@@ -1,0 +1,131 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// ============================================================
+// User System
+// ============================================================
+
+model User {
+  id        String   @id @default(uuid())
+  username  String   @unique
+  password  String   // bcrypt hashed
+  nickname  String   @default("")
+  role      String   @default("user") // "admin" | "user"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sessions  UserSession[]
+
+  @@index([username])
+}
+
+model UserSession {
+  id        String   @id // uuid token
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// ============================================================
+// Comics
+// ============================================================
+
+model Comic {
+  id          String   @id // md5 hash from filename
+  filename    String   @unique
+  title       String
+  pageCount   Int      @default(0)
+  fileSize    Int      @default(0)
+  addedAt     DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Reading progress
+  lastReadPage Int      @default(0)
+  lastReadAt   DateTime?
+
+  // Favorite
+  isFavorite  Boolean  @default(false)
+
+  // Rating 1-5
+  rating      Int?
+
+  // Custom sort order (for drag-and-drop)
+  sortOrder   Int      @default(0)
+
+  // Group / series name
+  groupName   String   @default("")
+
+  // Total reading duration in seconds
+  totalReadTime Int    @default(0)
+
+  // Metadata (from scraping)
+  author      String   @default("")
+  publisher   String   @default("")
+  year        Int?
+  description String   @default("")
+  language    String   @default("")
+  seriesName  String   @default("")
+  seriesIndex Int?
+  genre       String   @default("") // comma-separated
+  metadataSource String @default("") // "comicvine" | "anilist" | "manual"
+
+  // Tags relation
+  tags        ComicTag[]
+
+  // Reading sessions
+  readingSessions ReadingSession[]
+
+  @@index([title])
+  @@index([isFavorite])
+  @@index([lastReadAt])
+  @@index([sortOrder])
+  @@index([groupName])
+  @@index([author])
+  @@index([seriesName])
+}
+
+model Tag {
+  id     Int       @id @default(autoincrement())
+  name   String    @unique
+  color  String    @default("default") // matches CSS tag-* classes
+
+  comics ComicTag[]
+
+  @@index([name])
+}
+
+model ComicTag {
+  comicId String
+  tagId   Int
+
+  comic   Comic @relation(fields: [comicId], references: [id], onDelete: Cascade)
+  tag     Tag   @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([comicId, tagId])
+}
+
+model ReadingSession {
+  id        Int      @id @default(autoincrement())
+  comicId   String
+  startedAt DateTime @default(now())
+  endedAt   DateTime?
+  duration  Int      @default(0) // seconds
+  startPage Int      @default(0)
+  endPage   Int      @default(0)
+
+  comic     Comic    @relation(fields: [comicId], references: [id], onDelete: Cascade)
+
+  @@index([comicId])
+  @@index([startedAt])
+}
