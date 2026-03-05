@@ -1,10 +1,8 @@
 import { NextRequest } from "next/server";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "@/lib/db";
 import { extractComicInfoFromArchive, searchMetadata, applyMetadata, translateMetadataForDisplay } from "@/lib/metadata-scraper";
 import { findComicById } from "@/lib/comic-parser";
 import path from "path";
-
-const prisma = new PrismaClient();
 
 function extractSearchQuery(filename: string): string {
   let name = path.parse(filename).name;

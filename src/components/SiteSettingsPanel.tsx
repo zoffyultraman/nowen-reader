@@ -2,9 +2,9 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import {
-  Globe, Save, FolderOpen, Image, LayoutGrid, Palette, Languages,
+  Globe, Save, FolderOpen, Image, Palette, Languages,
   CheckCircle, Trash2, RefreshCw, Plus, X, Search, Sparkles,
-  HardDrive, ImagePlus, AlertCircle,
+  ImagePlus, AlertCircle,
 } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
 
@@ -256,66 +256,64 @@ export function SiteSettingsPanel() {
         </p>
       </div>
 
-      {/* Comics Directory */}
+      {/* Comics Directories */}
       <div className="space-y-3 rounded-xl bg-background p-4">
         <div className="flex items-center gap-2 text-xs font-medium text-foreground">
           <FolderOpen className="h-3.5 w-3.5 text-accent" />
           {siteT?.comicsDir || "Comics Directory"}
         </div>
-        <input
-          type="text"
-          value={config.comicsDir}
-          onChange={(e) => update("comicsDir", e.target.value)}
-          className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground font-mono outline-none focus:border-accent/50 transition-colors"
-          placeholder="/path/to/comics"
-        />
         <p className="text-[11px] text-muted">
-          {siteT?.comicsDirDesc || "Path where comic archives are stored. Requires restart to take effect."}
+          {siteT?.comicsDirsMergedDesc || "All directories will be scanned for comics. The first directory is the primary one (used for uploads). Requires restart to take effect."}
         </p>
 
-        {/* Extra Directories for Docker/NAS */}
-        <div className="mt-3 pt-3 border-t border-border/30">
-          <div className="flex items-center gap-2 text-xs font-medium text-foreground mb-2">
-            <HardDrive className="h-3.5 w-3.5 text-accent" />
-            {siteT?.extraDirs || "Additional Directories (Docker/NAS)"}
-          </div>
-          <p className="text-[11px] text-muted mb-2">
-            {siteT?.extraDirsDesc || "Mount multiple directories for Docker or NAS. All directories will be scanned for comics."}
-          </p>
-
-          {/* Existing extra dirs */}
-          {config.extraComicsDirs.map((dir, idx) => (
-            <div key={idx} className="flex items-center gap-2 mb-1.5">
-              <div className="flex-1 rounded-lg border border-border bg-card px-3 py-1.5 text-sm text-foreground font-mono truncate">
-                {dir}
-              </div>
-              <button
-                onClick={() => removeExtraDir(idx)}
-                className="shrink-0 rounded-lg p-1.5 text-muted hover:text-red-400 hover:bg-red-400/10 transition-colors"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          ))}
-
-          {/* Add new dir */}
-          <div className="flex items-center gap-2 mt-2">
+        {/* Primary dir */}
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
             <input
               type="text"
-              value={newDir}
-              onChange={(e) => setNewDir(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && addExtraDir()}
-              className="flex-1 rounded-lg border border-border bg-card px-3 py-1.5 text-sm text-foreground font-mono outline-none focus:border-accent/50 transition-colors"
-              placeholder={siteT?.extraDirPlaceholder || "/mnt/nas/comics or /data/manga"}
+              value={config.comicsDir}
+              onChange={(e) => update("comicsDir", e.target.value)}
+              className="w-full rounded-lg border border-accent/40 bg-card px-3 py-1.5 text-sm text-foreground font-mono outline-none focus:border-accent/50 transition-colors pr-14"
+              placeholder="/path/to/comics"
             />
+            <span className="absolute right-2 top-1/2 -translate-y-1/2 rounded bg-accent/15 px-1.5 py-0.5 text-[10px] font-medium text-accent">
+              {siteT?.primaryDir || "Primary"}
+            </span>
+          </div>
+        </div>
+
+        {/* Extra dirs */}
+        {config.extraComicsDirs.map((dir, idx) => (
+          <div key={idx} className="flex items-center gap-2">
+            <div className="flex-1 rounded-lg border border-border bg-card px-3 py-1.5 text-sm text-foreground font-mono truncate">
+              {dir}
+            </div>
             <button
-              onClick={addExtraDir}
-              disabled={!newDir.trim()}
-              className="shrink-0 rounded-lg bg-accent/15 p-1.5 text-accent hover:bg-accent/25 transition-colors disabled:opacity-30"
+              onClick={() => removeExtraDir(idx)}
+              className="shrink-0 rounded-lg p-1.5 text-muted hover:text-red-400 hover:bg-red-400/10 transition-colors"
             >
-              <Plus className="h-4 w-4" />
+              <X className="h-3.5 w-3.5" />
             </button>
           </div>
+        ))}
+
+        {/* Add new dir */}
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            value={newDir}
+            onChange={(e) => setNewDir(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && addExtraDir()}
+            className="flex-1 rounded-lg border border-border bg-card px-3 py-1.5 text-sm text-foreground font-mono outline-none focus:border-accent/50 transition-colors"
+            placeholder={siteT?.extraDirPlaceholder || "/mnt/nas/comics or /data/manga"}
+          />
+          <button
+            onClick={addExtraDir}
+            disabled={!newDir.trim()}
+            className="shrink-0 rounded-lg bg-accent/15 p-1.5 text-accent hover:bg-accent/25 transition-colors disabled:opacity-30"
+          >
+            <Plus className="h-4 w-4" />
+          </button>
         </div>
       </div>
 
@@ -539,26 +537,6 @@ export function SiteSettingsPanel() {
             </button>
           </div>
         )}
-      </div>
-
-      {/* Page Size */}
-      <div className="space-y-3 rounded-xl bg-background p-4">
-        <div className="flex items-center gap-2 text-xs font-medium text-foreground">
-          <LayoutGrid className="h-3.5 w-3.5 text-accent" />
-          {siteT?.pageSize || "Items Per Page"}
-        </div>
-        <select
-          value={config.pageSize}
-          onChange={(e) => update("pageSize", parseInt(e.target.value))}
-          className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground outline-none focus:border-accent/50 transition-colors"
-        >
-          {[12, 24, 36, 48, 60, 96].map((n) => (
-            <option key={n} value={n}>{n}</option>
-          ))}
-        </select>
-        <p className="text-[11px] text-muted">
-          {siteT?.pageSizeDesc || "Number of comics displayed per page on the home screen"}
-        </p>
       </div>
 
       {/* Language */}

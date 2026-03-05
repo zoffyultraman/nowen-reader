@@ -320,6 +320,8 @@ const en: Translations = {
     siteNameDesc: "Display name shown in the browser title bar",
     comicsDir: "Comics Directory",
     comicsDirDesc: "Path where comic archives are stored. Requires restart to take effect.",
+    comicsDirsMergedDesc: "All directories will be scanned. The first is the primary directory (used for uploads). Requires restart to take effect.",
+    primaryDir: "Primary",
     extraDirs: "Additional Directories (Docker/NAS)",
     extraDirsDesc: "Mount multiple directories for Docker or NAS. All directories will be scanned for comics.",
     extraDirPlaceholder: "/mnt/nas/comics or /data/manga",

@@ -318,6 +318,8 @@ const zhCN = {
     siteNameDesc: "显示在浏览器标题栏中的名称",
     comicsDir: "漫画库目录",
     comicsDirDesc: "存放漫画压缩包的路径，修改后需重启服务生效",
+    comicsDirsMergedDesc: "所有目录都会被扫描。第一个为主目录（用于上传），修改后需重启生效",
+    primaryDir: "主目录",
     extraDirs: "额外漫画目录（Docker / NAS）",
     extraDirsDesc: "挂载多个目录用于 Docker 或 NAS，所有目录都会被扫描",
     extraDirPlaceholder: "/mnt/nas/comics 或 /data/manga",

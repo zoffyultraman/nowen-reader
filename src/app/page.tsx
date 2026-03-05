@@ -651,6 +651,33 @@ export default function Home() {
                 <span className="ml-3 text-xs text-muted">
                   {currentPage} / {totalPages}
                 </span>
+
+                <div className="ml-4 flex items-center gap-1.5">
+                  <LayoutGrid className="h-3.5 w-3.5 text-muted" />
+                  <select
+                    value={pageSize}
+                    onChange={(e) => {
+                      const newSize = parseInt(e.target.value);
+                      setPageSize(newSize);
+                      setCurrentPage(1);
+                      fetch("/api/site-settings")
+                        .then((r) => r.json())
+                        .then((data) => {
+                          fetch("/api/site-settings", {
+                            method: "PUT",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ ...data, pageSize: newSize }),
+                          });
+                        })
+                        .catch(() => {});
+                    }}
+                    className="rounded-lg border border-border/60 bg-card px-2 py-1 text-xs text-foreground outline-none focus:border-accent/50 transition-colors"
+                  >
+                    {[12, 24, 36, 48, 60, 96].map((n) => (
+                      <option key={n} value={n}>{n}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
             )}
           </>
