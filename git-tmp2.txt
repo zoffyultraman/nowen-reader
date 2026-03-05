@@ -1,2 +1,12 @@
-To https://github.com/cropflre/nowen-reader.git
-   2851972..dfaa2fd  main -> main
+4688d09 fix: prisma-import-and-cicd-config
+On branch main
+Your branch is up to date with 'origin/main'.
+
+You are in a sparse checkout with 100% of tracked files present.
+
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+	modified:   git-tmp2.txt
+
+no changes added to commit (use "git add" and/or "git commit -a")

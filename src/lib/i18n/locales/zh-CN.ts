@@ -712,6 +712,8 @@ export interface Translations {
     siteNameDesc: string;
     comicsDir: string;
     comicsDirDesc: string;
+    comicsDirsMergedDesc: string;
+    primaryDir: string;
     extraDirs: string;
     extraDirsDesc: string;
     extraDirPlaceholder: string;
