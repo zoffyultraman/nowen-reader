@@ -1,0 +1,36 @@
+# ============================================================
+# NowenReader - 生产部署（使用 Docker Hub 镜像）
+#
+# 服务器上使用此文件：
+#   docker compose -f docker-compose.prod.yml up -d
+#
+# 或复制为 docker-compose.yml 后直接：
+#   docker compose up -d
+# ============================================================
+
+services:
+  nowen-reader:
+    image: cropflre/nowen-reader:latest
+    container_name: nowen-reader
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - nowen-data:/data
+      - nowen-comics:/app/comics
+      # 挂载本地目录（取消注释并修改路径）
+      # - /path/to/your/comics:/app/comics
+      - nowen-cache:/app/.cache
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=file:/data/nowen-reader.db
+      - COMICS_DIR=/app/comics
+      - PORT=3000
+
+volumes:
+  nowen-data:
+    name: nowen-reader-data
+  nowen-comics:
+    name: nowen-reader-comics
+  nowen-cache:
+    name: nowen-reader-cache

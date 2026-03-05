@@ -2,10 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
 import { THUMBNAILS_DIR } from "@/lib/config";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "@/lib/db";
 import { getComicThumbnail } from "@/lib/comic-parser";
-
-const prisma = new PrismaClient();
 
 export async function POST(request: NextRequest) {
   try {
