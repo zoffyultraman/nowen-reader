@@ -9,10 +9,12 @@ RUN apk add --no-cache libc6-compat python3 make g++
 WORKDIR /app
 
 COPY package.json package-lock.json ./
-# 完整安装（不跳过 postinstall），确保 lightningcss / sharp 等原生模块正确构建
+# 完整安装（不跳过 postinstall），确保原生模块正确构建
 RUN npm ci
-# 手动安装 lightningcss 的 alpine (linux-musl) 原生绑定
-RUN npm install lightningcss-linux-x64-musl
+# npm 在 Alpine (musl) 下经常漏装 optional 的平台特定原生绑定，手动补装
+RUN npm install \
+    lightningcss-linux-x64-musl \
+    @tailwindcss/oxide-linux-x64-musl
 
 # --- Stage 2: Build the app ---
 FROM node:20-alpine AS builder
