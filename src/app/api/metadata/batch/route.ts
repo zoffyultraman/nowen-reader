@@ -15,18 +15,36 @@ function extractSearchQuery(filename: string): string {
 }
 
 export async function POST(request: NextRequest) {
-  const { lang, mode } = await request.json();
-  // mode: "all" | "missing" (only comics without metadata)
+  let body: { lang?: string; mode?: string };
+  try {
+    body = await request.json();
+  } catch {
+    return new Response(JSON.stringify({ error: "Invalid JSON" }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
 
-  const where = mode === "missing"
-    ? { OR: [{ author: "" }, { author: null as unknown as string }, { description: "" }, { description: null as unknown as string }] }
-    : {};
+  const { lang, mode } = body;
 
-  const comics = await prisma.comic.findMany({
-    where,
-    select: { id: true, filename: true, title: true, author: true, description: true },
-    orderBy: { title: "asc" },
-  });
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const where: any = mode === "missing"
+      ? {
+          OR: [
+            { author: { equals: "" } },
+            { author: { equals: null } },
+            { description: { equals: "" } },
+            { description: { equals: null } },
+          ],
+        }
+      : {};
+
+    const comics = await prisma.comic.findMany({
+      where,
+      select: { id: true, filename: true, title: true, author: true, description: true },
+      orderBy: { title: "asc" },
+    });
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
@@ -125,4 +143,11 @@ export async function POST(request: NextRequest) {
       Connection: "keep-alive",
     },
   });
+  } catch (err) {
+    console.error("Metadata batch error:", err);
+    return new Response(JSON.stringify({ error: "Batch metadata failed", detail: String(err).slice(0, 500) }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
 }
