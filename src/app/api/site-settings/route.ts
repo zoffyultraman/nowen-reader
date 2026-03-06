@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { promises as fsPromises } from "fs";
 import fs from "fs";
 import path from "path";
 
@@ -26,10 +27,10 @@ const DEFAULT_CONFIG: SiteConfig = {
   theme: "dark",
 };
 
-function loadSiteConfig(): SiteConfig {
+async function loadSiteConfig(): Promise<SiteConfig> {
   try {
     if (fs.existsSync(CONFIG_PATH)) {
-      const raw = fs.readFileSync(CONFIG_PATH, "utf-8");
+      const raw = await fsPromises.readFile(CONFIG_PATH, "utf-8");
       return { ...DEFAULT_CONFIG, ...JSON.parse(raw) };
     }
   } catch {
@@ -38,23 +39,23 @@ function loadSiteConfig(): SiteConfig {
   return { ...DEFAULT_CONFIG };
 }
 
-function saveSiteConfig(config: SiteConfig) {
+async function saveSiteConfig(config: SiteConfig) {
   const dir = path.dirname(CONFIG_PATH);
   if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
+    await fsPromises.mkdir(dir, { recursive: true });
   }
-  fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2), "utf-8");
+  await fsPromises.writeFile(CONFIG_PATH, JSON.stringify(config, null, 2), "utf-8");
 }
 
 export async function GET() {
-  const config = loadSiteConfig();
+  const config = await loadSiteConfig();
   return NextResponse.json(config);
 }
 
 export async function PUT(request: Request) {
   try {
     const body = await request.json();
-    const current = loadSiteConfig();
+    const current = await loadSiteConfig();
 
     const updated: SiteConfig = {
       siteName: body.siteName ?? current.siteName,
@@ -67,7 +68,7 @@ export async function PUT(request: Request) {
       theme: body.theme ?? current.theme,
     };
 
-    saveSiteConfig(updated);
+    await saveSiteConfig(updated);
     return NextResponse.json({ success: true, config: updated });
   } catch (err) {
     return NextResponse.json(

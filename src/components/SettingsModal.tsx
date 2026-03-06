@@ -4,12 +4,33 @@ import { useState } from "react";
 import { createPortal } from "react-dom";
 import { X, Cloud, Puzzle, Smartphone, Info, Brain, Globe, BookOpen } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
-import { CloudSyncPanel } from "@/components/CloudSync";
-import { PluginManagerPanel } from "@/components/PluginManager";
-import { AISettingsPanel } from "@/components/AISettingsPanel";
-import { SiteSettingsPanel } from "@/components/SiteSettingsPanel";
-import { EHentaiSettingsPanel } from "@/components/EHentaiSettingsPanel";
 import { clearServiceWorkerCache } from "@/lib/pwa";
+import dynamic from "next/dynamic";
+
+const LoadingSkeleton = () => (
+  <div className="p-6 text-muted-foreground animate-pulse">Loading...</div>
+);
+
+const SiteSettingsPanel = dynamic(
+  () => import("@/components/SiteSettingsPanel").then((mod) => mod.SiteSettingsPanel),
+  { loading: LoadingSkeleton }
+);
+const CloudSyncPanel = dynamic(
+  () => import("@/components/CloudSync").then((mod) => mod.CloudSyncPanel),
+  { loading: LoadingSkeleton }
+);
+const PluginManagerPanel = dynamic(
+  () => import("@/components/PluginManager").then((mod) => mod.PluginManagerPanel),
+  { loading: LoadingSkeleton }
+);
+const AISettingsPanel = dynamic(
+  () => import("@/components/AISettingsPanel").then((mod) => mod.AISettingsPanel),
+  { loading: LoadingSkeleton }
+);
+const EHentaiSettingsPanel = dynamic(
+  () => import("@/components/EHentaiSettingsPanel").then((mod) => mod.EHentaiSettingsPanel),
+  { loading: LoadingSkeleton }
+);
 
 interface SettingsModalProps {
   open: boolean;
