@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { syncComicsToDatabase, getAllComics } from "@/lib/comic-service";
+import { getAllComics } from "@/lib/comic-service";
+// Background sync is auto-started when comic-service module loads
 
 export async function GET(request: NextRequest) {
   try {
-    // Sync filesystem with database first
-    await syncComicsToDatabase();
 
     // Parse query params
     const { searchParams } = new URL(request.url);
@@ -38,7 +37,7 @@ export async function GET(request: NextRequest) {
       totalPages: result.totalPages,
     }, {
       headers: {
-        "Cache-Control": "private, max-age=5, stale-while-revalidate=30",
+        "Cache-Control": "private, max-age=15, stale-while-revalidate=60",
       },
     });
   } catch (err) {

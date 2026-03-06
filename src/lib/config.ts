@@ -15,16 +15,28 @@ interface SiteConfigFile {
   theme?: string;
 }
 
-/** 从 site-config.json 读取用户自定义配置（每次调用实时读取，确保修改后立即生效） */
+/** 从 site-config.json 读取用户自定义配置（带 5 秒内存缓存） */
+let _siteConfigCache: SiteConfigFile | null = null;
+let _siteConfigCacheTs = 0;
+const SITE_CONFIG_CACHE_TTL = 5_000; // 5 seconds
+
 function loadSiteConfig(): SiteConfigFile {
+  const now = Date.now();
+  if (_siteConfigCache && now - _siteConfigCacheTs < SITE_CONFIG_CACHE_TTL) {
+    return _siteConfigCache;
+  }
   try {
     if (fs.existsSync(SITE_CONFIG_PATH)) {
-      return JSON.parse(fs.readFileSync(SITE_CONFIG_PATH, "utf-8"));
+      _siteConfigCache = JSON.parse(fs.readFileSync(SITE_CONFIG_PATH, "utf-8"));
+      _siteConfigCacheTs = now;
+      return _siteConfigCache!;
     }
   } catch {
     // ignore
   }
-  return {};
+  _siteConfigCache = {};
+  _siteConfigCacheTs = now;
+  return _siteConfigCache;
 }
 
 // 漫画库目录 - 优先级: 环境变量 > site-config.json > 默认值

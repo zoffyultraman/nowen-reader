@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateAcquisitionFeed, getBaseUrl, OPDS_ACQUISITION_MIME } from "@/lib/opds";
-import { syncComicsToDatabase } from "@/lib/comic-service";
+import "@/lib/comic-service"; // ensure background sync is started
 import { prisma } from "@/lib/db";
 
 export async function GET(request: NextRequest) {
   try {
-    await syncComicsToDatabase();
 
     const comics = await prisma.comic.findMany({
       orderBy: { title: "asc" },

@@ -1,33 +1,16 @@
 import { prisma } from "./db";
 import { scanComicsDirectory, ComicArchiveInfo, invalidateComicCaches, filenameToId, filenameToTitle } from "./comic-parser";
-import { THUMBNAILS_DIR, getAllComicsDirs } from "./config";
+import { getAllComicsDirs } from "./config";
 import path from "path";
 import fs from "fs";
 
-/** 封面版本号内存缓存，避免每次 getAllComics 都做 N 次 fs.statSync */
-const coverVersionCache = new Map<string, { version: string; ts: number }>();
-const COVER_VERSION_TTL = 60_000; // 1 minute
-
-/** 获取带缓存破坏参数的封面 URL */
+/**
+ * 封面 URL: 纯路径，不带版本号参数。
+ * 缩略图 API 已支持 ETag + 304，浏览器自动处理缓存。
+ * 这样 getAllComics 不再需要 N 次 fs.statSync。
+ */
 function getCoverUrl(comicId: string): string {
-  const base = `/api/comics/${comicId}/thumbnail`;
-  const now = Date.now();
-
-  // Check memory cache first
-  const cached = coverVersionCache.get(comicId);
-  if (cached && now - cached.ts < COVER_VERSION_TTL) {
-    return `${base}?v=${cached.version}`;
-  }
-
-  try {
-    const cachePath = path.join(THUMBNAILS_DIR, `${comicId}.webp`);
-    const stat = fs.statSync(cachePath);
-    const version = stat.mtimeMs.toString(36);
-    coverVersionCache.set(comicId, { version, ts: now });
-    return `${base}?v=${version}`;
-  } catch {
-    return base;
-  }
+  return `/api/comics/${comicId}/thumbnail`;
 }
 
 /**
@@ -221,6 +204,36 @@ export async function syncComicsToDatabase() {
 }
 
 /**
+ * Background sync scheduler.
+ * Runs sync on startup + periodically (every 60s).
+ * API routes should NOT call syncComicsToDatabase() directly.
+ */
+let bgSyncStarted = false;
+const BG_SYNC_INTERVAL = 60_000; // 60 seconds
+
+export function ensureBackgroundSync() {
+  if (bgSyncStarted) return;
+  bgSyncStarted = true;
+
+  // Initial sync on first import
+  syncComicsToDatabase().catch((err) =>
+    console.error("[bg-sync] Initial sync failed:", err)
+  );
+
+  // Periodic sync
+  setInterval(() => {
+    syncComicsToDatabase().catch((err) =>
+      console.error("[bg-sync] Periodic sync failed:", err)
+    );
+  }, BG_SYNC_INTERVAL);
+}
+
+// Auto-start background sync when this module is first imported on the server
+if (typeof process !== "undefined" && typeof window === "undefined") {
+  ensureBackgroundSync();
+}
+
+/**
  * Get all comics with their tags
  */
 export async function getAllComics(options?: {
@@ -239,7 +252,11 @@ export async function getAllComics(options?: {
   const where: any = {};
 
   if (search) {
-    where.title = { contains: search };
+    where.OR = [
+      { title: { contains: search } },
+      { author: { contains: search } },
+      { filename: { contains: search } },
+    ];
   }
 
   if (favoritesOnly) {
@@ -274,9 +291,6 @@ export async function getAllComics(options?: {
   const orderBy: any = {};
   const dbSortField = sortBy === "custom" ? "sortOrder" : sortBy;
   orderBy[dbSortField] = sortOrder;
-
-  // Get total count for pagination
-  const total = await prisma.comic.count({ where });
 
   // Build pagination options
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -324,7 +338,11 @@ export async function getAllComics(options?: {
     findOptions.take = pageSize;
   }
 
-  const comics = await prisma.comic.findMany(findOptions);
+  // Execute count and findMany in parallel
+  const [total, comics] = await Promise.all([
+    prisma.comic.count({ where }),
+    prisma.comic.findMany(findOptions),
+  ]);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const items = comics.map((c: any) => ({
@@ -633,9 +651,10 @@ export async function endReadingSession(sessionId: number, endPage: number, dura
 }
 
 /**
- * Get reading statistics
+ * Get reading statistics (optimized: uses aggregate queries instead of fetching all sessions)
  */
 export async function getReadingStats() {
+  // Recent sessions (for display)
   const sessions = await prisma.readingSession.findMany({
     orderBy: { startedAt: "desc" },
     take: 50,
@@ -644,25 +663,31 @@ export async function getReadingStats() {
     },
   });
 
-  const allSessions = await prisma.readingSession.findMany({
-    select: { duration: true, comicId: true, startedAt: true },
-  });
+  // Aggregate total stats using DB-level aggregation
+  const [totalAgg, totalComicsRead] = await Promise.all([
+    prisma.readingSession.aggregate({
+      _sum: { duration: true },
+      _count: true,
+    }),
+    prisma.readingSession.groupBy({
+      by: ["comicId"],
+    }),
+  ]);
 
-  const totalReadTime = allSessions.reduce((sum, s) => sum + s.duration, 0);
-  const totalSessions = allSessions.length;
-  const uniqueComics = new Set(allSessions.map((s) => s.comicId));
-  const totalComicsRead = uniqueComics.size;
+  const totalReadTime = totalAgg._sum.duration || 0;
+  const totalSessions = totalAgg._count;
 
-  // Daily stats (last 30 days)
+  // Daily stats (last 30 days) — only fetch recent sessions
   const thirtyDaysAgo = new Date();
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-  const recentAllSessions = allSessions.filter(
-    (s) => s.startedAt >= thirtyDaysAgo
-  );
+  const recentSessions = await prisma.readingSession.findMany({
+    where: { startedAt: { gte: thirtyDaysAgo } },
+    select: { duration: true, startedAt: true },
+  });
 
   const dailyMap = new Map<string, { duration: number; sessions: number }>();
-  for (const s of recentAllSessions) {
+  for (const s of recentSessions) {
     const date = s.startedAt.toISOString().split("T")[0];
     const existing = dailyMap.get(date) || { duration: 0, sessions: 0 };
     existing.duration += s.duration;
@@ -677,7 +702,7 @@ export async function getReadingStats() {
   return {
     totalReadTime,
     totalSessions,
-    totalComicsRead,
+    totalComicsRead: totalComicsRead.length,
     recentSessions: sessions.map((s) => ({
       id: s.id,
       comicId: s.comicId,

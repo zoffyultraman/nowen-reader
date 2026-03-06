@@ -51,7 +51,40 @@ interface PagesResponse {
 }
 
 /**
- * Hook to fetch the comics library list
+ * Simple client-side cache for comics list API responses.
+ * Key = URL query string, Value = { data, timestamp }.
+ * Cache entries expire after CACHE_TTL ms.
+ */
+const comicsCache = new Map<string, { data: ComicsResponse; ts: number }>();
+const COMICS_CACHE_TTL = 30_000; // 30 seconds
+const MAX_CACHE_ENTRIES = 20;
+
+function getCachedResponse(key: string): ComicsResponse | null {
+  const entry = comicsCache.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.ts > COMICS_CACHE_TTL) {
+    comicsCache.delete(key);
+    return null;
+  }
+  return entry.data;
+}
+
+function setCachedResponse(key: string, data: ComicsResponse) {
+  // Evict oldest entries if cache is full
+  if (comicsCache.size >= MAX_CACHE_ENTRIES) {
+    const oldest = comicsCache.keys().next().value;
+    if (oldest !== undefined) comicsCache.delete(oldest);
+  }
+  comicsCache.set(key, { data, ts: Date.now() });
+}
+
+/** Invalidate all cached comics data (call after mutations) */
+export function invalidateComicsCache() {
+  comicsCache.clear();
+}
+
+/**
+ * Hook to fetch the comics library list (with client-side caching)
  */
 export function useComics(options?: {
   search?: string;
@@ -72,35 +105,53 @@ export function useComics(options?: {
   const initializedRef = useRef(false);
 
   const fetchComics = useCallback(async () => {
-    // Only show full loading spinner on initial load
-    if (!initializedRef.current) {
+    const params = new URLSearchParams();
+    if (options?.search) params.set("search", options.search);
+    if (options?.tags?.length) params.set("tags", options.tags.join(","));
+    if (options?.favoritesOnly) params.set("favorites", "true");
+    if (options?.sortBy) params.set("sortBy", options.sortBy);
+    if (options?.sortOrder) params.set("sortOrder", options.sortOrder);
+    if (options?.page) params.set("page", String(options.page));
+    if (options?.pageSize) params.set("pageSize", String(options.pageSize));
+    if (options?.category) params.set("category", options.category);
+
+    const qs = params.toString();
+    const cacheKey = qs || "__default__";
+    const url = `/api/comics${qs ? `?${qs}` : ""}`;
+
+    // Check client cache first — show cached data immediately, then revalidate
+    const cached = getCachedResponse(cacheKey);
+    if (cached) {
+      setComics(cached.comics);
+      setTotal(cached.total);
+      setTotalPages(cached.totalPages);
+      if (!initializedRef.current) {
+        initializedRef.current = true;
+        setLoading(false);
+      }
+    }
+
+    // Only show full loading spinner on initial load (no cache)
+    if (!initializedRef.current && !cached) {
       setLoading(true);
     }
     setFetching(true);
     setError(null);
+
     try {
-      const params = new URLSearchParams();
-      if (options?.search) params.set("search", options.search);
-      if (options?.tags?.length) params.set("tags", options.tags.join(","));
-      if (options?.favoritesOnly) params.set("favorites", "true");
-      if (options?.sortBy) params.set("sortBy", options.sortBy);
-      if (options?.sortOrder) params.set("sortOrder", options.sortOrder);
-      if (options?.page) params.set("page", String(options.page));
-      if (options?.pageSize) params.set("pageSize", String(options.pageSize));
-      if (options?.category) params.set("category", options.category);
-
-      const qs = params.toString();
-      const url = `/api/comics${qs ? `?${qs}` : ""}`;
-
       const res = await fetch(url);
       if (!res.ok) throw new Error("Failed to fetch comics");
       const data: ComicsResponse = await res.json();
       setComics(data.comics);
       setTotal(data.total);
       setTotalPages(data.totalPages);
+      setCachedResponse(cacheKey, data);
       initializedRef.current = true;
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unknown error");
+      // If we have cached data, don't show error
+      if (!cached) {
+        setError(err instanceof Error ? err.message : "Unknown error");
+      }
     } finally {
       setLoading(false);
       setFetching(false);
@@ -111,7 +162,13 @@ export function useComics(options?: {
     fetchComics();
   }, [fetchComics]);
 
-  return { comics, loading, fetching, error, total, totalPages, refetch: fetchComics };
+  const refetch = useCallback(async () => {
+    // Invalidate cache before refetching (used after mutations)
+    invalidateComicsCache();
+    return fetchComics();
+  }, [fetchComics]);
+
+  return { comics, loading, fetching, error, total, totalPages, refetch };
 }
 
 /**
