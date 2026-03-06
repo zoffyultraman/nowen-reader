@@ -27,19 +27,10 @@ if [ ! -f /data/nowen-reader.db ]; then
     echo "[init] Creating database for first time..."
 fi
 
-# Export DATABASE_URL so child processes (su-exec) inherit it
-export DATABASE_URL
-
-echo "[init] Running prisma db push..."
-# Use node to run prisma directly (npx is not available in standalone image)
-PRISMA_CMD="node ./node_modules/prisma/build/index.js"
-su-exec nextjs $PRISMA_CMD db push --schema ./prisma/schema.prisma --accept-data-loss --skip-generate 2>&1 || {
-    echo "[warn] prisma db push exited with code $?, attempting fallback..."
-    # Fallback: use env command for su-exec (su-exec doesn't support inline VAR=val)
-    su-exec nextjs env DATABASE_URL="${DATABASE_URL}" $PRISMA_CMD db push --schema ./prisma/schema.prisma --accept-data-loss --skip-generate 2>&1 || {
-        echo "[error] Database initialization failed!"
-        exit 1
-    }
+echo "[init] Initializing database schema..."
+su-exec nextjs node ./db-init.mjs || {
+    echo "[error] Database initialization failed!"
+    exit 1
 }
 
 echo "[init] Database ready."

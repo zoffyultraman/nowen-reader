@@ -54,10 +54,11 @@ COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
-COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
 COPY --from=builder /app/src/generated ./src/generated
+
+# 复制轻量数据库初始化脚本（替代 prisma CLI）
+COPY db-init.mjs ./db-init.mjs
 
 # 复制 libsql 数据库驱动
 COPY --from=builder /app/node_modules/@libsql ./node_modules/@libsql
