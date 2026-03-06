@@ -114,7 +114,7 @@ export default function EHentaiPage() {
   // ============================================================
   // Download status polling — only poll when there are active downloads
   // ============================================================
-  const hasActiveDownloads = downloads.some(
+  const hasActiveDownloads = Object.values(downloads).some(
     (d) => d.status === "downloading" || d.status === "pending" || d.status === "queued"
   );
 
