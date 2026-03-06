@@ -869,6 +869,33 @@ export interface Translations {
     deletedCount: string;
     selectToKeep: string;
   };
+  ehentai: {
+    title: string;
+    search: string;
+    searchPlaceholder: string;
+    searching: string;
+    noResults: string;
+    emptyHint: string;
+    resultsCount: string;
+    prevPage: string;
+    nextPage: string;
+    pageNum: string;
+    pages: string;
+    uploader: string;
+    fileCount: string;
+    tags: string;
+    preview: string;
+    downloadToLibrary: string;
+    downloading: string;
+    downloadStarting: string;
+    downloadFetchingInfo: string;
+    downloadPackaging: string;
+    downloadCompleted: string;
+    downloadError: string;
+    galleryId: string;
+    notConfigured: string;
+    notConfiguredDesc: string;
+  };
   ehentaiSettings: {
     title: string;
     statusConfigured: string;
