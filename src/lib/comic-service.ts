@@ -355,26 +355,40 @@ export async function getAllComics(options?: {
   }
 
   if (tags && tags.length > 0) {
-    where.tags = {
-      some: {
-        tag: {
-          name: { in: tags },
+    const matchingTags = await prisma.tag.findMany({
+      where: { name: { in: tags } },
+      select: { id: true },
+    });
+    const tagIds = matchingTags.map((t) => t.id);
+    if (tagIds.length > 0) {
+      where.tags = {
+        some: {
+          tagId: { in: tagIds },
         },
-      },
-    };
+      };
+    } else {
+      // Tags not found — return empty result
+      where.id = "___none___";
+    }
   }
 
   if (category) {
     if (category === "uncategorized") {
       where.categories = { none: {} };
     } else {
-      where.categories = {
-        some: {
-          category: {
-            slug: category,
+      const matchingCat = await prisma.category.findFirst({
+        where: { slug: category },
+        select: { id: true },
+      });
+      if (matchingCat) {
+        where.categories = {
+          some: {
+            categoryId: matchingCat.id,
           },
-        },
-      };
+        };
+      } else {
+        where.id = "___none___";
+      }
     }
   }
 

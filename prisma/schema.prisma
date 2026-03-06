@@ -116,6 +116,7 @@ model ComicTag {
   tag     Tag   @relation(fields: [tagId], references: [id], onDelete: Cascade)
 
   @@id([comicId, tagId])
+  @@index([tagId])
 }
 
 // ============================================================
@@ -144,6 +145,7 @@ model ComicCategory {
   category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
 
   @@id([comicId, categoryId])
+  @@index([categoryId])
 }
 
 model ReadingSession {
