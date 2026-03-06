@@ -143,7 +143,6 @@ async function quickSync() {
           pageCount: 0,
           fileSize: f.fileSize,
         })),
-        skipDuplicates: true,
       });
       await yieldEventLoop();
     }
