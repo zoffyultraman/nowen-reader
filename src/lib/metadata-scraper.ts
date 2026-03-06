@@ -108,7 +108,6 @@ const GENRE_EN_TO_ZH: Record<string, string> = {
   "ninja": "忍者",
   "idol": "偶像",
   "idols": "偶像",
-  "music": "音乐",
   "performing arts": "表演艺术",
   "otaku culture": "宅文化",
   "satire": "讽刺",
