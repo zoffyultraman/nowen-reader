@@ -36,9 +36,9 @@ RUN npm run build
 FROM node:20-alpine AS runner
 WORKDIR /app
 
-# 安装运行时依赖：7zip（用于解压 .7z/.cb7）
+# 安装运行时依赖：7zip（用于解压 .7z/.cb7）、su-exec（用于降权运行）
 # unrar 不需要系统包，项目使用 node-unrar-js (WASM 实现)
-RUN apk add --no-cache p7zip tini
+RUN apk add --no-cache p7zip tini su-exec
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -94,7 +94,6 @@ VOLUME ["/data", "/app/comics"]
 # 暴露端口
 EXPOSE 3000
 
-USER nextjs
-
+# 以 root 启动 entrypoint，由脚本内部处理权限后降权运行
 ENTRYPOINT ["tini", "--"]
 CMD ["/docker-entrypoint.sh"]
