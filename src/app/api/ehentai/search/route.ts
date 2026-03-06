@@ -19,9 +19,10 @@ export async function GET(request: NextRequest) {
       configured: isConfigured(),
     });
   } catch (err) {
-    console.error("[ehentai/search] Error:", err);
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("[ehentai/search] Error:", message);
     return NextResponse.json(
-      { error: "Failed to search E-Hentai" },
+      { error: "Failed to search E-Hentai", detail: message },
       { status: 500 }
     );
   }

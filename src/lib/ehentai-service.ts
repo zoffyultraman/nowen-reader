@@ -144,8 +144,40 @@ export async function search(
   if (category > 0) params.set("f_cats", String(category));
 
   const url = `${base}/?${params.toString()}`;
-  const res = await fetch(url, { headers: getHeaders() });
+
+  // Add timeout to prevent hanging requests
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15_000);
+
+  let res: Response;
+  try {
+    res = await fetch(url, { headers: getHeaders(), signal: controller.signal });
+  } catch (err: unknown) {
+    clearTimeout(timeout);
+    if (err instanceof Error && err.name === "AbortError") {
+      throw new Error(`E-Hentai request timed out (15s) — URL: ${base}`);
+    }
+    throw new Error(
+      `E-Hentai network error: ${err instanceof Error ? err.message : String(err)} — URL: ${base}`
+    );
+  }
+  clearTimeout(timeout);
+
+  if (!res.ok) {
+    throw new Error(
+      `E-Hentai returned HTTP ${res.status} ${res.statusText} — URL: ${base}`
+    );
+  }
+
   const html = await res.text();
+
+  // Detect "sad panda" or empty response (ExHentai with invalid cookies)
+  if (html.length < 100 && !html.includes("<html")) {
+    throw new Error(
+      "E-Hentai returned empty/invalid response. If using ExHentai, check your cookies (igneous/ipb_member_id/ipb_pass_hash)."
+    );
+  }
+
   const $ = cheerio.load(html);
 
   const galleries: EHGallery[] = [];

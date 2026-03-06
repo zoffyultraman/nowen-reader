@@ -112,9 +112,38 @@ export default function EHentaiPage() {
   }, []);
 
   // ============================================================
-  // Download status polling
+  // Download status polling — only poll when there are active downloads
   // ============================================================
+  const hasActiveDownloads = downloads.some(
+    (d) => d.status === "downloading" || d.status === "pending" || d.status === "queued"
+  );
+
   useEffect(() => {
+    // Always do one initial fetch to restore any in-progress downloads
+    let cancelled = false;
+    const fetchOnce = async () => {
+      try {
+        const res = await fetch("/api/ehentai/download");
+        const data = await res.json();
+        if (!cancelled && data.downloads) {
+          setDownloads(data.downloads);
+        }
+      } catch { /* ignore */ }
+    };
+    fetchOnce();
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    if (!hasActiveDownloads) {
+      // No active downloads — stop polling
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+      return;
+    }
+    // Start polling only when there are active downloads
     pollRef.current = setInterval(async () => {
       try {
         const res = await fetch("/api/ehentai/download");
@@ -127,7 +156,7 @@ export default function EHentaiPage() {
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
     };
-  }, []);
+  }, [hasActiveDownloads]);
 
   // ============================================================
   // Search
