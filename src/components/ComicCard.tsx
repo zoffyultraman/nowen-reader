@@ -115,7 +115,7 @@ export default function ComicCard({
               <h3 className="truncate text-sm font-medium text-foreground/90">{comic.title}</h3>
               <div className="mt-1 flex items-center gap-2">
                 {comic.groupName && (
-                  <span className="rounded bg-zinc-700/50 px-1.5 py-0.5 text-[10px] text-muted">{comic.groupName}</span>
+                  <span className="rounded bg-border/50 px-1.5 py-0.5 text-[10px] text-muted">{comic.groupName}</span>
                 )}
                 {comic.rating && comic.rating > 0 && (
                   <div className="flex items-center gap-0.5">
@@ -156,7 +156,7 @@ export default function ComicCard({
                 <h3 className="truncate text-sm font-medium text-foreground/90 group-hover:text-foreground">{comic.title}</h3>
                 <div className="mt-1 flex items-center gap-2">
                   {comic.groupName && (
-                    <span className="rounded bg-zinc-700/50 px-1.5 py-0.5 text-[10px] text-muted">{comic.groupName}</span>
+                    <span className="rounded bg-border/50 px-1.5 py-0.5 text-[10px] text-muted">{comic.groupName}</span>
                   )}
                   {comic.rating && comic.rating > 0 && (
                     <div className="flex items-center gap-0.5">

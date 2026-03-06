@@ -26,8 +26,14 @@ echo "[init] Checking database..."
 if [ ! -f /data/nowen-reader.db ]; then
     echo "[init] Creating database for first time..."
 fi
-su-exec nextjs npx prisma db push --accept-data-loss --skip-generate 2>/dev/null || {
-    echo "[init] Database migration done."
+echo "[init] Running prisma db push..."
+su-exec nextjs npx prisma db push --schema ./prisma/schema.prisma --accept-data-loss --skip-generate || {
+    echo "[warn] prisma db push exited with code $?, attempting fallback..."
+    # Fallback: try without prisma.config.ts by setting env directly
+    su-exec nextjs DATABASE_URL="${DATABASE_URL}" npx prisma db push --schema ./prisma/schema.prisma --accept-data-loss --skip-generate 2>&1 || {
+        echo "[error] Database initialization failed!"
+        exit 1
+    }
 }
 
 echo "[init] Database ready."

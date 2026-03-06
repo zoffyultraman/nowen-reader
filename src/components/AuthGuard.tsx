@@ -10,8 +10,8 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[var(--bg-primary)]">
-        <div className="text-[var(--text-secondary)]">Loading...</div>
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-muted">Loading...</div>
       </div>
     );
   }
@@ -51,27 +51,27 @@ function SetupPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[var(--bg-primary)] p-4">
+    <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-[var(--text-primary)] mb-2">
+          <h1 className="text-3xl font-bold text-foreground mb-2">
             NowenReader
           </h1>
-          <p className="text-[var(--text-secondary)]">{t.auth?.setupTitle || "Create Admin Account"}</p>
-          <p className="text-sm text-[var(--text-muted)] mt-1">
+          <p className="text-muted">{t.auth?.setupTitle || "Create Admin Account"}</p>
+          <p className="text-sm text-muted/70 mt-1">
             {t.auth?.setupDesc || "Set up the first administrator account to get started"}
           </p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="relative">
-            <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
+            <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
             <input
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               placeholder={t.auth?.username || "Username"}
-              className="w-full pl-10 pr-4 py-3 bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-lg text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-primary)]"
+              className="w-full pl-10 pr-4 py-3 bg-card border border-border rounded-lg text-foreground placeholder:text-muted/50 focus:outline-none focus:border-accent"
               required
               minLength={3}
               maxLength={32}
@@ -79,31 +79,31 @@ function SetupPage() {
           </div>
 
           <div className="relative">
-            <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
+            <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
             <input
               type="text"
               value={nickname}
               onChange={(e) => setNickname(e.target.value)}
               placeholder={t.auth?.nickname || "Nickname (optional)"}
-              className="w-full pl-10 pr-4 py-3 bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-lg text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-primary)]"
+              className="w-full pl-10 pr-4 py-3 bg-card border border-border rounded-lg text-foreground placeholder:text-muted/50 focus:outline-none focus:border-accent"
             />
           </div>
 
           <div className="relative">
-            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
+            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
             <input
               type={showPassword ? "text" : "password"}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder={t.auth?.password || "Password"}
-              className="w-full pl-10 pr-10 py-3 bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-lg text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-primary)]"
+              className="w-full pl-10 pr-10 py-3 bg-card border border-border rounded-lg text-foreground placeholder:text-muted/50 focus:outline-none focus:border-accent"
               required
               minLength={6}
             />
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-foreground"
             >
               {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
             </button>
@@ -116,7 +116,7 @@ function SetupPage() {
           <button
             type="submit"
             disabled={submitting}
-            className="w-full py-3 bg-[var(--accent-primary)] text-white rounded-lg font-medium hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2"
+            className="w-full py-3 bg-accent text-white rounded-lg font-medium hover:bg-accent-hover disabled:opacity-50 flex items-center justify-center gap-2"
           >
             <UserPlus className="w-4 h-4" />
             {submitting ? (t.common.loading) : (t.auth?.createAccount || "Create Account")}
@@ -156,13 +156,13 @@ function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[var(--bg-primary)] p-4">
+    <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-[var(--text-primary)] mb-2">
+          <h1 className="text-3xl font-bold text-foreground mb-2">
             NowenReader
           </h1>
-          <p className="text-[var(--text-secondary)]">
+          <p className="text-muted">
             {isRegister
               ? (t.auth?.registerTitle || "Create Account")
               : (t.auth?.loginTitle || "Sign In")}
@@ -171,13 +171,13 @@ function LoginPage() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="relative">
-            <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
+            <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
             <input
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               placeholder={t.auth?.username || "Username"}
-              className="w-full pl-10 pr-4 py-3 bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-lg text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-primary)]"
+              className="w-full pl-10 pr-4 py-3 bg-card border border-border rounded-lg text-foreground placeholder:text-muted/50 focus:outline-none focus:border-accent"
               required
               minLength={3}
             />
@@ -185,32 +185,32 @@ function LoginPage() {
 
           {isRegister && (
             <div className="relative">
-              <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
+              <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
               <input
                 type="text"
                 value={nickname}
                 onChange={(e) => setNickname(e.target.value)}
                 placeholder={t.auth?.nickname || "Nickname"}
-                className="w-full pl-10 pr-4 py-3 bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-lg text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-primary)]"
+                className="w-full pl-10 pr-4 py-3 bg-card border border-border rounded-lg text-foreground placeholder:text-muted/50 focus:outline-none focus:border-accent"
               />
             </div>
           )}
 
           <div className="relative">
-            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
+            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
             <input
               type={showPassword ? "text" : "password"}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder={t.auth?.password || "Password"}
-              className="w-full pl-10 pr-10 py-3 bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-lg text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-primary)]"
+              className="w-full pl-10 pr-10 py-3 bg-card border border-border rounded-lg text-foreground placeholder:text-muted/50 focus:outline-none focus:border-accent"
               required
               minLength={6}
             />
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-foreground"
             >
               {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
             </button>
@@ -223,7 +223,7 @@ function LoginPage() {
           <button
             type="submit"
             disabled={submitting}
-            className="w-full py-3 bg-[var(--accent-primary)] text-white rounded-lg font-medium hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2"
+            className="w-full py-3 bg-accent text-white rounded-lg font-medium hover:bg-accent-hover disabled:opacity-50 flex items-center justify-center gap-2"
           >
             {isRegister ? <UserPlus className="w-4 h-4" /> : <LogIn className="w-4 h-4" />}
             {submitting
@@ -240,7 +240,7 @@ function LoginPage() {
               setIsRegister(!isRegister);
               setError("");
             }}
-            className="text-sm text-[var(--accent-primary)] hover:underline"
+            className="text-sm text-accent hover:underline"
           >
             {isRegister
               ? (t.auth?.hasAccount || "Already have an account? Sign in")

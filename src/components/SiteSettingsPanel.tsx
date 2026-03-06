@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import {
-  Globe, Save, FolderOpen, Image, Palette, Languages,
+  Globe, Save, FolderOpen, Image, Languages,
   CheckCircle, Trash2, RefreshCw, Plus, X, Search, Sparkles,
   ImagePlus, AlertCircle,
 } from "lucide-react";
@@ -16,7 +16,6 @@ interface SiteConfig {
   thumbnailHeight: number;
   pageSize: number;
   language: string;
-  theme: string;
 }
 
 interface ThumbnailStats {
@@ -556,22 +555,6 @@ export function SiteSettingsPanel() {
         </select>
       </div>
 
-      {/* Theme */}
-      <div className="space-y-3 rounded-xl bg-background p-4">
-        <div className="flex items-center gap-2 text-xs font-medium text-foreground">
-          <Palette className="h-3.5 w-3.5 text-accent" />
-          {siteT?.theme || "Theme"}
-        </div>
-        <select
-          value={config.theme}
-          onChange={(e) => update("theme", e.target.value)}
-          className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground outline-none focus:border-accent/50 transition-colors"
-        >
-          <option value="dark">{siteT?.themeDark || "Dark"}</option>
-          <option value="light">{siteT?.themeLight || "Light"}</option>
-          <option value="system">{siteT?.themeSystem || "System"}</option>
-        </select>
-      </div>
 
       {/* Save Button */}
       <button

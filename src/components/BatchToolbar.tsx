@@ -46,7 +46,7 @@ export default function BatchToolbar({
 
   return (
     <>
-      <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-border/50 bg-zinc-900/95 px-6 py-3 backdrop-blur-xl">
+      <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-border/50 bg-background/95 px-6 py-3 backdrop-blur-xl">
         <div className="mx-auto flex max-w-[1800px] items-center justify-between">
           <div className="flex items-center gap-3">
             <CheckSquare className="h-4 w-4 text-accent" />
@@ -231,7 +231,7 @@ export default function BatchToolbar({
       {showDeleteConfirm && (
         <>
           <div className="fixed inset-0 z-[60] bg-black/60" onClick={() => setShowDeleteConfirm(false)} />
-          <div className="fixed left-1/2 top-1/2 z-[60] w-80 -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-zinc-900 p-6 shadow-2xl">
+          <div className="fixed left-1/2 top-1/2 z-[60] w-80 -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-card border border-border p-6 shadow-2xl">
             <h3 className="text-lg font-semibold text-foreground">{t.batch.confirmDelete}</h3>
             <p className="mt-2 text-sm text-muted">
               {t.batch.confirmDeleteMsg.replace("{count}", String(selectedCount))}
