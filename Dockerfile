@@ -14,7 +14,8 @@ RUN npm ci
 # npm 在 Alpine (musl) 下经常漏装 optional 的平台特定原生绑定，手动补装
 RUN npm install \
     lightningcss-linux-x64-musl \
-    @tailwindcss/oxide-linux-x64-musl
+    @tailwindcss/oxide-linux-x64-musl \
+    @img/sharp-linuxmusl-x64
 
 # --- Stage 2: Build the app ---
 FROM node:20-alpine AS builder
