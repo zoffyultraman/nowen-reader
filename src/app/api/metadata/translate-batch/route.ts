@@ -71,11 +71,11 @@ export async function POST(request: NextRequest) {
           where: {
             OR: [
               { title: { not: "" } },
-              { author: { not: null } },
-              { description: { not: null } },
-              { genre: { not: null } },
-              { seriesName: { not: null } },
-              { publisher: { not: null } },
+              { author: { not: "" } },
+              { description: { not: "" } },
+              { genre: { not: "" } },
+              { seriesName: { not: "" } },
+              { publisher: { not: "" } },
             ],
           },
           select: {
