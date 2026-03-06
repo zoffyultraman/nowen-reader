@@ -11,6 +11,7 @@ const en: Translations = {
     all: "All",
     loading: "Loading...",
     noData: "No data",
+    close: "Close",
   },
 
   // Navbar

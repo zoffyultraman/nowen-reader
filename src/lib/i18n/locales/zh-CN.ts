@@ -9,6 +9,7 @@ const zhCN = {
     all: "全部",
     loading: "加载中...",
     noData: "暂无数据",
+    close: "关闭",
   },
 
   // Navbar
@@ -445,6 +446,7 @@ export interface Translations {
     all: string;
     loading: string;
     noData: string;
+    close: string;
   };
   navbar: {
     searchPlaceholder: string;
