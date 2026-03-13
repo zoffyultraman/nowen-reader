@@ -22,7 +22,9 @@ RUN npm run build 2>/dev/null || mkdir -p /frontend/dist
 # --- Stage 2: Build Go backend ---
 FROM golang:1.23-alpine AS builder
 
-RUN apk add --no-cache git
+# Use Aliyun mirror for faster & more reliable access in China
+RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories && \
+    apk add --no-cache git
 
 WORKDIR /build
 
@@ -68,7 +70,9 @@ LABEL description="NowenReader - Self-hosted comic management platform"
 # - tzdata: timezone support
 # Note: calibre (ebook-convert) is NOT available in Alpine repos.
 #       MOBI/AZW3 support is optional; mount ebook-convert binary or install via pip if needed.
-RUN apk add --no-cache \
+# Use Aliyun mirror for faster & more reliable access in China
+RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories && \
+    apk add --no-cache \
     p7zip \
     mupdf-tools \
     libwebp-tools \
