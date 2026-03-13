@@ -43,6 +43,9 @@ self.addEventListener("fetch", (event) => {
   // Skip non-GET requests
   if (request.method !== "GET") return;
 
+  // Skip non-http(s) schemes (e.g. chrome-extension://)
+  if (!url.protocol.startsWith("http")) return;
+
   // API requests: Network first, fallback to cache
   if (url.pathname.startsWith("/api/")) {
     // Cache comic thumbnails and pages aggressively
@@ -115,7 +118,9 @@ async function networkFirstStrategy(request, cacheName, maxAge) {
         statusText: responseClone.statusText,
         headers,
       });
-      cache.put(request, cachedResponse);
+      if (request.url.startsWith("http")) {
+        cache.put(request, cachedResponse);
+      }
     }
     return response;
   } catch {
@@ -136,7 +141,7 @@ async function networkFirstStrategy(request, cacheName, maxAge) {
 async function fetchAndCache(request, cacheName) {
   try {
     const response = await fetch(request);
-    if (response.ok) {
+    if (response.ok && request.url.startsWith("http")) {
       const cache = await caches.open(cacheName);
       const responseClone = response.clone();
       const headers = new Headers(responseClone.headers);

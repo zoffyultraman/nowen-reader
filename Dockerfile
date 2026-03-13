@@ -26,12 +26,11 @@ RUN apk add --no-cache git
 
 WORKDIR /build
 
-# Cache Go dependencies
-COPY go.mod go.sum ./
-RUN go mod download
-
 # Copy source
 COPY . .
+
+# Resolve dependencies (tidy ensures go.sum is correct)
+RUN go mod tidy && go mod download
 
 # Copy frontend build output into web/dist/ for embedding
 COPY --from=frontend-builder /frontend/dist/ ./web/dist/ 2>/dev/null || true
