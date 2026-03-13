@@ -17,7 +17,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/nwaples/rardecode"
+	"github.com/nwaples/rardecode/v2"
 	"github.com/nowen-reader/nowen-reader/internal/config"
 )
 
@@ -49,10 +49,12 @@ type Reader interface {
 type ArchiveType string
 
 const (
-	TypeZip ArchiveType = "zip"
-	TypeRar ArchiveType = "rar"
-	Type7z  ArchiveType = "7z"
-	TypePdf ArchiveType = "pdf"
+	TypeZip  ArchiveType = "zip"
+	TypeRar  ArchiveType = "rar"
+	Type7z   ArchiveType = "7z"
+	TypePdf  ArchiveType = "pdf"
+	TypeTxt  ArchiveType = "txt"
+	TypeEpub ArchiveType = "epub"
 )
 
 // DetectType returns the archive type based on file extension.
@@ -67,9 +69,18 @@ func DetectType(filepath string) ArchiveType {
 		return Type7z
 	case ".pdf":
 		return TypePdf
+	case ".txt":
+		return TypeTxt
+	case ".epub":
+		return TypeEpub
 	default:
 		return ""
 	}
+}
+
+// IsNovelType returns true if the archive type is a novel/text format.
+func IsNovelType(t ArchiveType) bool {
+	return t == TypeTxt || t == TypeEpub
 }
 
 // ============================================================
@@ -94,6 +105,10 @@ func NewReader(filepath string) (Reader, error) {
 		return newSevenZipReader(filepath)
 	case TypePdf:
 		return newPdfReader(filepath)
+	case TypeTxt:
+		return newTxtReader(filepath)
+	case TypeEpub:
+		return newEpubReader(filepath)
 	default:
 		return nil, fmt.Errorf("unsupported archive type: %s", filepath)
 	}
@@ -238,7 +253,7 @@ type rarReader struct {
 }
 
 func newRarReader(fp string) (*rarReader, error) {
-	rc, err := rardecode.OpenReader(fp, "")
+	rc, err := rardecode.OpenReader(fp)
 	if err != nil {
 		return nil, fmt.Errorf("open rar %s: %w", fp, err)
 	}
@@ -276,7 +291,7 @@ func (r *rarReader) ListEntries() []Entry {
 
 func (r *rarReader) ExtractEntry(entryName string) ([]byte, error) {
 	// Re-open the archive and stream through to find the target entry
-	rc, err := rardecode.OpenReader(r.filepath, "")
+	rc, err := rardecode.OpenReader(r.filepath)
 	if err != nil {
 		return nil, fmt.Errorf("open rar %s: %w", r.filepath, err)
 	}

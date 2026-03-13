@@ -106,7 +106,7 @@ func quickSync() (added, removed int) {
 					continue
 				}
 				name := entry.Name()
-				if !config.IsSupportedArchive(name) {
+				if !config.IsSupportedFile(name) {
 					continue
 				}
 

@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"fmt"
 	"image"
+	"image/color"
 	"image/jpeg"
 	"image/png"
 	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	// Register decoders for common image formats
 	_ "image/gif"
@@ -36,7 +38,8 @@ func GenerateThumbnail(archivePath, comicID string) ([]byte, error) {
 
 	var pageBuffer []byte
 
-	if archiveType == TypePdf {
+	switch {
+	case archiveType == TypePdf:
 		// PDF: render first page
 		buf, err := RenderPdfPage(archivePath, 0)
 		if err != nil {
@@ -44,7 +47,28 @@ func GenerateThumbnail(archivePath, comicID string) ([]byte, error) {
 			return nil, err
 		}
 		pageBuffer = buf
-	} else {
+
+	case archiveType == TypeEpub:
+		// EPUB: try to extract cover image
+		reader, err := NewReader(archivePath)
+		if err != nil {
+			return nil, err
+		}
+		defer reader.Close()
+
+		coverData, err := GetEpubCoverImage(reader)
+		if err != nil {
+			log.Printf("[thumbnail] EPUB cover extraction failed for %s: %v, generating text cover", comicID, err)
+			// Fallback: generate a text-based cover
+			return generateTextCover(archivePath, comicID, thumbDir, cachePath)
+		}
+		pageBuffer = coverData
+
+	case archiveType == TypeTxt:
+		// TXT: generate a text-based cover image
+		return generateTextCover(archivePath, comicID, thumbDir, cachePath)
+
+	default:
 		// Open archive and extract first image
 		reader, err := NewReader(archivePath)
 		if err != nil {
@@ -217,4 +241,119 @@ func toPNG(imgData []byte) ([]byte, error) {
 // quality 85 for user uploads.
 func ResizeImageToWebP(imgData []byte, width, height, quality int) ([]byte, error) {
 	return resizeToWebP(imgData, width, height, quality)
+}
+
+// generateTextCover creates a simple image thumbnail for text files.
+// Uses Go's image library to draw a colored background with the title.
+func generateTextCover(filePath, comicID, thumbDir, cachePath string) ([]byte, error) {
+	width := 400
+	height := 560
+
+	// Create a gradient-like background
+	dst := image.NewRGBA(image.Rect(0, 0, width, height))
+
+	// Generate a consistent color based on filename hash
+	hash := []byte(comicID)
+	hue := int(hash[0]) % 6
+	var bgR, bgG, bgB uint8
+	switch hue {
+	case 0:
+		bgR, bgG, bgB = 59, 130, 246 // blue
+	case 1:
+		bgR, bgG, bgB = 16, 185, 129 // green
+	case 2:
+		bgR, bgG, bgB = 245, 158, 11 // amber
+	case 3:
+		bgR, bgG, bgB = 239, 68, 68 // red
+	case 4:
+		bgR, bgG, bgB = 139, 92, 246 // purple
+	default:
+		bgR, bgG, bgB = 236, 72, 153 // pink
+	}
+
+	// Fill background
+	for y := 0; y < height; y++ {
+		// Slight vertical gradient
+		factor := float64(y) / float64(height)
+		r := uint8(float64(bgR) * (1.0 - factor*0.3))
+		g := uint8(float64(bgG) * (1.0 - factor*0.3))
+		b := uint8(float64(bgB) * (1.0 - factor*0.3))
+		for x := 0; x < width; x++ {
+			dst.Set(x, y, color.RGBA{R: r, G: g, B: b, A: 255})
+		}
+	}
+
+	// Draw a book icon area (white rectangle in center-top)
+	iconTop := 120
+	iconW := 160
+	iconH := 200
+	iconLeft := (width - iconW) / 2
+	for y := iconTop; y < iconTop+iconH; y++ {
+		for x := iconLeft; x < iconLeft+iconW; x++ {
+			dst.Set(x, y, color.RGBA{R: 255, G: 255, B: 255, A: 60})
+		}
+	}
+
+	// Draw "TXT" or "EPUB" label
+	ext := strings.ToUpper(strings.TrimPrefix(filepath.Ext(filePath), "."))
+	// Draw simple pixel text for the extension label
+	drawSimpleText(dst, ext, width/2, iconTop+iconH/2, color.RGBA{R: 255, G: 255, B: 255, A: 200})
+
+	// Encode as JPEG (will be served as webp via Content-Type)
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, dst, &jpeg.Options{Quality: 85}); err != nil {
+		return nil, fmt.Errorf("encode text cover: %w", err)
+	}
+
+	thumbnail := buf.Bytes()
+
+	// Write to cache
+	if err := os.WriteFile(cachePath, thumbnail, 0644); err != nil {
+		log.Printf("[thumbnail] Failed to write text cover cache for %s: %v", comicID, err)
+	}
+
+	return thumbnail, nil
+}
+
+// drawSimpleText draws a simple blocky text string centered at (cx, cy).
+func drawSimpleText(img *image.RGBA, text string, cx, cy int, clr color.RGBA) {
+	// Simple 5x7 pixel font for uppercase letters and digits
+	glyphs := map[rune][]string{
+		'T': {"#####", "  #  ", "  #  ", "  #  ", "  #  ", "  #  ", "  #  "},
+		'X': {"#   #", " # # ", "  #  ", "  #  ", " # # ", "#   #", "#   #"},
+		'E': {"#####", "#    ", "#    ", "#### ", "#    ", "#    ", "#####"},
+		'P': {"#### ", "#   #", "#   #", "#### ", "#    ", "#    ", "#    "},
+		'U': {"#   #", "#   #", "#   #", "#   #", "#   #", "#   #", " ### "},
+		'B': {"#### ", "#   #", "#   #", "#### ", "#   #", "#   #", "#### "},
+	}
+
+	scale := 4
+	charW := 5*scale + scale // char width + spacing
+	totalW := len(text) * charW
+	startX := cx - totalW/2
+
+	for i, ch := range text {
+		glyph, ok := glyphs[ch]
+		if !ok {
+			continue
+		}
+		ox := startX + i*charW
+		oy := cy - (7*scale)/2
+
+		for row, line := range glyph {
+			for col, pixel := range line {
+				if pixel == '#' {
+					for dy := 0; dy < scale; dy++ {
+						for dx := 0; dx < scale; dx++ {
+							px := ox + col*scale + dx
+							py := oy + row*scale + dy
+							if px >= 0 && px < img.Bounds().Dx() && py >= 0 && py < img.Bounds().Dy() {
+								img.Set(px, py, clr)
+							}
+						}
+					}
+				}
+			}
+		}
+	}
 }

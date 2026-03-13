@@ -139,9 +139,9 @@ func RateLimitStrict() gin.HandlerFunc {
 }
 
 // RateLimitAuth returns a rate limiter for auth endpoints (login/register).
-// Default: 5 requests per minute with a burst of 10.
+// Default: 10 requests per minute with a burst of 20.
 func RateLimitAuth() gin.HandlerFunc {
-	limiter := newRateLimiter(5, time.Minute, 10)
+	limiter := newRateLimiter(10, time.Minute, 20)
 	return func(c *gin.Context) {
 		if !limiter.allow(getClientIP(c)) {
 			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{

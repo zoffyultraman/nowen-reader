@@ -3,11 +3,13 @@ package handler
 import (
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/nowen-reader/nowen-reader/internal/archive"
@@ -37,31 +39,47 @@ func (h *ImageHandler) GetPages(c *gin.Context) {
 		return
 	}
 
-	pages, err := service.GetComicPages(id)
+	start := time.Now()
+	result, err := service.GetComicPagesEx(id)
 	if err != nil {
+		log.Printf("[pages] GetComicPagesEx failed for %s (%s) after %v: %v", id, comic.Filename, time.Since(start), err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get pages"})
 		return
+	}
+	elapsed := time.Since(start)
+	if elapsed > 2*time.Second {
+		log.Printf("[pages] Slow page list for %s (%s): %d pages in %v", id, comic.Filename, len(result.Entries), elapsed)
 	}
 
 	type pageInfo struct {
 		Index int    `json:"index"`
 		Name  string `json:"name"`
 		URL   string `json:"url"`
+		Title string `json:"title,omitempty"`
 	}
-	pageList := make([]pageInfo, len(pages))
-	for i, name := range pages {
-		pageList[i] = pageInfo{
+	pageList := make([]pageInfo, len(result.Entries))
+	for i, name := range result.Entries {
+		pi := pageInfo{
 			Index: i,
 			Name:  name,
-			URL:   fmt.Sprintf("/api/comics/%s/page/%d", id, i),
 		}
+		if result.IsNovel {
+			pi.URL = fmt.Sprintf("/api/comics/%s/chapter/%d", id, i)
+			if result.ChapterTitles != nil && i < len(result.ChapterTitles) {
+				pi.Title = result.ChapterTitles[i]
+			}
+		} else {
+			pi.URL = fmt.Sprintf("/api/comics/%s/page/%d", id, i)
+		}
+		pageList[i] = pi
 	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"comicId":    id,
 		"title":      comic.Title,
-		"totalPages": len(pages),
+		"totalPages": len(result.Entries),
 		"pages":      pageList,
+		"isNovel":    result.IsNovel,
 	})
 }
 
@@ -124,7 +142,8 @@ func (h *ImageHandler) GetThumbnail(c *gin.Context) {
 
 	thumbnail, err := service.GetComicThumbnail(id)
 	if err != nil || thumbnail == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Thumbnail unavailable"})
+		log.Printf("[thumbnail] Failed for %s (%s): %v", id, comic.Filename, err)
+		c.JSON(http.StatusNotFound, gin.H{"error": fmt.Sprintf("Thumbnail unavailable: %v", err)})
 		return
 	}
 
@@ -263,4 +282,89 @@ func (h *ImageHandler) UpdateCover(c *gin.Context) {
 // isMultipart checks if a Content-Type header indicates multipart form data.
 func isMultipart(ct string) bool {
 	return strings.HasPrefix(ct, "multipart/form-data")
+}
+
+// ============================================================
+// GET /api/comics/:id/chapter/:chapterIndex — Get chapter text content
+// ============================================================
+
+func (h *ImageHandler) GetChapterContent(c *gin.Context) {
+	id := c.Param("id")
+	chapterIndexStr := c.Param("chapterIndex")
+
+	chapterIndex, err := strconv.Atoi(chapterIndexStr)
+	if err != nil || chapterIndex < 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid chapter index"})
+		return
+	}
+
+	// Verify comic exists
+	comic, err := store.GetComicByID(id)
+	if err != nil || comic == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Comic not found"})
+		return
+	}
+
+	start := time.Now()
+	chapter, err := service.GetChapterContent(id, chapterIndex)
+	if err != nil {
+		log.Printf("[chapter] GetChapterContent failed for %s chapter %d after %v: %v", id, chapterIndex, time.Since(start), err)
+		c.JSON(http.StatusNotFound, gin.H{"error": "Chapter not found: " + err.Error()})
+		return
+	}
+	if elapsed := time.Since(start); elapsed > 2*time.Second {
+		log.Printf("[chapter] Slow chapter load for %s chapter %d: %v", id, chapterIndex, elapsed)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"content":  chapter.Content,
+		"title":    chapter.Title,
+		"mimeType": chapter.MimeType,
+	})
+}
+
+// ============================================================
+// GET /api/comics/:id/epub-resource/*resourcePath — Get EPUB resource (images, etc.)
+// ============================================================
+
+func (h *ImageHandler) GetEpubResource(c *gin.Context) {
+	id := c.Param("id")
+	resourcePath := c.Param("resourcePath")
+
+	// Strip leading slash
+	if len(resourcePath) > 0 && resourcePath[0] == '/' {
+		resourcePath = resourcePath[1:]
+	}
+
+	if resourcePath == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "No resource path provided"})
+		return
+	}
+
+	// Verify comic exists
+	comic, err := store.GetComicByID(id)
+	if err != nil || comic == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Comic not found"})
+		return
+	}
+
+	result, err := service.GetEpubResource(id, resourcePath)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Resource not found: " + err.Error()})
+		return
+	}
+
+	// Generate ETag
+	etag := `"` + archive.ContentMD5(result.Data) + `"`
+	if c.GetHeader("If-None-Match") == etag {
+		c.Header("ETag", etag)
+		c.Status(http.StatusNotModified)
+		return
+	}
+
+	c.Header("Content-Type", result.MimeType)
+	c.Header("Cache-Control", "public, max-age=31536000, immutable")
+	c.Header("Content-Length", strconv.Itoa(len(result.Data)))
+	c.Header("ETag", etag)
+	c.Data(http.StatusOK, result.MimeType, result.Data)
 }

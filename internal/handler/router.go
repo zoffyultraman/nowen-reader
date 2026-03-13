@@ -25,10 +25,11 @@ func SetupRoutes(r *gin.Engine) {
 	auth := NewAuthHandler()
 
 	authGroup := api.Group("/auth")
-	authGroup.Use(middleware.RateLimitAuth())
 	{
-		authGroup.POST("/register", auth.Register)
-		authGroup.POST("/login", auth.Login)
+		// Login/register use strict rate limiting to prevent brute-force
+		authGroup.POST("/register", middleware.RateLimitAuth(), auth.Register)
+		authGroup.POST("/login", middleware.RateLimitAuth(), auth.Login)
+		// Logout and session check don't need strict limiting
 		authGroup.POST("/logout", auth.Logout)
 		authGroup.GET("/me", auth.Me)
 	}
@@ -143,6 +144,12 @@ func SetupRoutes(r *gin.Engine) {
 
 	// Page image uses a different path pattern: /api/comics/:id/page/:pageIndex
 	api.GET("/comics/:id/page/:pageIndex", img.GetPageImage)
+
+	// Chapter content for novel formats: /api/comics/:id/chapter/:chapterIndex
+	api.GET("/comics/:id/chapter/:chapterIndex", img.GetChapterContent)
+
+	// EPUB resource (images, etc.): /api/comics/:id/epub-resource/*resourcePath
+	api.GET("/comics/:id/epub-resource/*resourcePath", img.GetEpubResource)
 
 	// ============================================================
 	// Cache management (Phase 3)

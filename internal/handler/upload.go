@@ -41,7 +41,7 @@ func (h *UploadHandler) Upload(c *gin.Context) {
 	var results []uploadResult
 	for _, fh := range files {
 		ext := strings.ToLower(filepath.Ext(fh.Filename))
-		if !config.IsSupportedArchive(fh.Filename) {
+		if !config.IsSupportedFile(fh.Filename) {
 			results = append(results, uploadResult{Filename: fh.Filename, Error: "Unsupported format: " + ext})
 			continue
 		}

@@ -135,6 +135,10 @@ func (h *OPDSHandler) Download(c *gin.Context) {
 		contentType = "application/x-cb7"
 	case ".pdf":
 		contentType = "application/pdf"
+	case ".epub":
+		contentType = "application/epub+zip"
+	case ".txt":
+		contentType = "text/plain; charset=utf-8"
 	default:
 		contentType = "application/octet-stream"
 	}

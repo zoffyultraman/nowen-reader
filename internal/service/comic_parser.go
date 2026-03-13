@@ -25,8 +25,8 @@ type cachedReader struct {
 var (
 	readerPool    = make(map[string]*cachedReader)
 	readerPoolMu  sync.Mutex
-	readerPoolTTL = 60 * time.Second
-	readerPoolMax = 5
+	readerPoolTTL = 5 * time.Minute // Increased from 60s: TXT/EPUB readers are expensive to create
+	readerPoolMax = 8               // Increased from 5: allow more concurrent readers
 )
 
 func init() {
@@ -56,17 +56,32 @@ func cleanExpiredReaders() {
 // getPooledReader returns a cached or new archive reader.
 // Caller must NOT call Close() on the returned reader.
 func getPooledReader(fp string) (archive.Reader, error) {
+	// Fast path: check if reader is already cached
 	readerPoolMu.Lock()
-	defer readerPoolMu.Unlock()
-
 	if cached, ok := readerPool[fp]; ok {
 		cached.lastUsed = time.Now()
+		readerPoolMu.Unlock()
 		return cached.reader, nil
 	}
+	readerPoolMu.Unlock()
 
+	// Slow path: create reader WITHOUT holding the lock
+	// (archive.NewReader can be very slow for large TXT/EPUB files)
 	reader, err := archive.NewReader(fp)
 	if err != nil {
 		return nil, err
+	}
+
+	// Re-acquire lock to store in pool
+	readerPoolMu.Lock()
+	defer readerPoolMu.Unlock()
+
+	// Double-check: another goroutine may have created the same reader
+	if cached, ok := readerPool[fp]; ok {
+		// Someone else created it; close ours and use theirs
+		reader.Close()
+		cached.lastUsed = time.Now()
+		return cached.reader, nil
 	}
 
 	// Evict LRU if pool is full
@@ -105,8 +120,9 @@ func InvalidateReaderPool() {
 // ============================================================
 
 type pageListCacheEntry struct {
-	entries []string
-	ts      time.Time
+	entries       []string
+	chapterTitles []string
+	ts            time.Time
 }
 
 var (
@@ -155,25 +171,40 @@ func FindComicFilePath(comicID string) (string, string, error) {
 // Get comic pages (list of page entry names)
 // ============================================================
 
-// GetComicPages returns the sorted list of page entry names for a comic.
-func GetComicPages(comicID string) ([]string, error) {
-	// Check cache
-	pageListCacheMu.RLock()
-	if cached, ok := pageListCache[comicID]; ok && time.Since(cached.ts) < pageListCacheTTL {
-		pageListCacheMu.RUnlock()
-		return cached.entries, nil
-	}
-	pageListCacheMu.RUnlock()
+// PagesResult holds page list data with optional chapter info for novels.
+type PagesResult struct {
+	Entries       []string
+	ChapterTitles []string // non-nil only for novel formats
+	IsNovel       bool
+}
 
+// GetComicPagesEx returns pages with extended info (chapter titles for novels).
+func GetComicPagesEx(comicID string) (*PagesResult, error) {
 	fp, _, err := FindComicFilePath(comicID)
 	if err != nil {
 		return nil, err
 	}
 
 	archiveType := archive.DetectType(fp)
-	var entries []string
+	isNovel := archive.IsNovelType(archiveType)
 
-	if archiveType == archive.TypePdf {
+	// Check cache for entries
+	pageListCacheMu.RLock()
+	if cached, ok := pageListCache[comicID]; ok && time.Since(cached.ts) < pageListCacheTTL {
+		pageListCacheMu.RUnlock()
+		result := &PagesResult{Entries: cached.entries, IsNovel: isNovel}
+		if isNovel {
+			result.ChapterTitles = cached.chapterTitles
+		}
+		return result, nil
+	}
+	pageListCacheMu.RUnlock()
+
+	var entries []string
+	var chapterTitles []string
+
+	switch {
+	case archiveType == archive.TypePdf:
 		count, err := archive.GetPdfPageCount(fp)
 		if err != nil {
 			return nil, err
@@ -182,7 +213,25 @@ func GetComicPages(comicID string) ([]string, error) {
 		for i := 0; i < count; i++ {
 			entries[i] = fmt.Sprintf("page-%04d.png", i+1)
 		}
-	} else {
+
+	case isNovel:
+		reader, err := getPooledReader(fp)
+		if err != nil {
+			return nil, err
+		}
+		// Set comic ID for EPUB image URL rewriting
+		if archiveType == archive.TypeEpub {
+			archive.SetEpubComicID(reader, comicID)
+		}
+		// For novels, list entries directly (they are virtual chapter files)
+		for _, e := range reader.ListEntries() {
+			if !e.IsDirectory {
+				entries = append(entries, e.Name)
+			}
+		}
+		chapterTitles = getChapterTitles(reader, archiveType)
+
+	default:
 		reader, err := getPooledReader(fp)
 		if err != nil {
 			return nil, err
@@ -192,10 +241,146 @@ func GetComicPages(comicID string) ([]string, error) {
 
 	// Update cache
 	pageListCacheMu.Lock()
-	pageListCache[comicID] = &pageListCacheEntry{entries: entries, ts: time.Now()}
+	pageListCache[comicID] = &pageListCacheEntry{entries: entries, chapterTitles: chapterTitles, ts: time.Now()}
 	pageListCacheMu.Unlock()
 
-	return entries, nil
+	return &PagesResult{
+		Entries:       entries,
+		ChapterTitles: chapterTitles,
+		IsNovel:       isNovel,
+	}, nil
+}
+
+// GetComicPages returns the sorted list of page entry names (backward compatible).
+func GetComicPages(comicID string) ([]string, error) {
+	result, err := GetComicPagesEx(comicID)
+	if err != nil {
+		return nil, err
+	}
+	return result.Entries, nil
+}
+
+// getChapterTitles extracts chapter titles from a novel reader.
+func getChapterTitles(r archive.Reader, archiveType archive.ArchiveType) []string {
+	switch archiveType {
+	case archive.TypeTxt:
+		return archive.GetTxtChapterTitles(r)
+	case archive.TypeEpub:
+		return archive.GetEpubChapterTitles(r)
+	}
+	return nil
+}
+
+// ============================================================
+// Get chapter content (text for novel formats)
+// ============================================================
+
+// ChapterContent holds the extracted chapter text.
+type ChapterContent struct {
+	Content  string `json:"content"`
+	Title    string `json:"title"`
+	MimeType string `json:"mimeType"`
+}
+
+// GetChapterContent extracts a single chapter's text content.
+func GetChapterContent(comicID string, chapterIndex int) (*ChapterContent, error) {
+	fp, _, err := FindComicFilePath(comicID)
+	if err != nil {
+		return nil, err
+	}
+
+	archiveType := archive.DetectType(fp)
+	if !archive.IsNovelType(archiveType) {
+		return nil, fmt.Errorf("not a novel format: %s", fp)
+	}
+
+	reader, err := getPooledReader(fp)
+	if err != nil {
+		return nil, err
+	}
+
+	// Set comic ID on EPUB reader for image URL rewriting
+	if archiveType == archive.TypeEpub {
+		archive.SetEpubComicID(reader, comicID)
+	}
+
+	allEntries := reader.ListEntries()
+	var chapters []string
+	for _, e := range allEntries {
+		if !e.IsDirectory {
+			chapters = append(chapters, e.Name)
+		}
+	}
+
+	if chapterIndex < 0 || chapterIndex >= len(chapters) {
+		return nil, fmt.Errorf("chapter index %d out of range (0-%d)", chapterIndex, len(chapters)-1)
+	}
+
+	entryName := chapters[chapterIndex]
+	data, err := reader.ExtractEntry(entryName)
+	if err != nil {
+		return nil, fmt.Errorf("extract chapter %d: %w", chapterIndex, err)
+	}
+
+	// Get chapter title — prefer cache to avoid re-computing
+	title := ""
+	pageListCacheMu.RLock()
+	if cached, ok := pageListCache[comicID]; ok && cached.chapterTitles != nil && chapterIndex < len(cached.chapterTitles) {
+		title = cached.chapterTitles[chapterIndex]
+	}
+	pageListCacheMu.RUnlock()
+	if title == "" {
+		titles := getChapterTitles(reader, archiveType)
+		if titles != nil && chapterIndex < len(titles) {
+			title = titles[chapterIndex]
+		}
+	}
+
+	mimeType := "text/plain; charset=utf-8"
+	if archiveType == archive.TypeEpub {
+		mimeType = "text/html; charset=utf-8" // EPUB returns sanitized HTML for rich rendering
+	}
+
+	return &ChapterContent{
+		Content:  string(data),
+		Title:    title,
+		MimeType: mimeType,
+	}, nil
+}
+
+// ============================================================
+// Get EPUB resource (images, etc.)
+// ============================================================
+
+// EpubResource holds the extracted resource data from an EPUB.
+type EpubResource struct {
+	Data     []byte
+	MimeType string
+}
+
+// GetEpubResource extracts a resource (image, etc.) from an EPUB file.
+func GetEpubResource(comicID string, resourcePath string) (*EpubResource, error) {
+	fp, _, err := FindComicFilePath(comicID)
+	if err != nil {
+		return nil, err
+	}
+
+	archiveType := archive.DetectType(fp)
+	if archiveType != archive.TypeEpub {
+		return nil, fmt.Errorf("not an EPUB file: %s", fp)
+	}
+
+	reader, err := getPooledReader(fp)
+	if err != nil {
+		return nil, err
+	}
+
+	data, mimeType, err := archive.GetEpubResourceData(reader, resourcePath)
+	if err != nil {
+		return nil, err
+	}
+
+	return &EpubResource{Data: data, MimeType: mimeType}, nil
 }
 
 // ============================================================
@@ -322,7 +507,7 @@ func GetComicThumbnail(comicID string) ([]byte, error) {
 // Get page count from archive (used by fullSync)
 // ============================================================
 
-// GetArchivePageCount opens an archive and counts image entries.
+// GetArchivePageCount opens an archive and counts image entries (or chapters for novels).
 func GetArchivePageCount(fp string) (int, error) {
 	archiveType := archive.DetectType(fp)
 
@@ -335,6 +520,17 @@ func GetArchivePageCount(fp string) (int, error) {
 		return 0, err
 	}
 	defer reader.Close()
+
+	// For novel formats, count chapters (non-directory entries)
+	if archive.IsNovelType(archiveType) {
+		count := 0
+		for _, e := range reader.ListEntries() {
+			if !e.IsDirectory {
+				count++
+			}
+		}
+		return count, nil
+	}
 
 	images := archive.GetImageEntries(reader)
 	return len(images), nil

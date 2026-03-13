@@ -190,6 +190,7 @@ func DatabaseURL() string {
 // Supported file extensions
 var (
 	SupportedExtensions = []string{".zip", ".cbz", ".cbr", ".rar", ".7z", ".cb7", ".pdf"}
+	NovelExtensions     = []string{".txt", ".epub"}
 	ImageExtensions     = []string{".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".avif"}
 )
 
@@ -202,6 +203,22 @@ func IsSupportedArchive(filename string) bool {
 		}
 	}
 	return false
+}
+
+// IsNovelFile checks if a filename is a supported novel/ebook extension.
+func IsNovelFile(filename string) bool {
+	ext := strings.ToLower(filepath.Ext(filename))
+	for _, e := range NovelExtensions {
+		if ext == e {
+			return true
+		}
+	}
+	return false
+}
+
+// IsSupportedFile checks if a filename is any supported format (archive or novel).
+func IsSupportedFile(filename string) bool {
+	return IsSupportedArchive(filename) || IsNovelFile(filename)
 }
 
 // IsImageFile checks if a filename has a supported image extension.
