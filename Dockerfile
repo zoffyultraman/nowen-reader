@@ -33,7 +33,7 @@ COPY . .
 RUN go mod tidy && go mod download
 
 # Copy frontend build output into web/dist/ for embedding
-COPY --from=frontend-builder /frontend/dist/ ./web/dist/ 2>/dev/null || true
+COPY --from=frontend-builder /frontend/dist/ ./web/dist/
 
 # Build static binary with version info
 ARG VERSION=docker
