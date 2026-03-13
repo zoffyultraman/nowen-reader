@@ -19,6 +19,7 @@ export interface Comic {
   rating?: number; // 1-5
   lastReadPage?: number;
   sortOrder?: number;
+  filename?: string;
 
   totalReadTime?: number; // seconds
   // Metadata fields

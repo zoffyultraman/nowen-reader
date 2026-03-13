@@ -152,6 +152,9 @@ const zhCN = {
     infoPanel: "信息面板",
     goBack: "返回",
     reachedLastPage: "已到达最后一页",
+    loading: "正在加载...",
+    loadError: "加载失败",
+    retry: "重试",
   },
 
   // Reader Toolbar
@@ -159,6 +162,7 @@ const zhCN = {
     single: "单页",
     double: "双页",
     webtoon: "长条",
+    text: "文本",
     rtl: "右→左",
     ltr: "左→右",
     dayMode: "日间",
@@ -613,11 +617,15 @@ export interface Translations {
     infoPanel: string;
     goBack: string;
     reachedLastPage: string;
+    loading: string;
+    loadError: string;
+    retry: string;
   };
   readerToolbar: {
     single: string;
     double: string;
     webtoon: string;
+    text: string;
     rtl: string;
     ltr: string;
     dayMode: string;

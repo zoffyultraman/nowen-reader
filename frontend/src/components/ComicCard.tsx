@@ -7,6 +7,19 @@ import { Comic } from "@/types/comic";
 import { BookOpen, Heart, Star, Info, GripVertical } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
 
+// Check if file is a novel type based on filename extension
+function isNovelFile(filename?: string): boolean {
+  if (!filename) return false;
+  const ext = filename.toLowerCase();
+  return ext.endsWith(".txt") || ext.endsWith(".epub");
+}
+
+function getReaderUrl(comic: Comic): string {
+  return isNovelFile(comic.filename)
+    ? `/novel/${comic.id}`
+    : `/reader/${comic.id}`;
+}
+
 const tagStyleMap: Record<string, string> = {
   Action: "tag-action",
   Romance: "tag-romance",
@@ -136,7 +149,7 @@ const ComicCard = memo(function ComicCard({
               </div>
             )}
             <Link
-              href={`/reader/${comic.id}`}
+              href={getReaderUrl(comic)}
               className="flex flex-1 items-center gap-4 rounded-xl bg-card p-3 transition-all duration-200 group-hover:bg-card-hover group-hover:shadow-lg group-hover:shadow-accent/5"
             >
               {/* Thumbnail */}
@@ -267,7 +280,7 @@ const ComicCard = memo(function ComicCard({
           )}
 
           <Link
-            href={`/reader/${comic.id}`}
+            href={getReaderUrl(comic)}
             className="block"
             onClick={() => onClick?.(comic)}
           >

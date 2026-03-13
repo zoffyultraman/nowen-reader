@@ -48,6 +48,12 @@ function formatFileSize(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function isNovelFile(filename?: string): boolean {
+  if (!filename) return false;
+  const ext = filename.toLowerCase();
+  return ext.endsWith(".txt") || ext.endsWith(".epub");
+}
+
 export default function ComicDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -404,7 +410,7 @@ export default function ComicDetailPage() {
 
             {/* Read Button */}
             <Link
-              href={`/reader/${comic.id}`}
+              href={isNovelFile(comic.filename) ? `/novel/${comic.id}` : `/reader/${comic.id}`}
               className="flex w-full items-center justify-center gap-2 rounded-xl bg-accent py-3 text-sm font-medium text-white transition-all hover:bg-accent-hover hover:shadow-lg hover:shadow-accent/25"
             >
               <Play className="h-4 w-4" />

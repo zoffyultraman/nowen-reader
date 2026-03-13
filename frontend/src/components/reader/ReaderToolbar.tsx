@@ -14,7 +14,7 @@ import {
   Sun,
   Moon,
 } from "lucide-react";
-import { ReadingMode, ReadingDirection } from "@/types/reader";
+import { ComicReadingMode, ReadingDirection } from "@/types/reader";
 import { useTranslation } from "@/lib/i18n";
 
 export type ReaderTheme = "day" | "night";
@@ -24,13 +24,13 @@ interface ReaderToolbarProps {
   title: string;
   currentPage: number;
   totalPages: number;
-  mode: ReadingMode;
+  mode: ComicReadingMode;
   direction: ReadingDirection;
   isFullscreen: boolean;
   readerTheme: ReaderTheme;
   onBack: () => void;
   onPageChange: (page: number) => void;
-  onModeChange: (mode: ReadingMode) => void;
+  onModeChange: (mode: ComicReadingMode) => void;
   onDirectionChange: (dir: ReadingDirection) => void;
   onToggleFullscreen: () => void;
   onToggleTheme: () => void;
@@ -56,7 +56,7 @@ export default function ReaderToolbar({
 }: ReaderToolbarProps) {
   const t = useTranslation();
 
-  const modeOptions: { value: ReadingMode; icon: React.ReactNode; label: string }[] = [
+  const modeOptions: { value: ComicReadingMode; icon: React.ReactNode; label: string }[] = [
     { value: "single", icon: <BookOpen className="h-4 w-4" />, label: t.readerToolbar.single },
     { value: "double", icon: <Columns2 className="h-4 w-4" />, label: t.readerToolbar.double },
     { value: "webtoon", icon: <GalleryVertical className="h-4 w-4" />, label: t.readerToolbar.webtoon },

@@ -47,7 +47,8 @@ interface PagesResponse {
   comicId: string;
   title: string;
   totalPages: number;
-  pages: { index: number; name: string; url: string }[];
+  pages: { index: number; name: string; url: string; title?: string }[];
+  isNovel?: boolean;
 }
 
 /**
@@ -181,34 +182,66 @@ export function useComics(options?: {
  */
 export function useComicPages(comicId: string) {
   const [pages, setPages] = useState<string[]>([]);
+  const [chapters, setChapters] = useState<{ index: number; name: string; url: string; title?: string }[]>([]);
   const [title, setTitle] = useState("");
+  const [isNovel, setIsNovel] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!comicId) return;
 
+    let cancelled = false; // track unmount vs timeout abort
+    let timedOut = false;
+
     setLoading(true);
     setError(null);
 
-    fetch(`/api/comics/${comicId}/pages`)
+    // Use AbortController with timeout for large file parsing
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, 120_000); // 120s timeout for large files
+
+    fetch(`/api/comics/${comicId}/pages`, { signal: controller.signal })
       .then((res) => {
         if (!res.ok) throw new Error("Comic not found");
         return res.json();
       })
       .then((data: PagesResponse) => {
+        if (cancelled) return; // component unmounted, discard result
         setTitle(data.title);
+        setIsNovel(!!data.isNovel);
+        setChapters(data.pages || []);
         setPages((data.pages || []).map((p) => p.url));
       })
       .catch((err) => {
-        setError(err instanceof Error ? err.message : "Unknown error");
+        if (cancelled) return; // component unmounted, don't set error
+        if (err instanceof DOMException && err.name === "AbortError") {
+          if (timedOut) {
+            setError("Loading timeout — file may be too large. Please retry.");
+          }
+          // If not timedOut, it's a cleanup abort — ignore silently
+        } else {
+          setError(err instanceof Error ? err.message : "Unknown error");
+        }
       })
       .finally(() => {
-        setLoading(false);
+        clearTimeout(timeoutId);
+        if (!cancelled) {
+          setLoading(false);
+        }
       });
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timeoutId);
+      controller.abort();
+    };
   }, [comicId]);
 
-  return { pages, title, loading, error };
+  return { pages, chapters, title, isNovel, loading, error };
 }
 
 /**

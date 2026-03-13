@@ -15,6 +15,7 @@ import { PWAInstallBanner } from "@/components/PWAInstall";
 import Home from "@/app/page";
 import ComicDetail from "@/app/comic/[id]/page";
 import Reader from "@/app/reader/[id]/page";
+import NovelReader from "@/app/novel/[id]/page";
 import EHentai from "@/app/ehentai/page";
 import Recommendations from "@/app/recommendations/page";
 import Stats from "@/app/stats/page";
@@ -30,6 +31,7 @@ function App() {
                 <Route path="/" element={<Home />} />
                 <Route path="/comic/:id" element={<ComicDetail />} />
                 <Route path="/reader/:id" element={<Reader />} />
+                <Route path="/novel/:id" element={<NovelReader />} />
                 <Route path="/ehentai" element={<EHentai />} />
                 <Route path="/recommendations" element={<Recommendations />} />
                 <Route path="/stats" element={<Stats />} />

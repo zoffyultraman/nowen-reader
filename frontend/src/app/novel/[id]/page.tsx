@@ -2,8 +2,6 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { mockComics } from "@/data/mock-comics";
-import { getMockPages, comicPageCounts } from "@/data/mock-pages";
 import {
   useComicPages,
   useComicDetail,
@@ -15,26 +13,23 @@ import {
   startSession,
   endSession,
 } from "@/hooks/useComics";
-import { ComicReadingMode, ReadingDirection } from "@/types/reader";
-import ReaderToolbar from "@/components/reader/ReaderToolbar";
-import type { ReaderTheme } from "@/components/reader/ReaderToolbar";
-import { useTheme } from "@/lib/theme-context";
-import SinglePageView from "@/components/reader/SinglePageView";
-import DoublePageView from "@/components/reader/DoublePageView";
-import WebtoonView from "@/components/reader/WebtoonView";
+import TextReaderView from "@/components/reader/TextReaderView";
+import NovelToolbar from "@/components/reader/NovelToolbar";
 import { Heart, Star, Tag, X, Plus } from "lucide-react";
 import { useTranslation, useLocale } from "@/lib/i18n";
+import { useTheme } from "@/lib/theme-context";
+import type { ReaderTheme } from "@/components/reader/ReaderToolbar";
 
-export default function ReaderPage() {
+export default function NovelReaderPage() {
   const params = useParams();
   const router = useRouter();
   const comicId = params.id as string;
   const t = useTranslation();
   const { locale } = useLocale();
 
-  // Try API first
+  // Fetch chapters from API
   const {
-    pages: apiPages,
+    chapters: apiChapters,
     title: apiTitle,
     isNovel,
     loading: apiLoading,
@@ -45,28 +40,12 @@ export default function ReaderPage() {
   const { comic: comicDetail, refetch: refetchDetail } =
     useComicDetail(comicId);
 
-  // Fallback to mock data
-  const mockComic = mockComics.find((c) => c.id === comicId);
-  const mockPageCount = comicPageCounts[comicId] || 20;
-  const mockPages = mockComic ? getMockPages(comicId, mockPageCount) : [];
-
-  // Determine data source
-  const useRealData = !apiError && apiPages.length > 0;
-  const pages = useRealData ? apiPages : mockPages;
-  const title = useRealData ? apiTitle : mockComic?.title || t.reader.unknownComic;
-  const isLoading = apiLoading && !mockComic;
-
-  // Redirect novel files to the dedicated novel reader
-  useEffect(() => {
-    if (isNovel && !apiLoading) {
-      router.replace(`/novel/${comicId}`);
-    }
-  }, [isNovel, apiLoading, comicId, router]);
+  const title = apiTitle || comicDetail?.title || t.reader.unknownComic;
+  const isLoading = apiLoading;
+  const totalChapters = apiChapters.length;
 
   // State
   const [currentPage, setCurrentPage] = useState(0);
-  const [mode, setMode] = useState<ComicReadingMode>("single");
-  const [direction, setDirection] = useState<ReadingDirection>("ltr");
   const [toolbarVisible, setToolbarVisible] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showInfoPanel, setShowInfoPanel] = useState(false);
@@ -87,23 +66,21 @@ export default function ReaderPage() {
   // Reading session tracking
   const sessionIdRef = useRef<number | null>(null);
   const sessionStartTimeRef = useRef<number>(Date.now());
-  const sessionStartPageRef = useRef<number>(0);
 
   // Restore reading progress when comic detail loads
   useEffect(() => {
-    if (comicDetail && useRealData) {
-      if (comicDetail.lastReadPage > 0 && comicDetail.lastReadPage < pages.length) {
+    if (comicDetail && totalChapters > 0) {
+      if (comicDetail.lastReadPage > 0 && comicDetail.lastReadPage < totalChapters) {
         setCurrentPage(comicDetail.lastReadPage);
-        sessionStartPageRef.current = comicDetail.lastReadPage;
       }
       setIsFavorite(comicDetail.isFavorite);
       setRating(comicDetail.rating || 0);
     }
-  }, [comicDetail, useRealData, pages.length]);
+  }, [comicDetail, totalChapters]);
 
   // Start reading session
   useEffect(() => {
-    if (!useRealData || pages.length === 0) return;
+    if (totalChapters === 0) return;
 
     sessionStartTimeRef.current = Date.now();
     startSession(comicId, currentPage).then((id) => {
@@ -111,7 +88,6 @@ export default function ReaderPage() {
     });
 
     return () => {
-      // End session on unmount
       if (sessionIdRef.current) {
         const duration = Math.round((Date.now() - sessionStartTimeRef.current) / 1000);
         if (duration > 2) {
@@ -121,11 +97,11 @@ export default function ReaderPage() {
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [useRealData, comicId]);
+  }, [comicId, totalChapters > 0]);
 
-  // Save progress on page change (debounced)
+  // Save progress on chapter change (debounced)
   useEffect(() => {
-    if (!useRealData) return;
+    if (totalChapters === 0) return;
 
     if (saveTimerRef.current) {
       clearTimeout(saveTimerRef.current);
@@ -138,12 +114,12 @@ export default function ReaderPage() {
     return () => {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     };
-  }, [currentPage, comicId, useRealData]);
+  }, [currentPage, comicId, totalChapters]);
 
   // Save progress on unmount
   useEffect(() => {
     return () => {
-      if (useRealData) {
+      if (totalChapters > 0) {
         saveReadingProgress(comicId, currentPage);
       }
     };
@@ -157,36 +133,13 @@ export default function ReaderPage() {
     return () => clearTimeout(timer);
   }, [toolbarVisible, currentPage]);
 
-  // Keyboard navigation
+  // Keyboard navigation (Escape, F, I)
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
-      // Don't handle if info panel is open (for tag input)
       if (showInfoPanel) return;
 
-      if (mode === "webtoon") return;
-
-      const isForward =
-        direction === "ltr"
-          ? e.key === "ArrowRight" || e.key === "d"
-          : e.key === "ArrowLeft" || e.key === "a";
-
-      const isBack =
-        direction === "ltr"
-          ? e.key === "ArrowLeft" || e.key === "a"
-          : e.key === "ArrowRight" || e.key === "d";
-
-      const step = mode === "double" ? 2 : 1;
-
-      if (isForward || e.key === "ArrowDown" || e.key === " ") {
-        e.preventDefault();
-        setCurrentPage((p) => Math.min(pages.length - 1, p + step));
-      } else if (isBack || e.key === "ArrowUp") {
-        e.preventDefault();
-        setCurrentPage((p) => Math.max(0, p - step));
-      } else if (e.key === "Escape") {
-        if (showInfoPanel) {
-          setShowInfoPanel(false);
-        } else if (isFullscreen) {
+      if (e.key === "Escape") {
+        if (isFullscreen) {
           document.exitFullscreen?.();
         } else {
           router.back();
@@ -197,7 +150,7 @@ export default function ReaderPage() {
         setShowInfoPanel((v) => !v);
       }
     },
-    [direction, mode, pages.length, isFullscreen, router, showInfoPanel]
+    [isFullscreen, router, showInfoPanel]
   );
 
   useEffect(() => {
@@ -230,10 +183,10 @@ export default function ReaderPage() {
 
   const handlePageChange = useCallback(
     (page: number) => {
-      const clamped = Math.max(0, Math.min(pages.length - 1, page));
+      const clamped = Math.max(0, Math.min(totalChapters - 1, page));
       setCurrentPage(clamped);
     },
-    [pages.length]
+    [totalChapters]
   );
 
   // Theme toggle
@@ -281,8 +234,8 @@ export default function ReaderPage() {
     );
   }
 
-  // Error state (e.g. timeout for large files)
-  if (apiError && !mockComic) {
+  // Error state
+  if (apiError) {
     return (
       <div className="flex h-screen items-center justify-center bg-black text-white">
         <div className="text-center">
@@ -307,12 +260,12 @@ export default function ReaderPage() {
     );
   }
 
-  // 404
-  if (pages.length === 0) {
+  // No chapters found
+  if (totalChapters === 0) {
     return (
       <div className="flex h-screen items-center justify-center bg-black text-white">
         <div className="text-center">
-          <p className="text-lg font-medium">{ t.reader.comicNotFound}</p>
+          <p className="text-lg font-medium">{t.reader.comicNotFound}</p>
           <button
             onClick={() => router.push("/")}
             className="mt-4 rounded-lg bg-accent px-4 py-2 text-sm"
@@ -325,79 +278,33 @@ export default function ReaderPage() {
   }
 
   return (
-    <div className={`relative h-screen w-full overflow-hidden transition-colors duration-300 ${
-      readerTheme === "day" ? "bg-gray-100" : "bg-black"
-    }`}>
-      {/* Reading View */}
-      {mode === "single" && (
-        <SinglePageView
-          pages={pages}
-          currentPage={currentPage}
-          onPageChange={handlePageChange}
-          onTapCenter={handleTapCenter}
-          direction={direction}
-          useRealData={useRealData}
-          readerTheme={readerTheme}
-        />
-      )}
+    <div className="relative h-screen w-full overflow-hidden">
+      {/* Text Reader View */}
+      <TextReaderView
+        chapters={apiChapters}
+        currentPage={currentPage}
+        onPageChange={handlePageChange}
+        onTapCenter={handleTapCenter}
+        readerTheme={readerTheme}
+      />
 
-      {mode === "double" && (
-        <DoublePageView
-          pages={pages}
-          currentPage={currentPage}
-          onPageChange={handlePageChange}
-          onTapCenter={handleTapCenter}
-          direction={direction}
-          useRealData={useRealData}
-          readerTheme={readerTheme}
-        />
-      )}
-
-      {mode === "webtoon" && (
-        <WebtoonView
-          pages={pages}
-          currentPage={currentPage}
-          onPageChange={handlePageChange}
-          onTapCenter={handleTapCenter}
-          useRealData={useRealData}
-          readerTheme={readerTheme}
-        />
-      )}
-
-      {/* Toolbar */}
-      <ReaderToolbar
+      {/* Novel Toolbar */}
+      <NovelToolbar
         visible={toolbarVisible}
         title={title}
-        currentPage={currentPage}
-        totalPages={pages.length}
-        mode={mode}
-        direction={direction}
+        currentChapter={currentPage}
+        totalChapters={totalChapters}
         isFullscreen={isFullscreen}
         readerTheme={readerTheme}
         onBack={() => router.push("/")}
-        onPageChange={handlePageChange}
-        onModeChange={setMode}
-        onDirectionChange={setDirection}
+        onChapterChange={handlePageChange}
         onToggleFullscreen={toggleFullscreen}
         onToggleTheme={handleToggleTheme}
-        onShowInfo={useRealData ? () => setShowInfoPanel(true) : undefined}
+        onShowInfo={() => setShowInfoPanel(true)}
       />
 
-      {/* Page number indicator */}
-      {mode !== "webtoon" && !toolbarVisible && (
-        <div className={`pointer-events-none fixed bottom-4 left-1/2 -translate-x-1/2 rounded-full px-3 py-1 backdrop-blur-sm ${
-          readerTheme === "day" ? "bg-white/70 shadow" : "bg-black/50"
-        }`}>
-          <span className={`text-xs font-mono ${
-            readerTheme === "day" ? "text-gray-500" : "text-white/50"
-          }`}>
-            {currentPage + 1} / {pages.length}
-          </span>
-        </div>
-      )}
-
       {/* Info Panel (slide-in from right) */}
-      {showInfoPanel && useRealData && (
+      {showInfoPanel && (
         <>
           {/* Backdrop */}
           <div
@@ -466,7 +373,6 @@ export default function ReaderPage() {
                 {t.reader.tagsLabel}
               </h3>
 
-              {/* Existing tags */}
               <div className="mb-3 flex flex-wrap gap-2">
                 {(comicDetail?.tags || []).map((tag) => (
                   <span
@@ -489,7 +395,6 @@ export default function ReaderPage() {
                 )}
               </div>
 
-              {/* Add tag */}
               <div className="flex gap-2">
                 <input
                   type="text"
@@ -518,13 +423,13 @@ export default function ReaderPage() {
                 <div className="flex justify-between">
                   <span>{t.reader.currentPage}</span>
                   <span className="text-white/80">
-                    {currentPage + 1} / {pages.length}
+                    {currentPage + 1} / {totalChapters}
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span>{t.reader.readProgress}</span>
                   <span className="text-white/80">
-                    {Math.round(((currentPage + 1) / pages.length) * 100)}%
+                    {Math.round(((currentPage + 1) / totalChapters) * 100)}%
                   </span>
                 </div>
                 {comicDetail?.lastReadAt && (
@@ -541,7 +446,7 @@ export default function ReaderPage() {
                 <div
                   className="h-full rounded-full bg-accent transition-all duration-300"
                   style={{
-                    width: `${((currentPage + 1) / pages.length) * 100}%`,
+                    width: `${((currentPage + 1) / totalChapters) * 100}%`,
                   }}
                 />
               </div>

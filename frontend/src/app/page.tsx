@@ -53,6 +53,7 @@ function apiToComic(api: ApiComic): Comic {
     sortOrder: api.sortOrder,
     totalReadTime: api.totalReadTime,
     categories: api.categories || [],
+    filename: api.filename,
   };
 }
 
@@ -354,7 +355,7 @@ export default function Home() {
         ref={fileInputRef}
         type="file"
         multiple
-        accept=".zip,.cbz,.cbr,.rar,.7z,.cb7,.pdf"
+        accept=".zip,.cbz,.cbr,.rar,.7z,.cb7,.pdf,.txt,.epub"
         className="hidden"
         onChange={handleFileChange}
       />

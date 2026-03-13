@@ -154,6 +154,9 @@ const en: Translations = {
     infoPanel: "Info Panel",
     goBack: "Back",
     reachedLastPage: "Reached the last page",
+    loading: "Loading...",
+    loadError: "Failed to load",
+    retry: "Retry",
   },
 
   // Reader Toolbar
@@ -161,6 +164,7 @@ const en: Translations = {
     single: "Single",
     double: "Double",
     webtoon: "Scroll",
+    text: "Text",
     rtl: "R→L",
     ltr: "L→R",
     dayMode: "Day",
