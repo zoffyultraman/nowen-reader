@@ -28,6 +28,9 @@ RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
 
 WORKDIR /build
 
+# Use China Go module proxy for faster & more reliable access
+ENV GOPROXY=https://goproxy.cn,direct
+
 # Copy source
 COPY . .
 
