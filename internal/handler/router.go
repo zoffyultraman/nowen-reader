@@ -249,7 +249,6 @@ func SetupRoutes(r *gin.Engine) {
 		aiGroup.GET("/status", ai.Status)
 		aiGroup.GET("/settings", ai.GetSettings)
 		aiGroup.PUT("/settings", ai.UpdateSettings)
-		aiGroup.GET("/duplicates", ai.Duplicates)
 		aiGroup.GET("/models", ai.Models)
 	}
 

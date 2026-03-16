@@ -4,9 +4,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/nowen-reader/nowen-reader/internal/config"
 	"github.com/nowen-reader/nowen-reader/internal/service"
-	"github.com/nowen-reader/nowen-reader/internal/store"
 )
 
 type AIHandler struct{}
@@ -33,14 +31,12 @@ func (h *AIHandler) GetSettings(c *gin.Context) {
 	}
 
 	c.JSON(200, gin.H{
-		"enableLocalAI":        cfg.EnableLocalAI,
-		"enablePerceptualHash": cfg.EnablePerceptualHash,
-		"enableCloudAI":        cfg.EnableCloudAI,
-		"cloudProvider":        cfg.CloudProvider,
-		"cloudApiKey":          maskedKey,
-		"cloudApiUrl":          cfg.CloudAPIURL,
-		"cloudModel":           cfg.CloudModel,
-		"providerPresets":      service.ProviderPresets,
+		"enableCloudAI":   cfg.EnableCloudAI,
+		"cloudProvider":   cfg.CloudProvider,
+		"cloudApiKey":     maskedKey,
+		"cloudApiUrl":     cfg.CloudAPIURL,
+		"cloudModel":      cfg.CloudModel,
+		"providerPresets": service.ProviderPresets,
 	})
 }
 
@@ -63,40 +59,6 @@ func (h *AIHandler) UpdateSettings(c *gin.Context) {
 		return
 	}
 	c.JSON(200, gin.H{"success": true})
-}
-
-// GET /api/ai/duplicates
-func (h *AIHandler) Duplicates(c *gin.Context) {
-	cfg := service.LoadAIConfig()
-	if !cfg.EnablePerceptualHash {
-		c.JSON(200, gin.H{"groups": []interface{}{}, "message": "Perceptual hash is disabled"})
-		return
-	}
-
-	allComics, err := store.GetAllComicIDsAndFilenames()
-	if err != nil {
-		c.JSON(500, gin.H{"error": "Failed to load comics"})
-		return
-	}
-
-	var comics []struct {
-		ID       string
-		Filename string
-		Title    string
-	}
-	for _, c := range allComics {
-		title := store.FilenameToTitle(c.Filename)
-		comics = append(comics, struct {
-			ID       string
-			Filename string
-			Title    string
-		}{c.ID, c.Filename, title})
-	}
-
-	threshold := 10 // Hamming distance threshold
-	groups := service.FindVisuallySimilarCovers(comics, config.GetThumbnailsDir(), threshold)
-
-	c.JSON(200, gin.H{"groups": groups})
 }
 
 // GET /api/ai/models?provider=...&apiUrl=...&apiKey=...

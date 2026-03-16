@@ -362,10 +362,7 @@ const zhCN = {
   // AI
   ai: {
     title: "AI 功能",
-    localAI: "本地 AI",
     cloudAI: "云端 AI",
-    perceptualHash: "感知哈希去重",
-    perceptualHashDesc: "检测封面视觉相似的重复漫画",
     provider: "服务商",
     compatible: "兼容 API",
     model: "模型",
@@ -375,7 +372,6 @@ const zhCN = {
     connectionFailed: "连接失败",
     saving: "保存中...",
     saveSettings: "保存设置",
-    similarCover: "封面视觉相似",
     internationalProviders: "国际服务商",
     chinaProviders: "国内服务商",
     customProvider: "自定义",
@@ -858,10 +854,7 @@ export interface Translations {
   };
   ai: {
     title: string;
-    localAI: string;
     cloudAI: string;
-    perceptualHash: string;
-    perceptualHashDesc: string;
     provider: string;
     compatible: string;
     model: string;
@@ -871,7 +864,6 @@ export interface Translations {
     connectionFailed: string;
     saving: string;
     saveSettings: string;
-    similarCover: string;
     internationalProviders: string;
     chinaProviders: string;
     customProvider: string;

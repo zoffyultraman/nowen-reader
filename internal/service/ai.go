@@ -3,16 +3,11 @@ package service
 import (
 	"encoding/json"
 	"fmt"
-	"image"
-	_ "image/gif"
-	_ "image/jpeg"
-	_ "image/png"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/nowen-reader/nowen-reader/internal/config"
@@ -53,9 +48,6 @@ var ProviderPresets = map[string]ProviderPreset{
 }
 
 type AIConfig struct {
-	EnableLocalAI        bool `json:"enableLocalAI"`
-	EnablePerceptualHash bool `json:"enablePerceptualHash"`
-
 	EnableCloudAI bool   `json:"enableCloudAI"`
 	CloudProvider string `json:"cloudProvider"`
 	CloudAPIKey   string `json:"cloudApiKey"`
@@ -64,13 +56,11 @@ type AIConfig struct {
 }
 
 var defaultAIConfig = AIConfig{
-	EnableLocalAI:        true,
-	EnablePerceptualHash: true,
-	EnableCloudAI:        false,
-	CloudProvider:        "openai",
-	CloudAPIKey:          "",
-	CloudAPIURL:          "https://api.openai.com/v1",
-	CloudModel:           "gpt-4o-mini",
+	EnableCloudAI: false,
+	CloudProvider: "openai",
+	CloudAPIKey:   "",
+	CloudAPIURL:   "https://api.openai.com/v1",
+	CloudModel:    "gpt-4o-mini",
 }
 
 func aiConfigPath() string {
@@ -95,241 +85,24 @@ func SaveAIConfig(cfg AIConfig) error {
 }
 
 // ============================================================
-// Perceptual Hash (pHash)
-// ============================================================
-
-// GeneratePerceptualHash creates a perceptual hash from image bytes.
-// Uses 8x8 grayscale resize → compare to mean → 64-bit hash → hex.
-func GeneratePerceptualHash(imgData []byte) (string, error) {
-	img, _, err := image.Decode(strings.NewReader(string(imgData)))
-	if err != nil {
-		return "", err
-	}
-
-	// Resize to 8x8 grayscale
-	bounds := img.Bounds()
-	w, h := bounds.Dx(), bounds.Dy()
-
-	var pixels [64]float64
-	for row := 0; row < 8; row++ {
-		for col := 0; col < 8; col++ {
-			srcX := bounds.Min.X + col*w/8
-			srcY := bounds.Min.Y + row*h/8
-			r, g, b, _ := img.At(srcX, srcY).RGBA()
-			// Convert to grayscale
-			gray := 0.299*float64(r>>8) + 0.587*float64(g>>8) + 0.114*float64(b>>8)
-			pixels[row*8+col] = gray
-		}
-	}
-
-	// Calculate mean
-	var sum float64
-	for _, v := range pixels {
-		sum += v
-	}
-	mean := sum / 64
-
-	// Build hash
-	var hash uint64
-	for i, v := range pixels {
-		if v > mean {
-			hash |= 1 << uint(63-i)
-		}
-	}
-
-	return fmt.Sprintf("%016x", hash), nil
-}
-
-// HammingDistance returns the number of differing bits between two hex hashes.
-func HammingDistance(hash1, hash2 string) int {
-	if len(hash1) != len(hash2) {
-		if len(hash1) > len(hash2) {
-			return len(hash1) * 4
-		}
-		return len(hash2) * 4
-	}
-
-	distance := 0
-	for i := 0; i < len(hash1); i++ {
-		n1 := hexVal(hash1[i])
-		n2 := hexVal(hash2[i])
-		xor := n1 ^ n2
-		for xor > 0 {
-			distance += int(xor & 1)
-			xor >>= 1
-		}
-	}
-	return distance
-}
-
-func hexVal(c byte) int {
-	switch {
-	case c >= '0' && c <= '9':
-		return int(c - '0')
-	case c >= 'a' && c <= 'f':
-		return int(c - 'a' + 10)
-	case c >= 'A' && c <= 'F':
-		return int(c - 'A' + 10)
-	}
-	return 0
-}
-
-// ============================================================
-// pHash Cache
-// ============================================================
-
-var (
-	pHashCache   map[string]string
-	pHashCacheMu sync.RWMutex
-)
-
-func pHashCachePath() string {
-	return filepath.Join(config.DataDir(), "phash-cache.json")
-}
-
-func LoadPHashCache() map[string]string {
-	pHashCacheMu.Lock()
-	defer pHashCacheMu.Unlock()
-
-	if pHashCache != nil {
-		return pHashCache
-	}
-
-	pHashCache = make(map[string]string)
-	data, err := os.ReadFile(pHashCachePath())
-	if err != nil {
-		return pHashCache
-	}
-	_ = json.Unmarshal(data, &pHashCache)
-	return pHashCache
-}
-
-func SavePHashCache() {
-	pHashCacheMu.RLock()
-	defer pHashCacheMu.RUnlock()
-
-	if pHashCache == nil {
-		return
-	}
-	dir := filepath.Dir(pHashCachePath())
-	os.MkdirAll(dir, 0755)
-	data, _ := json.Marshal(pHashCache)
-	_ = os.WriteFile(pHashCachePath(), data, 0644)
-}
-
-// FindVisuallySimilarCovers finds comics with similar cover thumbnails.
-func FindVisuallySimilarCovers(comics []struct {
-	ID       string
-	Filename string
-	Title    string
-}, thumbDir string, threshold int) []struct {
-	Reason string   `json:"reason"`
-	Comics []string `json:"comics"`
-} {
-	cache := LoadPHashCache()
-	cacheUpdated := false
-
-	type hashItem struct {
-		ID   string
-		Hash string
-	}
-	var hashes []hashItem
-
-	for _, comic := range comics {
-		pHashCacheMu.RLock()
-		if h, ok := cache[comic.ID]; ok {
-			hashes = append(hashes, hashItem{comic.ID, h})
-			pHashCacheMu.RUnlock()
-			continue
-		}
-		pHashCacheMu.RUnlock()
-
-		thumbPath := filepath.Join(thumbDir, comic.ID+".webp")
-		imgData, err := os.ReadFile(thumbPath)
-		if err != nil {
-			continue
-		}
-
-		hash, err := GeneratePerceptualHash(imgData)
-		if err != nil {
-			continue
-		}
-
-		hashes = append(hashes, hashItem{comic.ID, hash})
-		pHashCacheMu.Lock()
-		cache[comic.ID] = hash
-		pHashCacheMu.Unlock()
-		cacheUpdated = true
-	}
-
-	if cacheUpdated {
-		SavePHashCache()
-	}
-
-	// Find similar pairs
-	groups := make(map[string]map[string]bool)
-	for i := 0; i < len(hashes); i++ {
-		for j := i + 1; j < len(hashes); j++ {
-			dist := HammingDistance(hashes[i].Hash, hashes[j].Hash)
-			if dist <= threshold {
-				key := hashes[i].ID
-				if groups[key] == nil {
-					groups[key] = map[string]bool{hashes[i].ID: true}
-				}
-				groups[key][hashes[j].ID] = true
-			}
-		}
-	}
-
-	var result []struct {
-		Reason string   `json:"reason"`
-		Comics []string `json:"comics"`
-	}
-	for _, members := range groups {
-		if len(members) > 1 {
-			var ids []string
-			for id := range members {
-				ids = append(ids, id)
-			}
-			result = append(result, struct {
-				Reason string   `json:"reason"`
-				Comics []string `json:"comics"`
-			}{Reason: "similarCover", Comics: ids})
-		}
-	}
-	return result
-}
-
-// ============================================================
 // AI Status
 // ============================================================
 
 type AIStatus struct {
-	LocalAI struct {
-		Available      bool `json:"available"`
-		PerceptualHash bool `json:"perceptualHash"`
-	} `json:"localAI"`
 	CloudAI struct {
 		Configured bool   `json:"configured"`
 		Provider   string `json:"provider"`
 		Model      string `json:"model"`
 	} `json:"cloudAI"`
-	Stats struct {
-		PHashCacheSize int `json:"pHashCacheSize"`
-	} `json:"stats"`
 }
 
 func GetAIStatus() AIStatus {
 	cfg := LoadAIConfig()
-	cache := LoadPHashCache()
 
 	var status AIStatus
-	status.LocalAI.Available = true
-	status.LocalAI.PerceptualHash = cfg.EnablePerceptualHash
 	status.CloudAI.Configured = cfg.EnableCloudAI && cfg.CloudAPIKey != ""
 	status.CloudAI.Provider = cfg.CloudProvider
 	status.CloudAI.Model = cfg.CloudModel
-	status.Stats.PHashCacheSize = len(cache)
 	return status
 }
 

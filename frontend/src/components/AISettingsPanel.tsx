@@ -5,9 +5,7 @@ import {
   Brain,
   Cloud,
   Eye,
-  Fingerprint,
   Loader2,
-  Sparkles,
   ChevronDown,
   RefreshCw,
   Edit3,
@@ -65,8 +63,6 @@ const INTERNATIONAL_PROVIDERS: CloudProvider[] = ["openai", "anthropic", "google
 const CHINA_PROVIDERS: CloudProvider[] = ["deepseek", "zhipu", "qwen", "doubao", "moonshot", "baichuan", "minimax", "stepfun", "yi"];
 
 interface AIConfig {
-  enableLocalAI: boolean;
-  enablePerceptualHash: boolean;
   enableCloudAI: boolean;
   cloudProvider: CloudProvider;
   cloudApiKey: string;
@@ -75,17 +71,10 @@ interface AIConfig {
 }
 
 interface AIStatus {
-  localAI: {
-    available: boolean;
-    perceptualHash: boolean;
-  };
   cloudAI: {
     configured: boolean;
     provider: string;
     model: string;
-  };
-  stats: {
-    pHashCacheSize: number;
   };
 }
 
@@ -189,36 +178,6 @@ export function AISettingsPanel() {
         <h3 className="text-sm font-medium text-foreground">
           {aiT.title || "AI Features"}
         </h3>
-      </div>
-
-      {/* Local AI Section */}
-      <div className="space-y-3 rounded-xl bg-background p-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-purple-400" />
-            <span className="text-sm font-medium text-foreground">
-              {aiT.localAI || "Local AI"}
-            </span>
-          </div>
-          <ToggleSwitch
-            checked={config.enableLocalAI}
-            onChange={(v) => setConfig({ ...config, enableLocalAI: v })}
-          />
-        </div>
-
-        {config.enableLocalAI && (
-          <div className="space-y-2 border-t border-border/30 pt-3">
-            {/* Perceptual Hash */}
-            <FeatureRow
-              icon={<Fingerprint className="h-3.5 w-3.5" />}
-              label={aiT.perceptualHash || "Perceptual Hash Dedup"}
-              description={aiT.perceptualHashDesc || "Detect visually similar covers"}
-              checked={config.enablePerceptualHash}
-              onChange={(v) => setConfig({ ...config, enablePerceptualHash: v })}
-              stat={status ? `${status.stats.pHashCacheSize} cached` : undefined}
-            />
-          </div>
-        )}
       </div>
 
       {/* Cloud AI Section */}
@@ -510,37 +469,5 @@ function ToggleSwitch({
         }`}
       />
     </button>
-  );
-}
-
-function FeatureRow({
-  icon,
-  label,
-  description,
-  checked,
-  onChange,
-  stat,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  description: string;
-  checked: boolean;
-  onChange: (v: boolean) => void;
-  stat?: string;
-}) {
-  return (
-    <div className="flex items-center gap-3 py-1">
-      <span className="text-muted">{icon}</span>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-medium text-foreground">{label}</span>
-          {stat && (
-            <span className="text-[10px] text-muted">({stat})</span>
-          )}
-        </div>
-        <p className="text-[10px] text-muted truncate">{description}</p>
-      </div>
-      <ToggleSwitch checked={checked} onChange={onChange} />
-    </div>
   );
 }

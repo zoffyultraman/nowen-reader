@@ -40,15 +40,7 @@ func (h *CacheHandler) ClearCache(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"success": true, "deleted": count})
 
 	case "clear-search":
-		count := 0
-		cacheFiles := []string{"phash-cache.json"}
-		for _, f := range cacheFiles {
-			fp := filepath.Join(config.DataDir(), f)
-			if err := os.Remove(fp); err == nil {
-				count++
-			}
-		}
-		c.JSON(http.StatusOK, gin.H{"success": true, "deleted": count})
+		c.JSON(http.StatusOK, gin.H{"success": true, "deleted": 0})
 
 	case "clear-all":
 		service.InvalidateAllCaches()

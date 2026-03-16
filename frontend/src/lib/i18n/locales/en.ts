@@ -364,10 +364,7 @@ const en: Translations = {
   // AI
   ai: {
     title: "AI Features",
-    localAI: "Local AI",
     cloudAI: "Cloud AI",
-    perceptualHash: "Perceptual Hash Dedup",
-    perceptualHashDesc: "Detect visually similar comic covers",
     provider: "Provider",
     compatible: "Compatible API",
     model: "Model",
@@ -377,7 +374,6 @@ const en: Translations = {
     connectionFailed: "Connection Failed",
     saving: "Saving...",
     saveSettings: "Save Settings",
-    similarCover: "Visually similar cover",
     internationalProviders: "International",
     chinaProviders: "China",
     customProvider: "Custom",
