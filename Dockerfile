@@ -86,6 +86,7 @@ RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
     mupdf-tools \
     libwebp-tools \
     tini \
+    su-exec \
     ca-certificates \
     tzdata
 
@@ -119,7 +120,9 @@ EXPOSE 3000
 # Declare volumes for persistent data
 VOLUME ["/data", "/app/comics", "/app/.cache"]
 
-USER appuser
+# Note: NOT using USER appuser here.
+# entrypoint runs as root to fix bind-mount permissions,
+# then drops to appuser via su-exec before starting the server.
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \

@@ -15,6 +15,13 @@ mkdir -p /app/.cache/thumbnails 2>/dev/null || true
 mkdir -p /app/.cache/pages 2>/dev/null || true
 mkdir -p /app/comics 2>/dev/null || true
 
+# Fix permissions for bind-mounted directories
+# When host directories are bind-mounted, they are owned by root,
+# causing SQLite "out of memory" (actually permission denied) errors.
+# entrypoint runs as root, so we can always fix permissions here.
+echo "[init] Ensuring directory permissions for appuser (1001)..."
+chown -R 1001:1001 /data /app/.cache /app/comics 2>/dev/null || true
+
 # Set defaults
 export DATABASE_URL="${DATABASE_URL:-/data/nowen-reader.db}"
 export COMICS_DIR="${COMICS_DIR:-/app/comics}"
@@ -33,5 +40,6 @@ echo "[init] Cache:    ${DATA_DIR}"
 echo "[init] Port:     ${PORT}"
 echo "========================================="
 
-# Start the server
-exec ./nowen-reader
+# Start the server (drop privileges to appuser via su-exec)
+echo "[init] Starting server as appuser..."
+exec su-exec appuser ./nowen-reader
