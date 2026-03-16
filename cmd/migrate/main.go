@@ -43,6 +43,11 @@ func main() {
 	}
 	log.Println("Schema migrations completed successfully.")
 
+	// Rebuild FTS5 full-text search index
+	if err := store.RebuildFTSIndex(); err != nil {
+		log.Printf("Warning: FTS index rebuild failed: %v", err)
+	}
+
 	// Import data from Prisma database if specified
 	if *importFrom != "" {
 		log.Printf("Importing data from: %s", *importFrom)

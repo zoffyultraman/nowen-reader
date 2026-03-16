@@ -58,6 +58,11 @@ func main() {
 		log.Printf("[Main] Warning: schema migration failed: %v", err)
 	}
 
+	// Rebuild FTS5 full-text search index (fast, idempotent)
+	if err := store.RebuildFTSIndex(); err != nil {
+		log.Printf("[Main] Warning: FTS index rebuild failed: %v", err)
+	}
+
 	// ============================================================
 	// Ensure required directories exist
 	// ============================================================

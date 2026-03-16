@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sync"
+	"sync/atomic"
 
 	"github.com/gin-gonic/gin"
 	"github.com/nowen-reader/nowen-reader/internal/config"
@@ -19,6 +21,9 @@ type ThumbnailHandler struct{}
 func NewThumbnailHandler() *ThumbnailHandler {
 	return &ThumbnailHandler{}
 }
+
+// thumbnailWorkers 是缩略图生成的并发 worker 数量。
+const thumbnailWorkers = 4
 
 // POST /api/thumbnails/manage — Manage thumbnails
 func (h *ThumbnailHandler) ManageThumbnails(c *gin.Context) {
@@ -42,20 +47,39 @@ func (h *ThumbnailHandler) ManageThumbnails(c *gin.Context) {
 
 	switch body.Action {
 	case "generate-missing":
-		generated := 0
-		skipped := 0
+		// 筛选出缺失缩略图的漫画
+		var missing []store.ComicIDFilename
 		for _, comic := range comics {
 			cachePath := filepath.Join(thumbDir, comic.ID+".webp")
-			if _, err := os.Stat(cachePath); err == nil {
-				skipped++
-				continue
-			}
-			if _, err := service.GetComicThumbnail(comic.ID); err == nil {
-				generated++
-			} else {
-				log.Printf("[thumbnails] Failed to generate for %s: %v", comic.ID, err)
+			if _, err := os.Stat(cachePath); err != nil {
+				missing = append(missing, comic)
 			}
 		}
+		skipped := len(comics) - len(missing)
+
+		// Worker pool 并发生成
+		var generated int64
+		jobs := make(chan store.ComicIDFilename, len(missing))
+		var wg sync.WaitGroup
+		for w := 0; w < thumbnailWorkers; w++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				for comic := range jobs {
+					if _, err := service.GetComicThumbnail(comic.ID); err == nil {
+						atomic.AddInt64(&generated, 1)
+					} else {
+						log.Printf("[thumbnails] Failed to generate for %s: %v", comic.ID, err)
+					}
+				}
+			}()
+		}
+		for _, comic := range missing {
+			jobs <- comic
+		}
+		close(jobs)
+		wg.Wait()
+
 		c.JSON(http.StatusOK, gin.H{
 			"success":   true,
 			"generated": generated,
@@ -71,15 +95,29 @@ func (h *ThumbnailHandler) ManageThumbnails(c *gin.Context) {
 			}
 		}
 
-		generated := 0
-		failed := 0
-		for _, comic := range comics {
-			if _, err := service.GetComicThumbnail(comic.ID); err == nil {
-				generated++
-			} else {
-				failed++
-			}
+		// Worker pool 并发生成
+		var generated, failed int64
+		jobs := make(chan store.ComicIDFilename, len(comics))
+		var wg sync.WaitGroup
+		for w := 0; w < thumbnailWorkers; w++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				for comic := range jobs {
+					if _, err := service.GetComicThumbnail(comic.ID); err == nil {
+						atomic.AddInt64(&generated, 1)
+					} else {
+						atomic.AddInt64(&failed, 1)
+					}
+				}
+			}()
 		}
+		for _, comic := range comics {
+			jobs <- comic
+		}
+		close(jobs)
+		wg.Wait()
+
 		c.JSON(http.StatusOK, gin.H{
 			"success":   true,
 			"generated": generated,

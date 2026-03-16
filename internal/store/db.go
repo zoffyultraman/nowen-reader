@@ -233,6 +233,34 @@ func createTables() error {
 			"updatedAt"   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 		)`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS "ReadingGoal_goalType_key" ON "ReadingGoal"("goalType")`,
+
+		// ============================================================
+		// FTS5 全文搜索虚拟表
+		// ============================================================
+		`CREATE VIRTUAL TABLE IF NOT EXISTS "ComicFTS" USING fts5(
+			title, author, filename, description, seriesName, genre,
+			content="Comic", content_rowid="rowid"
+		)`,
+
+		// 触发器：插入时同步到 FTS
+		`CREATE TRIGGER IF NOT EXISTS "Comic_ai_fts" AFTER INSERT ON "Comic" BEGIN
+			INSERT INTO "ComicFTS"(rowid, title, author, filename, description, seriesName, genre)
+			VALUES (new.rowid, new.title, new.author, new.filename, new.description, new.seriesName, new.genre);
+		END`,
+
+		// 触发器：删除时同步到 FTS
+		`CREATE TRIGGER IF NOT EXISTS "Comic_ad_fts" AFTER DELETE ON "Comic" BEGIN
+			INSERT INTO "ComicFTS"("ComicFTS", rowid, title, author, filename, description, seriesName, genre)
+			VALUES ('delete', old.rowid, old.title, old.author, old.filename, old.description, old.seriesName, old.genre);
+		END`,
+
+		// 触发器：更新时同步到 FTS
+		`CREATE TRIGGER IF NOT EXISTS "Comic_au_fts" AFTER UPDATE ON "Comic" BEGIN
+			INSERT INTO "ComicFTS"("ComicFTS", rowid, title, author, filename, description, seriesName, genre)
+			VALUES ('delete', old.rowid, old.title, old.author, old.filename, old.description, old.seriesName, old.genre);
+			INSERT INTO "ComicFTS"(rowid, title, author, filename, description, seriesName, genre)
+			VALUES (new.rowid, new.title, new.author, new.filename, new.description, new.seriesName, new.genre);
+		END`,
 	}
 
 	for _, stmt := range statements {

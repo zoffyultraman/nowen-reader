@@ -70,15 +70,29 @@ var Migrations = []Migration{
 		Description: "Add composite indexes for common query patterns",
 		SQL: strings.Join([]string{
 			// 常用列表查询：按标题排序 + 收藏筛选
-			`CREATE INDEX IF NOT EXISTS "Comic_fav_title_idx" ON "Comic"("isFavorite", "title");`,
+			`CREATE INDEX IF NOT EXISTS "Comic_fav_title_idx" ON "Comic"("isFavorite", "title")`,
 			// 常用列表查询：按添加时间倒序 + 类型筛选
-			`CREATE INDEX IF NOT EXISTS "Comic_type_addedAt_idx" ON "Comic"("type", "addedAt" DESC);`,
+			`CREATE INDEX IF NOT EXISTS "Comic_type_addedAt_idx" ON "Comic"("type", "addedAt" DESC)`,
 			// 阅读状态 + 类型复合查询
-			`CREATE INDEX IF NOT EXISTS "Comic_status_type_idx" ON "Comic"("readingStatus", "type");`,
+			`CREATE INDEX IF NOT EXISTS "Comic_status_type_idx" ON "Comic"("readingStatus", "type")`,
 			// 系列查询优化
-			`CREATE INDEX IF NOT EXISTS "Comic_seriesName_idx" ON "Comic"("seriesName");`,
+			`CREATE INDEX IF NOT EXISTS "Comic_seriesName_idx" ON "Comic"("seriesName")`,
 			// ReadingSession 查询优化
-			`CREATE INDEX IF NOT EXISTS "ReadingSession_startedAt_idx" ON "ReadingSession"("startedAt" DESC);`,
+			`CREATE INDEX IF NOT EXISTS "ReadingSession_startedAt_idx" ON "ReadingSession"("startedAt" DESC)`,
+		}, "\n"),
+	},
+	{
+		Version:     8,
+		Description: "Add FTS5 full-text search for comics (replace LIKE with FTS5)",
+		SQL: strings.Join([]string{
+			// 创建 FTS5 虚拟表（content-sync 模式，与 Comic 表联动）
+			`CREATE VIRTUAL TABLE IF NOT EXISTS "ComicFTS" USING fts5(title, author, filename, description, seriesName, genre, content="Comic", content_rowid="rowid")`,
+			// 触发器：插入时同步
+			`CREATE TRIGGER IF NOT EXISTS "Comic_ai_fts" AFTER INSERT ON "Comic" BEGIN INSERT INTO "ComicFTS"(rowid, title, author, filename, description, seriesName, genre) VALUES (new.rowid, new.title, new.author, new.filename, new.description, new.seriesName, new.genre); END`,
+			// 触发器：删除时同步
+			`CREATE TRIGGER IF NOT EXISTS "Comic_ad_fts" AFTER DELETE ON "Comic" BEGIN INSERT INTO "ComicFTS"("ComicFTS", rowid, title, author, filename, description, seriesName, genre) VALUES ('delete', old.rowid, old.title, old.author, old.filename, old.description, old.seriesName, old.genre); END`,
+			// 触发器：更新时同步
+			`CREATE TRIGGER IF NOT EXISTS "Comic_au_fts" AFTER UPDATE ON "Comic" BEGIN INSERT INTO "ComicFTS"("ComicFTS", rowid, title, author, filename, description, seriesName, genre) VALUES ('delete', old.rowid, old.title, old.author, old.filename, old.description, old.seriesName, old.genre); INSERT INTO "ComicFTS"(rowid, title, author, filename, description, seriesName, genre) VALUES (new.rowid, new.title, new.author, new.filename, new.description, new.seriesName, new.genre); END`,
 		}, "\n"),
 	},
 }
@@ -171,6 +185,26 @@ func RunMigrations() error {
 		log.Printf("[Migrate] Applied migration %d successfully", m.Version)
 	}
 
+	return nil
+}
+
+// RebuildFTSIndex 重建 FTS5 全文搜索索引。
+// 在 migration 8 首次应用后调用，或在数据迁移后手动调用。
+func RebuildFTSIndex() error {
+	// 检查 FTS 表是否存在
+	var name string
+	err := db.QueryRow(`SELECT name FROM sqlite_master WHERE type='table' AND name='ComicFTS'`).Scan(&name)
+	if err != nil {
+		return nil // FTS 表不存在，跳过
+	}
+
+	// 清空并重建 FTS 索引
+	_, err = db.Exec(`INSERT INTO "ComicFTS"("ComicFTS") VALUES('rebuild')`)
+	if err != nil {
+		log.Printf("[FTS] Warning: failed to rebuild FTS index: %v", err)
+		return err
+	}
+	log.Println("[FTS] Full-text search index rebuilt ✅")
 	return nil
 }
 

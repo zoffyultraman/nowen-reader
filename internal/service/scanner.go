@@ -272,10 +272,46 @@ func fullSync() {
 	}
 
 	allDirs := config.GetAllComicsDirs()
-	processed := 0
 
+	// 使用 worker pool 并发处理（默认 4 个并发 worker）
+	const numWorkers = 4
+	type workItem struct {
+		ID       string
+		Filename string
+		Path     string
+	}
+
+	jobs := make(chan workItem, len(comics))
+	var wg sync.WaitGroup
+	var processed int64
+	var mu sync.Mutex
+
+	// 启动 worker
+	for w := 0; w < numWorkers; w++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for item := range jobs {
+				pageCount, err := GetArchivePageCount(item.Path)
+				if err != nil || pageCount <= 0 {
+					log.Printf("[full-sync] Failed to parse %s: %v", item.Filename, err)
+					_ = store.UpdateComicPageCount(item.ID, -1)
+					continue
+				}
+				if err := store.UpdateComicPageCount(item.ID, pageCount); err != nil {
+					log.Printf("[full-sync] Failed to update %s: %v", item.Filename, err)
+					_ = store.UpdateComicPageCount(item.ID, -1)
+				} else {
+					mu.Lock()
+					processed++
+					mu.Unlock()
+				}
+			}
+		}()
+	}
+
+	// 分发任务
 	for _, c := range comics {
-		// Find file on disk
 		var foundPath string
 		for _, dir := range allDirs {
 			candidate := filepath.Join(dir, c.Filename)
@@ -284,32 +320,16 @@ func fullSync() {
 				break
 			}
 		}
-
 		if foundPath == "" {
 			continue
 		}
-
-		// Open archive and count image entries
-		pageCount, err := GetArchivePageCount(foundPath)
-		if err != nil || pageCount <= 0 {
-			log.Printf("[full-sync] Failed to parse %s: %v", c.Filename, err)
-			_ = store.UpdateComicPageCount(c.ID, -1) // -1 = failed, avoids infinite retry
-			continue
-		}
-
-		if err := store.UpdateComicPageCount(c.ID, pageCount); err != nil {
-			log.Printf("[full-sync] Failed to update %s: %v", c.Filename, err)
-			_ = store.UpdateComicPageCount(c.ID, -1)
-		} else {
-			processed++
-		}
-
-		// Yield between archives to limit CPU burst
-		time.Sleep(10 * time.Millisecond)
+		jobs <- workItem{ID: c.ID, Filename: c.Filename, Path: foundPath}
 	}
+	close(jobs)
+	wg.Wait()
 
 	if processed > 0 {
-		log.Printf("[full-sync] Processed %d/%d archives", processed, len(comics))
+		log.Printf("[full-sync] Processed %d/%d archives (workers: %d)", processed, len(comics), numWorkers)
 	}
 }
 
