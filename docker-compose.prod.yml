@@ -20,11 +20,17 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - nowen-data:/data
-      - nowen-comics:/app/comics
-      # 挂载本地目录（取消注释并修改路径）
-      # - /path/to/your/comics:/app/comics
-      - nowen-cache:/app/.cache
+      # 数据库持久化（不要删除，否则丢失所有数据）
+      - ./data:/data
+      # 漫画文件目录 - 把你的漫画放这里（默认挂载到当前目录下的 comics 文件夹）
+      - ./comics:/app/comics
+
+      # NAS 额外目录（可选，取消注释并修改路径）
+      # - /mnt/nas/manga:/mnt/nas/manga
+      # - /volume1/comics:/volume1/comics
+
+      # 缩略图缓存持久化（加速启动）
+      - ./cache:/app/.cache
     environment:
       - GIN_MODE=release
       - DATABASE_URL=/data/nowen-reader.db
@@ -32,11 +38,3 @@ services:
       - DATA_DIR=/app/.cache
       - PORT=3000
       - TZ=Asia/Shanghai
-
-volumes:
-  nowen-data:
-    name: nowen-reader-data
-  nowen-comics:
-    name: nowen-reader-comics
-  nowen-cache:
-    name: nowen-reader-cache

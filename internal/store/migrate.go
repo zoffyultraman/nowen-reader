@@ -86,7 +86,7 @@ var Migrations = []Migration{
 		Description: "Add FTS5 full-text search for comics (replace LIKE with FTS5)",
 		SQL: strings.Join([]string{
 			// 创建 FTS5 虚拟表（content-sync 模式，与 Comic 表联动）
-			`CREATE VIRTUAL TABLE IF NOT EXISTS "ComicFTS" USING fts5(title, author, filename, description, seriesName, genre, content="Comic", content_rowid="rowid")`,
+			`CREATE VIRTUAL TABLE IF NOT EXISTS "ComicFTS" USING fts5(title, author, filename, description, seriesName, genre, content="Comic", content_rowid="rowid");`,
 			// 触发器：插入时同步
 			`CREATE TRIGGER IF NOT EXISTS "Comic_ai_fts" AFTER INSERT ON "Comic" BEGIN INSERT INTO "ComicFTS"(rowid, title, author, filename, description, seriesName, genre) VALUES (new.rowid, new.title, new.author, new.filename, new.description, new.seriesName, new.genre); END`,
 			// 触发器：删除时同步
@@ -208,16 +208,55 @@ func RebuildFTSIndex() error {
 	return nil
 }
 
-// splitSQL splits a multi-statement SQL string by semicolons.
+// splitSQL splits a multi-statement SQL string by semicolons,
+// correctly handling BEGIN...END blocks (e.g. triggers) that contain internal semicolons.
 func splitSQL(sql string) []string {
-	parts := strings.Split(sql, ";")
-	result := make([]string, 0, len(parts))
-	for _, p := range parts {
-		p = strings.TrimSpace(p)
-		if p != "" {
-			result = append(result, p)
+	var result []string
+	var current strings.Builder
+	inBlock := false // 是否在 BEGIN...END 块内
+
+	for _, line := range strings.Split(sql, "\n") {
+		trimmed := strings.TrimSpace(line)
+		upper := strings.ToUpper(trimmed)
+
+		// 检测 BEGIN 关键字（触发器等块语句的开始）
+		if !inBlock && strings.Contains(upper, " BEGIN") {
+			inBlock = true
+		}
+
+		current.WriteString(line)
+		current.WriteString("\n")
+
+		// 检测 END 关键字（块语句结束）
+		if inBlock && (upper == "END" || strings.HasSuffix(upper, " END") ||
+			upper == "END;" || strings.HasSuffix(upper, " END;")) {
+			inBlock = false
+			stmt := strings.TrimSpace(strings.TrimRight(strings.TrimSpace(current.String()), ";"))
+			if stmt != "" {
+				result = append(result, stmt)
+			}
+			current.Reset()
+			continue
+		}
+
+		// 不在块内时，按行尾分号分割
+		if !inBlock && strings.HasSuffix(trimmed, ";") {
+			stmt := strings.TrimSpace(strings.TrimRight(strings.TrimSpace(current.String()), ";"))
+			if stmt != "" {
+				result = append(result, stmt)
+			}
+			current.Reset()
 		}
 	}
+
+	// 处理末尾没有分号的剩余内容
+	remaining := strings.TrimSpace(current.String())
+	remaining = strings.TrimRight(remaining, ";")
+	remaining = strings.TrimSpace(remaining)
+	if remaining != "" {
+		result = append(result, remaining)
+	}
+
 	return result
 }
 

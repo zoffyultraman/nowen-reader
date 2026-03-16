@@ -30,22 +30,28 @@ func TestRunMigrations(t *testing.T) {
 
 func TestSplitSQL(t *testing.T) {
 	tests := []struct {
+		name     string
 		input    string
 		expected int
 	}{
-		{"SELECT 1;", 1},
-		{"SELECT 1; SELECT 2;", 2},
-		{"SELECT 1;\nSELECT 2;", 2},
-		{"", 0},
-		{"  ;  ;  ", 0},
-		{"ALTER TABLE x ADD COLUMN y; CREATE INDEX idx ON x(y);", 2},
+		{"single statement", "SELECT 1;", 1},
+		{"two statements on separate lines", "SELECT 1;\nSELECT 2;", 2},
+		{"empty string", "", 0},
+		{"only whitespace and semicolons", "  ;  ;  ", 0},
+		{"alter and create index on separate lines", "ALTER TABLE x ADD COLUMN y;\nCREATE INDEX idx ON x(y);", 2},
+		{"trigger with internal semicolons", "CREATE TRIGGER t AFTER INSERT ON x BEGIN INSERT INTO y VALUES (1); END", 1},
+		{"virtual table then trigger", "CREATE VIRTUAL TABLE ft USING fts5(a);\nCREATE TRIGGER t AFTER INSERT ON x BEGIN INSERT INTO y VALUES (1); END", 2},
+		{"multiple triggers", "CREATE TRIGGER t1 AFTER INSERT ON x BEGIN INSERT INTO y VALUES (1); END\nCREATE TRIGGER t2 AFTER DELETE ON x BEGIN INSERT INTO y VALUES (2); END", 2},
+		{"trigger with multiple internal statements", "CREATE TRIGGER t AFTER UPDATE ON x BEGIN DELETE FROM y WHERE id=old.id; INSERT INTO y VALUES (new.id); END", 1},
 	}
 
 	for _, tt := range tests {
-		result := splitSQL(tt.input)
-		if len(result) != tt.expected {
-			t.Errorf("splitSQL(%q) = %d parts, expected %d", tt.input, len(result), tt.expected)
-		}
+		t.Run(tt.name, func(t *testing.T) {
+			result := splitSQL(tt.input)
+			if len(result) != tt.expected {
+				t.Errorf("splitSQL(%q) = %d parts %v, expected %d", tt.input, len(result), result, tt.expected)
+			}
+		})
 	}
 }
 
