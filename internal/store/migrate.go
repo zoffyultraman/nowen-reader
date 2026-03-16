@@ -70,15 +70,15 @@ var Migrations = []Migration{
 		Description: "Add composite indexes for common query patterns",
 		SQL: strings.Join([]string{
 			// 常用列表查询：按标题排序 + 收藏筛选
-			`CREATE INDEX IF NOT EXISTS "Comic_fav_title_idx" ON "Comic"("isFavorite", "title")`,
+			`CREATE INDEX IF NOT EXISTS "Comic_fav_title_idx" ON "Comic"("isFavorite", "title");`,
 			// 常用列表查询：按添加时间倒序 + 类型筛选
-			`CREATE INDEX IF NOT EXISTS "Comic_type_addedAt_idx" ON "Comic"("type", "addedAt" DESC)`,
+			`CREATE INDEX IF NOT EXISTS "Comic_type_addedAt_idx" ON "Comic"("type", "addedAt" DESC);`,
 			// 阅读状态 + 类型复合查询
-			`CREATE INDEX IF NOT EXISTS "Comic_status_type_idx" ON "Comic"("readingStatus", "type")`,
+			`CREATE INDEX IF NOT EXISTS "Comic_status_type_idx" ON "Comic"("readingStatus", "type");`,
 			// 系列查询优化
-			`CREATE INDEX IF NOT EXISTS "Comic_seriesName_idx" ON "Comic"("seriesName")`,
+			`CREATE INDEX IF NOT EXISTS "Comic_seriesName_idx" ON "Comic"("seriesName");`,
 			// ReadingSession 查询优化
-			`CREATE INDEX IF NOT EXISTS "ReadingSession_startedAt_idx" ON "ReadingSession"("startedAt" DESC)`,
+			`CREATE INDEX IF NOT EXISTS "ReadingSession_startedAt_idx" ON "ReadingSession"("startedAt" DESC);`,
 		}, "\n"),
 	},
 	{
