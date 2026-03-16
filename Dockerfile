@@ -14,10 +14,14 @@ WORKDIR /frontend
 #   1. Build it externally and copy to web/dist/ before docker build
 #   2. Include it as a submodule at frontend/
 COPY frontend/package*.json ./
-RUN npm ci --production=false 2>/dev/null || true
+RUN npm ci --production=false
 
 COPY frontend/ ./
-RUN npm run build 2>/dev/null || mkdir -p /frontend/dist
+RUN npm run build && \
+    echo "[frontend] Build succeeded" && \
+    ls -la /frontend/dist/ && \
+    test -f /frontend/dist/index.html && echo "[frontend] index.html found ✅" || \
+    (echo "[frontend] ERROR: index.html not found in dist/" && exit 1)
 
 # --- Stage 2: Build Go backend ---
 FROM golang:1.23-alpine AS builder

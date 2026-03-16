@@ -22,7 +22,7 @@ var frontend embed.FS
 // FrontendFS returns the embedded frontend filesystem rooted at "dist/".
 // Returns nil if no frontend files are embedded (dev mode).
 func FrontendFS() fs.FS {
-	// Check if dist directory exists and has files
+	// Check if dist directory exists and has real frontend files (not just .gitkeep)
 	entries, err := fs.ReadDir(frontend, "dist")
 	if err != nil || len(entries) == 0 {
 		return nil
@@ -32,5 +32,11 @@ func FrontendFS() fs.FS {
 	if err != nil {
 		return nil
 	}
+
+	// Verify index.html exists — if only .gitkeep is present, frontend build failed
+	if _, err := fs.Stat(sub, "index.html"); err != nil {
+		return nil
+	}
+
 	return sub
 }
