@@ -43,6 +43,7 @@ const zhCN = {
     emptyLibraryHint: "点击上传按钮或将 .zip/.cbz 文件放入 comics/ 目录",
     noMatchingHint: "试试更换搜索关键词或清除标签筛选",
     uploadFailed: "上传失败，请重试",
+    uploadSuccess: "上传成功",
     firstPage: "第一页",
     prevPage: "上一页",
     nextPage: "下一页",
@@ -592,6 +593,7 @@ export interface Translations {
     emptyLibraryHint: string;
     noMatchingHint: string;
     uploadFailed: string;
+    uploadSuccess: string;
     firstPage: string;
     prevPage: string;
     nextPage: string;

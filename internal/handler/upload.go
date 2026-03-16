@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -85,8 +86,20 @@ func (h *UploadHandler) Upload(c *gin.Context) {
 		}
 	}
 
+	totalCount := len(results)
+	var message string
+	if successCount == totalCount {
+		message = fmt.Sprintf("Successfully uploaded %d file(s)", successCount)
+	} else if successCount > 0 {
+		message = fmt.Sprintf("Uploaded %d of %d file(s), %d failed", successCount, totalCount, totalCount-successCount)
+	} else {
+		message = fmt.Sprintf("Upload failed: all %d file(s) failed", totalCount)
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"message": successCount,
-		"results": results,
+		"message":      message,
+		"results":      results,
+		"successCount": successCount,
+		"totalCount":   totalCount,
 	})
 }

@@ -8,7 +8,7 @@
  */
 export async function uploadComics(
   files: FileList | File[]
-): Promise<{ success: boolean; message: string }> {
+): Promise<{ success: boolean; message: string; successCount: number; totalCount: number }> {
   const formData = new FormData();
   Array.from(files).forEach((file) => formData.append("files", file));
 
@@ -19,8 +19,10 @@ export async function uploadComics(
 
   const data = await res.json();
   return {
-    success: res.ok,
-    message: data.message || data.error,
+    success: res.ok && (data.successCount ?? 0) > 0,
+    message: data.message || data.error || "Unknown error",
+    successCount: data.successCount ?? 0,
+    totalCount: data.totalCount ?? Array.from(files).length,
   };
 }
 

@@ -45,6 +45,7 @@ const en: Translations = {
     emptyLibraryHint: "Click upload or place .zip/.cbz files in the comics/ directory",
     noMatchingHint: "Try different keywords or clear tag filters",
     uploadFailed: "Upload failed, please retry",
+    uploadSuccess: "Upload successful",
     firstPage: "First Page",
     prevPage: "Previous Page",
     nextPage: "Next Page",

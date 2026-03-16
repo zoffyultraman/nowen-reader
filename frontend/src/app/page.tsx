@@ -21,6 +21,7 @@ import { Comic } from "@/types/comic";
 import { useTranslation } from "@/lib/i18n";
 import { CheckSquare, CheckCheck, LayoutGrid, List, Copy, Upload, Download, BookMarked, Image, BookOpen } from "lucide-react";
 import DuplicateDetector from "@/components/DuplicateDetector";
+import { useToast } from "@/components/Toast";
 
 const DEFAULT_PAGE_SIZE = 24;
 
@@ -60,6 +61,7 @@ function apiToComic(api: ApiComic): Comic {
 
 export default function Home() {
   const t = useTranslation();
+  const toast = useToast();
   const [searchQuery, setSearchQuery] = useState("");
   const debouncedSearch = useDebouncedValue(searchQuery, 300);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
@@ -175,17 +177,27 @@ export default function Home() {
       try {
         const result = await uploadComics(files);
         if (result.success) {
+          // 触发后端扫描，确保新文件入库
+          try {
+            await fetch("/api/sync", { method: "POST" });
+          } catch {
+            // 扫描失败不影响提示
+          }
           await refetch();
+          toast.success(
+            `${t.home.uploadSuccess || "上传成功"}: ${result.successCount}/${result.totalCount}`
+          );
+        } else {
+          toast.error(result.message || t.home.uploadFailed);
         }
-        alert(result.message);
       } catch {
-        alert(t.home.uploadFailed);
+        toast.error(t.home.uploadFailed);
       } finally {
         setUploading(false);
         if (fileInputRef.current) fileInputRef.current.value = "";
       }
     },
-    [refetch]
+    [refetch, toast, t]
   );
 
   // Batch selection handlers
