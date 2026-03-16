@@ -2,6 +2,8 @@
 nowen-reader
 nowen-reader.exe
 nowen-reader-linux-*
+*.exe
+server
 
 # Data
 *.db
