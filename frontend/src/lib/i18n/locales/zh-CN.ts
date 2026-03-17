@@ -135,6 +135,17 @@ const zhCN = {
     aiNotConfigured: "请先在设置中配置 AI",
     aiAddSelected: "添加选中标签",
     aiAddAll: "全部添加",
+    aiAnalyzeCover: "AI 分析封面",
+    aiAnalyzeCoverLoading: "正在分析封面...",
+    aiAnalyzeCoverResult: "封面分析结果",
+    aiCoverStyle: "画风",
+    aiCoverMood: "氛围",
+    aiCoverTheme: "主题",
+    aiCoverAgeRating: "年龄分级",
+    aiCoverColorTone: "色调",
+    aiCoverCharacters: "角色",
+    aiCoverConfidence: "置信度",
+    aiVisionNotSupported: "当前 AI 服务商不支持图像分析",
   },
 
   // Stats Page
@@ -280,6 +291,8 @@ const zhCN = {
     sameSeries: "同一系列",
     sameCategory: "同一分类",
     semanticMatch: "AI 语义匹配",
+    aiReasonLoading: "正在生成 AI 推荐理由...",
+    aiReasonGenerate: "AI 推荐理由",
   },
 
   // Settings
@@ -694,6 +707,17 @@ export interface Translations {
     aiNotConfigured: string;
     aiAddSelected: string;
     aiAddAll: string;
+    aiAnalyzeCover: string;
+    aiAnalyzeCoverLoading: string;
+    aiAnalyzeCoverResult: string;
+    aiCoverStyle: string;
+    aiCoverMood: string;
+    aiCoverTheme: string;
+    aiCoverAgeRating: string;
+    aiCoverColorTone: string;
+    aiCoverCharacters: string;
+    aiCoverConfidence: string;
+    aiVisionNotSupported: string;
   };
   stats: {
     title: string;
@@ -825,6 +849,8 @@ export interface Translations {
     sameSeries: string;
     sameCategory: string;
     semanticMatch: string;
+    aiReasonLoading: string;
+    aiReasonGenerate: string;
   };
   settings: {
     title: string;

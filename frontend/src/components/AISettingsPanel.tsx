@@ -685,6 +685,11 @@ export function AISettingsPanel() {
         </div>
       )}
 
+      {/* Prompt Templates Section (Phase 2-3) */}
+      {config.enableCloudAI && (
+        <PromptTemplatesSection aiT={aiT} />
+      )}
+
       {/* Save Button */}
       <button
         onClick={handleSave}
@@ -700,6 +705,222 @@ export function AISettingsPanel() {
           aiT.saveSettings || t.common.save || "Save"
         )}
       </button>
+    </div>
+  );
+}
+
+// ============================================================
+// Prompt Templates Management (Phase 2-3)
+// ============================================================
+
+interface PromptPair {
+  system: string;
+  user: string;
+}
+
+interface PromptTemplates {
+  summary: PromptPair;
+  parseFilename: PromptPair;
+  suggestTags: PromptPair;
+  coverAnalysis: PromptPair;
+  recommendReason: PromptPair;
+  translate: PromptPair;
+}
+
+const SCENARIO_LABELS: Record<string, { zh: string; en: string }> = {
+  summary: { zh: "摘要生成", en: "Summary" },
+  parseFilename: { zh: "文件名解析", en: "Parse Filename" },
+  suggestTags: { zh: "标签建议", en: "Tag Suggestion" },
+  coverAnalysis: { zh: "封面分析", en: "Cover Analysis" },
+  recommendReason: { zh: "推荐理由", en: "Recommend Reason" },
+  translate: { zh: "元数据翻译", en: "Translation" },
+};
+
+function PromptTemplatesSection({ aiT }: { aiT: Record<string, string> }) {
+  const [showPrompts, setShowPrompts] = useState(false);
+  const [templates, setTemplates] = useState<PromptTemplates | null>(null);
+  const [defaults, setDefaults] = useState<PromptTemplates | null>(null);
+  const [loadingPrompts, setLoadingPrompts] = useState(false);
+  const [savingPrompts, setSavingPrompts] = useState(false);
+  const [editingScenario, setEditingScenario] = useState<string | null>(null);
+
+  const loadTemplates = useCallback(async () => {
+    setLoadingPrompts(true);
+    try {
+      const res = await fetch("/api/ai/prompts");
+      if (res.ok) {
+        const data = await res.json();
+        setTemplates(data.templates);
+        setDefaults(data.defaults);
+      }
+    } finally {
+      setLoadingPrompts(false);
+    }
+  }, []);
+
+  const saveTemplates = useCallback(async () => {
+    if (!templates) return;
+    setSavingPrompts(true);
+    try {
+      await fetch("/api/ai/prompts", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(templates),
+      });
+    } finally {
+      setSavingPrompts(false);
+    }
+  }, [templates]);
+
+  const resetTemplates = useCallback(async () => {
+    if (!confirm("Reset all prompt templates to defaults?")) return;
+    const res = await fetch("/api/ai/prompts", { method: "DELETE" });
+    if (res.ok) {
+      const data = await res.json();
+      setDefaults(data.defaults);
+      setTemplates({ summary: { system: "", user: "" }, parseFilename: { system: "", user: "" }, suggestTags: { system: "", user: "" }, coverAnalysis: { system: "", user: "" }, recommendReason: { system: "", user: "" }, translate: { system: "", user: "" } });
+    }
+  }, []);
+
+  const updateTemplate = (scenario: string, field: "system" | "user", value: string) => {
+    if (!templates) return;
+    setTemplates({
+      ...templates,
+      [scenario]: {
+        ...(templates as Record<string, PromptPair>)[scenario],
+        [field]: value,
+      },
+    });
+  };
+
+  return (
+    <div className="space-y-3 rounded-xl bg-background p-4">
+      <button
+        onClick={() => {
+          setShowPrompts(!showPrompts);
+          if (!showPrompts && !templates) loadTemplates();
+        }}
+        className="flex w-full items-center justify-between"
+      >
+        <div className="flex items-center gap-2">
+          <Edit3 className="h-4 w-4 text-purple-400" />
+          <span className="text-sm font-medium text-foreground">
+            {aiT.promptTemplates || "Prompt Templates"}
+          </span>
+        </div>
+        <ChevronDown className={`h-4 w-4 text-muted transition-transform ${showPrompts ? "rotate-180" : ""}`} />
+      </button>
+
+      {showPrompts && (
+        <div className="border-t border-border/30 pt-3 space-y-3">
+          {loadingPrompts ? (
+            <div className="flex items-center justify-center py-4">
+              <Loader2 className="h-4 w-4 animate-spin text-muted" />
+            </div>
+          ) : (
+            <>
+              <p className="text-[10px] text-muted/70">
+                {aiT.promptTemplatesHint || "Customize AI prompts for each scenario. Leave empty to use built-in defaults."}
+              </p>
+
+              {/* Scenario List */}
+              <div className="space-y-2">
+                {Object.keys(SCENARIO_LABELS).map((scenario) => {
+                  const label = SCENARIO_LABELS[scenario];
+                  const isEditing = editingScenario === scenario;
+                  const currentTemplate = templates ? (templates as Record<string, PromptPair>)[scenario] : null;
+                  const defaultTemplate = defaults ? (defaults as Record<string, PromptPair>)[scenario] : null;
+                  const hasCustom = currentTemplate?.system || currentTemplate?.user;
+
+                  return (
+                    <div key={scenario} className="rounded-lg border border-border/30 bg-card/30">
+                      <button
+                        onClick={() => setEditingScenario(isEditing ? null : scenario)}
+                        className="flex w-full items-center justify-between px-3 py-2"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-medium text-foreground">{label.zh}</span>
+                          <span className="text-[10px] text-muted">({label.en})</span>
+                          {hasCustom && (
+                            <span className="rounded bg-purple-500/15 px-1.5 py-0.5 text-[9px] text-purple-400">
+                              {aiT.customized || "Customized"}
+                            </span>
+                          )}
+                        </div>
+                        <ChevronDown className={`h-3 w-3 text-muted transition-transform ${isEditing ? "rotate-180" : ""}`} />
+                      </button>
+
+                      {isEditing && (
+                        <div className="space-y-2 border-t border-border/20 px-3 py-2">
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-[10px] text-muted">System Prompt</span>
+                              {defaultTemplate?.system && (
+                                <button
+                                  onClick={() => updateTemplate(scenario, "system", "")}
+                                  className="text-[10px] text-muted hover:text-foreground"
+                                >
+                                  {aiT.useDefault || "Use Default"}
+                                </button>
+                              )}
+                            </div>
+                            <textarea
+                              value={currentTemplate?.system || ""}
+                              onChange={(e) => updateTemplate(scenario, "system", e.target.value)}
+                              placeholder={defaultTemplate?.system || "System prompt (leave empty for default)"}
+                              rows={3}
+                              className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-[11px] text-foreground outline-none placeholder:text-muted/40 resize-y"
+                            />
+                          </div>
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-[10px] text-muted">User Prompt</span>
+                              {defaultTemplate?.user && (
+                                <button
+                                  onClick={() => updateTemplate(scenario, "user", "")}
+                                  className="text-[10px] text-muted hover:text-foreground"
+                                >
+                                  {aiT.useDefault || "Use Default"}
+                                </button>
+                              )}
+                            </div>
+                            <textarea
+                              value={currentTemplate?.user || ""}
+                              onChange={(e) => updateTemplate(scenario, "user", e.target.value)}
+                              placeholder={defaultTemplate?.user || "User prompt (leave empty for default)"}
+                              rows={2}
+                              className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-[11px] text-foreground outline-none placeholder:text-muted/40 resize-y"
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Save / Reset Buttons */}
+              <div className="flex gap-2">
+                <button
+                  onClick={saveTemplates}
+                  disabled={savingPrompts}
+                  className="flex items-center gap-1.5 rounded-lg bg-purple-500/15 px-3 py-1.5 text-xs font-medium text-purple-400 transition-colors hover:bg-purple-500/25 disabled:opacity-50"
+                >
+                  {savingPrompts ? <Loader2 className="h-3 w-3 animate-spin" /> : <Settings2 className="h-3 w-3" />}
+                  {aiT.savePrompts || "Save Prompts"}
+                </button>
+                <button
+                  onClick={resetTemplates}
+                  className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs text-muted transition-colors hover:text-foreground"
+                >
+                  <Trash2 className="h-3 w-3" />
+                  {aiT.resetToDefaults || "Reset to Defaults"}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }

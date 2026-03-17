@@ -16,6 +16,7 @@ type ScoredComic struct {
 	Title    string               `json:"title"`
 	Score    float64              `json:"score"`
 	Reasons  []string             `json:"reasons"`
+	AIReason string               `json:"aiReason,omitempty"` // AI 生成的自然语言推荐理由
 	CoverURL string               `json:"coverUrl"`
 	Author   string               `json:"author"`
 	Genre    string               `json:"genre"`

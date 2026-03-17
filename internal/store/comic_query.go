@@ -920,3 +920,24 @@ func UpdateComicFields(comicID string, fields map[string]interface{}) error {
 	_, err := db.Exec(query, args...)
 	return err
 }
+
+// GetFavoriteComicTitles 获取用户收藏的漫画标题列表（用于 AI 推荐理由生成上下文）
+func GetFavoriteComicTitles(limit int) ([]string, error) {
+	if limit <= 0 {
+		limit = 5
+	}
+	rows, err := db.Query(`SELECT "title" FROM "Comic" WHERE "isFavorite" = 1 ORDER BY "updatedAt" DESC LIMIT ?`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var titles []string
+	for rows.Next() {
+		var title string
+		if rows.Scan(&title) == nil {
+			titles = append(titles, title)
+		}
+	}
+	return titles, nil
+}

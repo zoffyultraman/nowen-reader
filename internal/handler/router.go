@@ -274,6 +274,13 @@ func SetupRoutes(r *gin.Engine) {
 	comicByIDWrite.POST("/ai-summary", ai.GenerateSummary)
 	comicByIDWrite.POST("/ai-parse-filename", ai.ParseFilename)
 	comicByIDWrite.POST("/ai-suggest-tags", ai.SuggestTags)
+	// Phase 2
+	comicByIDWrite.POST("/ai-analyze-cover", ai.AnalyzeCover)
+
+	// AI prompt templates (Phase 2)
+	aiGroup.GET("/prompts", ai.GetPromptTemplates)
+	aiGroup.PUT("/prompts", ai.UpdatePromptTemplates)
+	aiGroup.DELETE("/prompts", ai.ResetPromptTemplates)
 
 	// OPDS protocol
 	opds := NewOPDSHandler()
@@ -291,6 +298,7 @@ func SetupRoutes(r *gin.Engine) {
 	rec := NewRecommendationHandler()
 	api.GET("/recommendations", rec.GetRecommendations)
 	api.GET("/recommendations/similar/:id", rec.GetSimilar)
+	api.POST("/recommendations/ai-reasons", ai.GenerateRecommendationReasons)
 
 	// E-Hentai integration
 	eh := NewEHentaiHandler()

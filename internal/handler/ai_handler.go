@@ -379,3 +379,207 @@ func (h *AIHandler) SuggestTags(c *gin.Context) {
 
 	c.JSON(200, result)
 }
+
+// ============================================================
+// Phase 2-1: POST /api/comics/:id/ai-analyze-cover — Vision 封面分析
+// ============================================================
+
+func (h *AIHandler) AnalyzeCover(c *gin.Context) {
+	comicID := c.Param("id")
+	if comicID == "" {
+		c.JSON(400, gin.H{"error": "comic id required"})
+		return
+	}
+
+	var body struct {
+		TargetLang string `json:"targetLang"`
+		Apply      bool   `json:"apply"` // 是否自动应用分析结果到元数据
+	}
+	_ = c.ShouldBindJSON(&body)
+	if body.TargetLang == "" {
+		body.TargetLang = "zh"
+	}
+
+	cfg := service.LoadAIConfig()
+	if !cfg.EnableCloudAI || cfg.CloudAPIKey == "" {
+		c.JSON(400, gin.H{"error": "AI not configured"})
+		return
+	}
+
+	// 检查 provider 是否支持 Vision
+	if preset, ok := service.ProviderPresets[cfg.CloudProvider]; ok {
+		if !preset.SupportsVision {
+			c.JSON(400, gin.H{"error": "Current AI provider does not support vision/image analysis. Please switch to a provider with vision support (OpenAI, Anthropic, Google Gemini, etc.)"})
+			return
+		}
+	}
+
+	comic, err := store.GetComicByID(comicID)
+	if err != nil || comic == nil {
+		c.JSON(404, gin.H{"error": "Comic not found"})
+		return
+	}
+
+	// 获取封面图片数据
+	coverData, err := service.GetComicThumbnail(comicID)
+	if err != nil || len(coverData) == 0 {
+		c.JSON(500, gin.H{"error": "Failed to get cover image"})
+		return
+	}
+
+	// 判断内容类型
+	contentType := "comic/manga"
+	if service.IsNovelFilename(comic.Filename) {
+		contentType = "novel/light novel"
+	}
+
+	analysis, err := service.AnalyzeCoverWithVision(cfg, coverData, comic.Title, contentType, body.TargetLang)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	result := gin.H{
+		"success":  true,
+		"analysis": analysis,
+	}
+
+	// 如果 apply=true，将分析结果写入元数据
+	if body.Apply && analysis != nil {
+		updates := map[string]interface{}{}
+
+		// 如果当前没有 genre，用分析出的 theme+style 组合
+		if comic.Genre == "" && analysis.Theme != "" {
+			genre := analysis.Theme
+			if analysis.Style != "" {
+				genre = analysis.Style + ", " + genre
+			}
+			updates["genre"] = genre
+		}
+
+		// 如果没有描述，用分析出的描述
+		if comic.Description == "" && analysis.Description != "" {
+			updates["description"] = analysis.Description
+		}
+
+		if len(updates) > 0 {
+			updates["metadataSource"] = "ai_vision"
+			_ = store.UpdateComicFields(comicID, updates)
+		}
+
+		// 添加分析出的标签
+		if len(analysis.Tags) > 0 {
+			tagsToAdd := analysis.Tags
+			if analysis.Mood != "" {
+				tagsToAdd = append(tagsToAdd, analysis.Mood)
+			}
+			if analysis.ColorTone != "" {
+				tagsToAdd = append(tagsToAdd, analysis.ColorTone)
+			}
+			_ = store.AddTagsToComic(comicID, tagsToAdd)
+		}
+
+		updated, _ := store.GetComicByID(comicID)
+		result["comic"] = updated
+		result["applied"] = true
+	}
+
+	c.JSON(200, result)
+}
+
+// ============================================================
+// Phase 2-2: POST /api/recommendations/ai-reasons — AI 推荐理由
+// ============================================================
+
+func (h *AIHandler) GenerateRecommendationReasons(c *gin.Context) {
+	var body struct {
+		TargetLang string `json:"targetLang"`
+		Items      []struct {
+			ID      string   `json:"id"`
+			Title   string   `json:"title"`
+			Reasons []string `json:"reasons"`
+			Genre   string   `json:"genre"`
+			Author  string   `json:"author"`
+		} `json:"items"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(400, gin.H{"error": "invalid request body"})
+		return
+	}
+	if body.TargetLang == "" {
+		body.TargetLang = "zh"
+	}
+
+	cfg := service.LoadAIConfig()
+	if !cfg.EnableCloudAI || cfg.CloudAPIKey == "" {
+		c.JSON(400, gin.H{"error": "AI not configured"})
+		return
+	}
+
+	// 转换为 service 层结构
+	var items []service.RecommendationItem
+	for _, item := range body.Items {
+		items = append(items, service.RecommendationItem{
+			ID:      item.ID,
+			Title:   item.Title,
+			Reasons: item.Reasons,
+			Genre:   item.Genre,
+			Author:  item.Author,
+		})
+	}
+
+	// 获取用户收藏作品名称
+	var userFavorites []string
+	favs, err := store.GetFavoriteComicTitles(5)
+	if err == nil {
+		userFavorites = favs
+	}
+
+	reasons, err := service.GenerateRecommendationReasons(cfg, items, userFavorites, body.TargetLang)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(200, gin.H{
+		"success": true,
+		"reasons": reasons,
+	})
+}
+
+// ============================================================
+// Phase 2-3: Prompt 模板管理 API
+// ============================================================
+
+// GET /api/ai/prompts — 获取 prompt 模板
+func (h *AIHandler) GetPromptTemplates(c *gin.Context) {
+	templates := service.LoadPromptTemplates()
+	defaults := service.GetDefaultPromptTemplates()
+	c.JSON(200, gin.H{
+		"templates": templates,
+		"defaults":  defaults,
+	})
+}
+
+// PUT /api/ai/prompts — 保存自定义 prompt 模板
+func (h *AIHandler) UpdatePromptTemplates(c *gin.Context) {
+	var templates service.PromptTemplates
+	if err := c.ShouldBindJSON(&templates); err != nil {
+		c.JSON(400, gin.H{"error": "invalid request body"})
+		return
+	}
+	if err := service.SavePromptTemplates(templates); err != nil {
+		c.JSON(500, gin.H{"error": "Failed to save prompt templates"})
+		return
+	}
+	c.JSON(200, gin.H{"success": true})
+}
+
+// DELETE /api/ai/prompts — 重置 prompt 模板为默认
+func (h *AIHandler) ResetPromptTemplates(c *gin.Context) {
+	_ = service.ResetPromptTemplates()
+	c.JSON(200, gin.H{
+		"success":  true,
+		"defaults": service.GetDefaultPromptTemplates(),
+	})
+}

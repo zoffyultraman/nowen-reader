@@ -46,6 +46,7 @@ import {
   Sparkles,
   FileText,
   Loader2,
+  Eye,
 } from "lucide-react";
 import { useTranslation, useLocale } from "@/lib/i18n";
 import { MetadataSearch } from "@/components/MetadataSearch";
@@ -98,6 +99,8 @@ export default function ComicDetailPage() {
   const [aiSuggestLoading, setAiSuggestLoading] = useState(false);
   const [aiSuggestedTags, setAiSuggestedTags] = useState<string[]>([]);
   const [aiSelectedTags, setAiSelectedTags] = useState<Set<string>>(new Set());
+  const [aiCoverLoading, setAiCoverLoading] = useState(false);
+  const [aiCoverResult, setAiCoverResult] = useState<Record<string, unknown> | null>(null);
 
   // 标题编辑 state
   const [editingTitle, setEditingTitle] = useState(false);
@@ -406,6 +409,45 @@ export default function ComicDetailPage() {
     setAiSelectedTags(new Set());
     refetch();
   }, [comicId, refetch]);
+
+  // AI 封面分析
+  const handleAiAnalyzeCover = useCallback(async () => {
+    if (aiCoverLoading) return;
+    setAiCoverLoading(true);
+    setAiCoverResult(null);
+    try {
+      const res = await fetch(`/api/comics/${comicId}/ai-analyze-cover`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetLang: locale, apply: false }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAiCoverResult(data.analysis);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setAiCoverLoading(false);
+    }
+  }, [aiCoverLoading, comicId, locale]);
+
+  // AI 封面分析 - 应用结果
+  const handleAiCoverApply = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/comics/${comicId}/ai-analyze-cover`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetLang: locale, apply: true }),
+      });
+      if (res.ok) {
+        setAiCoverResult(null);
+        refetch();
+      }
+    } catch {
+      // ignore
+    }
+  }, [comicId, locale, refetch]);
 
   const handleTranslateMetadata = useCallback(async () => {
     if (metadataTranslating) return;
@@ -952,6 +994,15 @@ export default function ComicDetailPage() {
                       {aiParseLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <FileText className="h-3 w-3" />}
                       <span>{aiParseLoading ? (t.comicDetail.aiParseFilenameLoading || "Parsing...") : (t.comicDetail.aiParseFilename || "AI Parse")}</span>
                     </button>
+                    <button
+                      onClick={handleAiAnalyzeCover}
+                      disabled={aiCoverLoading}
+                      className="flex items-center gap-1 rounded-md border border-purple-500/30 bg-purple-500/10 px-1.5 py-0.5 text-[10px] font-medium text-purple-400 transition-all hover:bg-purple-500/20 hover:border-purple-500/50 disabled:opacity-50 disabled:pointer-events-none"
+                      title={t.comicDetail.aiAnalyzeCover || "AI Analyze Cover"}
+                    >
+                      {aiCoverLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Eye className="h-3 w-3" />}
+                      <span>{aiCoverLoading ? (t.comicDetail.aiAnalyzeCoverLoading || "Analyzing...") : (t.comicDetail.aiAnalyzeCover || "AI Cover")}</span>
+                    </button>
                   </>
                 )}
               </div>
@@ -1120,6 +1171,90 @@ export default function ComicDetailPage() {
                     </div>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {/* AI 封面分析结果展示 */}
+            {aiCoverResult && (
+              <div className="rounded-xl border border-purple-500/20 bg-purple-500/5 p-4">
+                <div className="mb-3 flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-sm font-medium text-purple-400">
+                    <Eye className="h-4 w-4" />
+                    {t.comicDetail.aiAnalyzeCoverResult || "Cover Analysis Result"}
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleAiCoverApply}
+                      className="rounded-md bg-purple-500/20 px-3 py-1 text-xs font-medium text-purple-300 transition-colors hover:bg-purple-500/30"
+                    >
+                      {t.comicDetail.aiParseApply || "Apply Results"}
+                    </button>
+                    <button
+                      onClick={() => setAiCoverResult(null)}
+                      className="rounded-md px-2 py-1 text-xs text-muted hover:text-foreground"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+                <div className="grid gap-2 text-xs sm:grid-cols-2">
+                  {(aiCoverResult as Record<string, unknown>).style && (
+                    <div className="flex gap-2">
+                      <span className="w-20 shrink-0 text-muted">{t.comicDetail.aiCoverStyle || "Style"}:</span>
+                      <span className="text-foreground">{String((aiCoverResult as Record<string, unknown>).style)}</span>
+                    </div>
+                  )}
+                  {(aiCoverResult as Record<string, unknown>).mood && (
+                    <div className="flex gap-2">
+                      <span className="w-20 shrink-0 text-muted">{t.comicDetail.aiCoverMood || "Mood"}:</span>
+                      <span className="text-foreground">{String((aiCoverResult as Record<string, unknown>).mood)}</span>
+                    </div>
+                  )}
+                  {(aiCoverResult as Record<string, unknown>).theme && (
+                    <div className="flex gap-2">
+                      <span className="w-20 shrink-0 text-muted">{t.comicDetail.aiCoverTheme || "Theme"}:</span>
+                      <span className="text-foreground">{String((aiCoverResult as Record<string, unknown>).theme)}</span>
+                    </div>
+                  )}
+                  {(aiCoverResult as Record<string, unknown>).ageRating && (
+                    <div className="flex gap-2">
+                      <span className="w-20 shrink-0 text-muted">{t.comicDetail.aiCoverAgeRating || "Rating"}:</span>
+                      <span className="text-foreground">{String((aiCoverResult as Record<string, unknown>).ageRating)}</span>
+                    </div>
+                  )}
+                  {(aiCoverResult as Record<string, unknown>).colorTone && (
+                    <div className="flex gap-2">
+                      <span className="w-20 shrink-0 text-muted">{t.comicDetail.aiCoverColorTone || "Color"}:</span>
+                      <span className="text-foreground">{String((aiCoverResult as Record<string, unknown>).colorTone)}</span>
+                    </div>
+                  )}
+                  {(aiCoverResult as Record<string, unknown>).confidence && (
+                    <div className="flex gap-2">
+                      <span className="w-20 shrink-0 text-muted">{t.comicDetail.aiCoverConfidence || "Conf."}:</span>
+                      <span className="text-foreground">{String((aiCoverResult as Record<string, unknown>).confidence)}</span>
+                    </div>
+                  )}
+                </div>
+                {(aiCoverResult as Record<string, unknown>).characters && (
+                  <div className="mt-2 text-xs">
+                    <span className="text-muted">{t.comicDetail.aiCoverCharacters || "Characters"}: </span>
+                    <span className="text-foreground">{String((aiCoverResult as Record<string, unknown>).characters)}</span>
+                  </div>
+                )}
+                {(aiCoverResult as Record<string, unknown>).description && (
+                  <div className="mt-2 text-xs italic text-foreground/70">
+                    {String((aiCoverResult as Record<string, unknown>).description)}
+                  </div>
+                )}
+                {Array.isArray((aiCoverResult as Record<string, unknown>).tags) && ((aiCoverResult as Record<string, unknown>).tags as string[]).length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {((aiCoverResult as Record<string, unknown>).tags as string[]).map((tag: string) => (
+                      <span key={tag} className="rounded bg-purple-500/15 px-1.5 py-0.5 text-[10px] text-purple-300">
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 

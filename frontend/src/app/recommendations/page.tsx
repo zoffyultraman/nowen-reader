@@ -3,14 +3,15 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowLeft, Sparkles, RefreshCw } from "lucide-react";
-import { useTranslation } from "@/lib/i18n";
+import { ArrowLeft, Sparkles, RefreshCw, Brain, Loader2 } from "lucide-react";
+import { useTranslation, useLocale } from "@/lib/i18n";
 
 interface RecommendedComic {
   id: string;
   title: string;
   score: number;
   reasons: string[];
+  aiReason?: string;
   coverUrl: string;
   author: string;
   genre: string;
@@ -19,8 +20,11 @@ interface RecommendedComic {
 
 export default function RecommendationsPage() {
   const t = useTranslation();
+  const locale = useLocale();
   const [recommendations, setRecommendations] = useState<RecommendedComic[]>([]);
   const [loading, setLoading] = useState(true);
+  const [aiReasonsLoading, setAiReasonsLoading] = useState(false);
+  const [aiReasons, setAiReasons] = useState<Record<string, string>>({});
 
   const fetchRecommendations = useCallback(async () => {
     setLoading(true);
@@ -29,6 +33,7 @@ export default function RecommendationsPage() {
       if (res.ok) {
         const data = await res.json();
         setRecommendations(data.recommendations || []);
+        setAiReasons({}); // 清除旧的 AI 理由
       }
     } catch { /* ignore */ }
     finally { setLoading(false); }
@@ -37,6 +42,31 @@ export default function RecommendationsPage() {
   useEffect(() => {
     fetchRecommendations();
   }, [fetchRecommendations]);
+
+  // AI 推荐理由生成
+  const fetchAiReasons = useCallback(async () => {
+    if (aiReasonsLoading || recommendations.length === 0) return;
+    setAiReasonsLoading(true);
+    try {
+      const items = recommendations.slice(0, 10).map((c) => ({
+        id: c.id,
+        title: c.title,
+        reasons: c.reasons,
+        genre: c.genre,
+        author: c.author,
+      }));
+      const res = await fetch("/api/recommendations/ai-reasons", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetLang: locale, items }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAiReasons(data.reasons || {});
+      }
+    } catch { /* ignore */ }
+    finally { setAiReasonsLoading(false); }
+  }, [aiReasonsLoading, recommendations, locale]);
 
   const reasonLabels: Record<string, string> = {
     tag_match: t.recommend?.tagMatch || "Similar tags",
@@ -69,6 +99,14 @@ export default function RecommendationsPage() {
             </h1>
           </div>
           <div className="flex-1" />
+          <button
+            onClick={fetchAiReasons}
+            disabled={aiReasonsLoading || recommendations.length === 0}
+            className="flex items-center gap-1.5 rounded-lg bg-purple-500/10 px-3 py-1.5 text-sm text-purple-400 transition-colors hover:bg-purple-500/20 disabled:opacity-50"
+          >
+            {aiReasonsLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Brain className="h-4 w-4" />}
+            {t.recommend?.aiReasonGenerate || "AI Reasons"}
+          </button>
           <button
             onClick={fetchRecommendations}
             disabled={loading}
@@ -134,6 +172,13 @@ export default function RecommendationsPage() {
                   {comic.author && (
                     <p className="mt-0.5 line-clamp-1 text-xs text-muted">
                       {comic.author}
+                    </p>
+                  )}
+                  {/* AI 推荐理由 */}
+                  {aiReasons[comic.id] && (
+                    <p className="mt-1 line-clamp-2 text-[10px] leading-tight text-purple-400/80">
+                      <Brain className="mr-0.5 inline h-2.5 w-2.5" />
+                      {aiReasons[comic.id]}
                     </p>
                   )}
                 </div>

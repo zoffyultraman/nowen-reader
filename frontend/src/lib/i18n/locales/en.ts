@@ -137,6 +137,17 @@ const en: Translations = {
     aiNotConfigured: "Please configure AI in Settings first",
     aiAddSelected: "Add Selected",
     aiAddAll: "Add All",
+    aiAnalyzeCover: "AI Analyze Cover",
+    aiAnalyzeCoverLoading: "Analyzing cover...",
+    aiAnalyzeCoverResult: "Cover Analysis Result",
+    aiCoverStyle: "Style",
+    aiCoverMood: "Mood",
+    aiCoverTheme: "Theme",
+    aiCoverAgeRating: "Age Rating",
+    aiCoverColorTone: "Color Tone",
+    aiCoverCharacters: "Characters",
+    aiCoverConfidence: "Confidence",
+    aiVisionNotSupported: "Current AI provider does not support image analysis",
   },
 
   // Stats Page
@@ -282,6 +293,8 @@ const en: Translations = {
     sameSeries: "Same series",
     sameCategory: "Same category",
     semanticMatch: "AI semantic match",
+    aiReasonLoading: "Generating AI reasons...",
+    aiReasonGenerate: "AI Reasons",
   },
 
   // Settings

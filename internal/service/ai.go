@@ -1185,3 +1185,319 @@ Requirements:
 
 	return newTags, nil
 }
+
+// ============================================================
+// Phase 2-1: Vision 封面分析
+// ============================================================
+
+// CoverAnalysis AI 分析封面后返回的结构化数据
+type CoverAnalysis struct {
+	Style       string   `json:"style"`       // 画风：写实/卡通/少女漫/少年漫/美漫/韩漫等
+	Mood        string   `json:"mood"`        // 氛围：热血/温馨/黑暗/搞笑/恐怖等
+	Theme       string   `json:"theme"`       // 主题：冒险/恋爱/校园/异世界/科幻等
+	AgeRating   string   `json:"ageRating"`   // 年龄分级估计：全年龄/青年/成人
+	ColorTone   string   `json:"colorTone"`   // 色调：明亮/暗沉/彩色/黑白
+	Characters  string   `json:"characters"`  // 角色描述
+	Tags        []string `json:"tags"`        // 建议标签
+	Description string   `json:"description"` // 一句话描述封面内容
+	Confidence  string   `json:"confidence"`  // 分析置信度：high/medium/low
+}
+
+// AnalyzeCoverWithVision 使用多模态 LLM 分析漫画/小说封面图片。
+// coverData 为封面图片的原始字节数据（JPEG/PNG/WebP）。
+func AnalyzeCoverWithVision(cfg AIConfig, coverData []byte, title, contentType, targetLang string) (*CoverAnalysis, error) {
+	if !cfg.EnableCloudAI || cfg.CloudAPIKey == "" {
+		return nil, fmt.Errorf("cloud AI not configured")
+	}
+
+	// 检查 provider 是否支持 Vision
+	if preset, ok := ProviderPresets[cfg.CloudProvider]; ok {
+		if !preset.SupportsVision {
+			return nil, fmt.Errorf("provider %s does not support vision/image analysis", cfg.CloudProvider)
+		}
+	}
+
+	langName := "Chinese (简体中文)"
+	if targetLang == "en" {
+		langName = "English"
+	}
+
+	// 加载 prompt 模板
+	templates := LoadPromptTemplates()
+	systemPrompt := templates.CoverAnalysis.System
+	if systemPrompt == "" {
+		systemPrompt = fmt.Sprintf(`You are an expert %s cover analyst and librarian. Analyze the given cover image and extract structured information in %s.
+
+Return ONLY a valid JSON object with these fields:
+{
+  "style": "art style (e.g. realistic, cartoon, shoujo manga, seinen, manhwa, etc.)",
+  "mood": "atmosphere/mood (e.g. action, warm, dark, comedy, horror, etc.)",
+  "theme": "main theme (e.g. adventure, romance, school, isekai, sci-fi, etc.)",
+  "ageRating": "estimated age rating (all-ages / teen / mature)",
+  "colorTone": "color characteristics (bright / dark / colorful / monochrome)",
+  "characters": "brief character description visible on cover",
+  "tags": ["tag1", "tag2", "tag3"],
+  "description": "one-sentence description of the cover in %s",
+  "confidence": "high/medium/low"
+}`, contentType, langName, langName)
+	}
+
+	userPrompt := templates.CoverAnalysis.User
+	if userPrompt == "" {
+		userPrompt = fmt.Sprintf("Analyze this %s cover image", contentType)
+	}
+	if title != "" {
+		userPrompt += fmt.Sprintf(" (title: %s)", title)
+	}
+	userPrompt += ". Return a JSON object with style, mood, theme, ageRating, colorTone, characters, tags, description, confidence."
+
+	// 检测 MIME 类型
+	mimeType := "image/jpeg"
+	if len(coverData) > 4 {
+		if coverData[0] == 0x89 && coverData[1] == 0x50 {
+			mimeType = "image/png"
+		} else if coverData[0] == 0x52 && coverData[1] == 0x49 {
+			mimeType = "image/webp"
+		}
+	}
+
+	// 编码为 base64
+	b64 := encodeBase64(coverData)
+
+	content, err := CallCloudLLM(cfg, systemPrompt, userPrompt, &LLMCallOptions{
+		Scenario:  "cover_analysis",
+		MaxTokens: 500,
+		Images: []ImageContent{
+			{Base64: b64, MimeType: mimeType},
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// 清理并解析 JSON
+	content = strings.ReplaceAll(content, "```json", "")
+	content = strings.ReplaceAll(content, "```", "")
+	content = strings.TrimSpace(content)
+
+	start := strings.Index(content, "{")
+	end := strings.LastIndex(content, "}")
+	if start >= 0 && end > start {
+		content = content[start : end+1]
+	}
+
+	var analysis CoverAnalysis
+	if err := json.Unmarshal([]byte(content), &analysis); err != nil {
+		return nil, fmt.Errorf("failed to parse AI vision response: %w", err)
+	}
+	return &analysis, nil
+}
+
+// encodeBase64 将字节数组编码为 base64 字符串
+func encodeBase64(data []byte) string {
+	const base64chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+	var result strings.Builder
+	result.Grow((len(data)/3 + 1) * 4)
+	for i := 0; i < len(data); i += 3 {
+		var b0, b1, b2 byte
+		b0 = data[i]
+		if i+1 < len(data) {
+			b1 = data[i+1]
+		}
+		if i+2 < len(data) {
+			b2 = data[i+2]
+		}
+		result.WriteByte(base64chars[b0>>2])
+		result.WriteByte(base64chars[((b0&0x03)<<4)|(b1>>4)])
+		if i+1 < len(data) {
+			result.WriteByte(base64chars[((b1&0x0F)<<2)|(b2>>6)])
+		} else {
+			result.WriteByte('=')
+		}
+		if i+2 < len(data) {
+			result.WriteByte(base64chars[b2&0x3F])
+		} else {
+			result.WriteByte('=')
+		}
+	}
+	return result.String()
+}
+
+// ============================================================
+// Phase 2-2: AI 推荐理由生成
+// ============================================================
+
+// GenerateRecommendationReasons 使用 AI 为推荐列表生成自然语言推荐理由。
+// items: [{title, reasons, genre, author}]
+// 批量处理以减少 API 调用次数。
+func GenerateRecommendationReasons(cfg AIConfig, items []RecommendationItem, userFavorites []string, targetLang string) (map[string]string, error) {
+	if !cfg.EnableCloudAI || cfg.CloudAPIKey == "" {
+		return nil, fmt.Errorf("cloud AI not configured")
+	}
+	if len(items) == 0 {
+		return map[string]string{}, nil
+	}
+
+	langName := "Chinese (简体中文)"
+	if targetLang == "en" {
+		langName = "English"
+	}
+
+	templates := LoadPromptTemplates()
+	systemPrompt := templates.RecommendReason.System
+	if systemPrompt == "" {
+		systemPrompt = fmt.Sprintf(`You are a friendly %s recommendation curator. Generate short, engaging recommendation reasons for each item.
+
+Rules:
+- Each reason should be 1 sentence, max 50 characters for Chinese or 80 characters for English
+- Be specific: mention matching tags, similar works, or why the user would enjoy it
+- Sound natural, like a friend's recommendation, not a database query
+- Return a JSON object: { "id1": "reason text", "id2": "reason text", ... }`, langName)
+	}
+
+	// 构建批量数据（一次最多处理 10 个）
+	batchSize := 10
+	if len(items) > batchSize {
+		items = items[:batchSize]
+	}
+
+	var itemDescs []string
+	for _, item := range items {
+		desc := fmt.Sprintf("- ID: %s | Title: %s | Reasons: %s", item.ID, item.Title, strings.Join(item.Reasons, ","))
+		if item.Genre != "" {
+			desc += fmt.Sprintf(" | Genre: %s", item.Genre)
+		}
+		if item.Author != "" {
+			desc += fmt.Sprintf(" | Author: %s", item.Author)
+		}
+		itemDescs = append(itemDescs, desc)
+	}
+
+	userCtx := ""
+	if len(userFavorites) > 0 {
+		favs := userFavorites
+		if len(favs) > 5 {
+			favs = favs[:5]
+		}
+		userCtx = fmt.Sprintf("\nUser's favorite works: %s", strings.Join(favs, ", "))
+	}
+
+	userPrompt := templates.RecommendReason.User
+	if userPrompt == "" {
+		userPrompt = fmt.Sprintf("Generate a personalized recommendation reason in %s for each item:\n\n%s%s\n\nReturn a JSON object mapping each ID to its reason string.", langName, strings.Join(itemDescs, "\n"), userCtx)
+	} else {
+		userPrompt = fmt.Sprintf(userPrompt+"\n\n%s%s", strings.Join(itemDescs, "\n"), userCtx)
+	}
+
+	content, err := CallCloudLLM(cfg, systemPrompt, userPrompt, &LLMCallOptions{
+		Scenario:  "recommend_reason",
+		MaxTokens: 800,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// 解析
+	content = strings.ReplaceAll(content, "```json", "")
+	content = strings.ReplaceAll(content, "```", "")
+	content = strings.TrimSpace(content)
+
+	start := strings.Index(content, "{")
+	end := strings.LastIndex(content, "}")
+	if start >= 0 && end > start {
+		content = content[start : end+1]
+	}
+
+	var result map[string]string
+	if err := json.Unmarshal([]byte(content), &result); err != nil {
+		return nil, fmt.Errorf("failed to parse AI recommendation reasons: %w", err)
+	}
+	return result, nil
+}
+
+// RecommendationItem 推荐项，用于 AI 生成理由
+type RecommendationItem struct {
+	ID      string   `json:"id"`
+	Title   string   `json:"title"`
+	Reasons []string `json:"reasons"`
+	Genre   string   `json:"genre"`
+	Author  string   `json:"author"`
+}
+
+// ============================================================
+// Phase 2-3: Prompt 模板管理
+// ============================================================
+
+// PromptPair 一对 system + user prompt 模板
+type PromptPair struct {
+	System string `json:"system"`
+	User   string `json:"user"`
+}
+
+// PromptTemplates 所有可自定义的 prompt 模板
+type PromptTemplates struct {
+	Summary         PromptPair `json:"summary"`         // AI 摘要生成
+	ParseFilename   PromptPair `json:"parseFilename"`   // AI 文件名解析
+	SuggestTags     PromptPair `json:"suggestTags"`     // AI 标签建议
+	CoverAnalysis   PromptPair `json:"coverAnalysis"`   // Vision 封面分析
+	RecommendReason PromptPair `json:"recommendReason"` // 推荐理由生成
+	Translate       PromptPair `json:"translate"`       // 元数据翻译
+}
+
+func promptTemplatesPath() string {
+	return filepath.Join(config.DataDir(), "prompt-templates.json")
+}
+
+// LoadPromptTemplates 加载自定义 prompt 模板（为空则使用代码内置默认值）
+func LoadPromptTemplates() PromptTemplates {
+	var templates PromptTemplates
+	data, err := os.ReadFile(promptTemplatesPath())
+	if err != nil {
+		return templates // 返回空模板，各功能将使用内置默认值
+	}
+	_ = json.Unmarshal(data, &templates)
+	return templates
+}
+
+// SavePromptTemplates 保存自定义 prompt 模板
+func SavePromptTemplates(templates PromptTemplates) error {
+	dir := filepath.Dir(promptTemplatesPath())
+	os.MkdirAll(dir, 0755)
+	data, _ := json.MarshalIndent(templates, "", "  ")
+	return os.WriteFile(promptTemplatesPath(), data, 0644)
+}
+
+// ResetPromptTemplates 重置为默认模板（删除自定义文件）
+func ResetPromptTemplates() error {
+	return os.Remove(promptTemplatesPath())
+}
+
+// GetDefaultPromptTemplates 返回内置的默认 prompt 模板（供前端展示参考）
+func GetDefaultPromptTemplates() PromptTemplates {
+	return PromptTemplates{
+		Summary: PromptPair{
+			System: "You are a professional {contentType} reviewer and librarian. Based on the given metadata, write an engaging and informative summary/description in {language}.\n\nRequirements:\n- Write 2-4 sentences (80-200 characters for Chinese, 100-300 words for English)\n- Be descriptive and engaging, like a bookstore blurb\n- If the existing description exists, improve and localize it\n- Do NOT add any prefixes, labels, or markdown — return only the pure summary text",
+			User:   "Generate a {language} summary for this {contentType} based on the following metadata:\n\n{metadata}",
+		},
+		ParseFilename: PromptPair{
+			System: "You are an expert at parsing manga/comic/novel filenames. Extract structured metadata from complex filename conventions.\n\nRules:\n- \"Group\" refers to scan/translation groups\n- Remove file extensions before parsing\n- Volume/chapter numbers map to seriesIndex\n- Return ONLY a valid JSON object",
+			User:   "Parse this filename and extract structured metadata:\n\n\"{filename}\"\n\nReturn a JSON object with fields: title, author, group, seriesName, seriesIndex, language, genre, year, tags",
+		},
+		SuggestTags: PromptPair{
+			System: "You are an expert {contentType} librarian and tagger. Suggest 5-10 relevant tags in {language}.\n\nRequirements:\n- Tags should be concise (1-4 words)\n- Include genre, theme, and mood/style tags\n- Don't repeat existing tags\n- Return ONLY a JSON array of tag strings",
+			User:   "Suggest tags for this {contentType}:\n\n{metadata}\n\nReturn a JSON array of tag strings.",
+		},
+		CoverAnalysis: PromptPair{
+			System: "You are an expert cover analyst. Analyze the cover image and return a JSON object with: style, mood, theme, ageRating, colorTone, characters, tags, description, confidence.",
+			User:   "Analyze this {contentType} cover image. Return a JSON object.",
+		},
+		RecommendReason: PromptPair{
+			System: "You are a friendly recommendation curator. Generate short, engaging recommendation reasons (1 sentence, max 50 chars for Chinese / 80 chars for English). Return a JSON object mapping IDs to reason strings.",
+			User:   "Generate personalized recommendation reasons in {language} for each item:",
+		},
+		Translate: PromptPair{
+			System: "You are a professional translator specializing in manga/comic metadata. Translate the given fields to {language}. Keep proper nouns in their commonly known form.\nRespond ONLY with a valid JSON object.",
+			User:   "Translate these metadata fields to {language}:\n\n{fields}\n\nReturn a JSON object with the same keys and translated values.",
+		},
+	}
+}
