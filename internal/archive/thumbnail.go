@@ -27,12 +27,19 @@ func GenerateThumbnail(archivePath, comicID string) ([]byte, error) {
 		return nil, err
 	}
 
-	cachePath := filepath.Join(thumbDir, comicID+".webp")
+	// 缓存路径包含尺寸信息，尺寸变更后自动生成新缩略图
+	tw := config.GetThumbnailWidth()
+	th := config.GetThumbnailHeight()
+	cacheName := fmt.Sprintf("%s_%dx%d.webp", comicID, tw, th)
+	cachePath := filepath.Join(thumbDir, cacheName)
 
-	// Check cache first
+	// Check cache first（尺寸匹配才命中）
 	if data, err := os.ReadFile(cachePath); err == nil && len(data) > 0 {
 		return data, nil
 	}
+
+	// 清理该 comicID 的旧尺寸缓存文件
+	cleanOldThumbnailCache(thumbDir, comicID, cacheName)
 
 	archiveType := DetectType(archivePath)
 
@@ -243,11 +250,34 @@ func ResizeImageToWebP(imgData []byte, width, height, quality int) ([]byte, erro
 	return resizeToWebP(imgData, width, height, quality)
 }
 
+// cleanOldThumbnailCache 删除同一 comicID 的旧尺寸缓存文件（包括旧格式 comicID.webp）。
+func cleanOldThumbnailCache(thumbDir, comicID, currentCacheName string) {
+	// 清理旧格式缓存 comicID.webp（不含尺寸后缀）
+	oldFormatPath := filepath.Join(thumbDir, comicID+".webp")
+	if _, err := os.Stat(oldFormatPath); err == nil {
+		_ = os.Remove(oldFormatPath)
+	}
+
+	// 清理同 comicID 但不同尺寸的缓存
+	entries, err := os.ReadDir(thumbDir)
+	if err != nil {
+		return
+	}
+	prefix := comicID + "_"
+	for _, entry := range entries {
+		name := entry.Name()
+		if strings.HasPrefix(name, prefix) && name != currentCacheName {
+			_ = os.Remove(filepath.Join(thumbDir, name))
+		}
+	}
+}
+
 // generateTextCover creates a simple image thumbnail for text files.
 // Uses Go's image library to draw a colored background with the title.
 func generateTextCover(filePath, comicID, thumbDir, cachePath string) ([]byte, error) {
-	width := 400
-	height := 560
+	// 从配置读取缩略图尺寸，而不是硬编码
+	width := config.GetThumbnailWidth()
+	height := config.GetThumbnailHeight()
 
 	// Create a gradient-like background
 	dst := image.NewRGBA(image.Rect(0, 0, width, height))
