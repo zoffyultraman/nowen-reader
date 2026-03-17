@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BookMarked, BarChart3, User, Settings, BookOpen } from "lucide-react";
+import { BookMarked, Settings } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
 
 /**
@@ -34,16 +34,10 @@ export default function MobileBottomNav() {
       active: pathname === "/",
     },
     {
-      href: "/stats",
-      icon: BarChart3,
-      label: t.mobileNav?.stats || "统计",
-      active: pathname === "/stats",
-    },
-    {
-      href: "/ehentai",
-      icon: BookOpen,
-      label: "E-H",
-      active: pathname === "/ehentai",
+      href: "/settings",
+      icon: Settings,
+      label: t.settings?.title || "设置",
+      active: pathname === "/settings",
     },
   ];
 

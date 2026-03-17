@@ -12,6 +12,7 @@ import {
   removeComicTag,
   startSession,
   endSession,
+  endSessionBeacon,
 } from "@/hooks/useComics";
 import { ComicReadingMode, ReadingDirection } from "@/types/reader";
 import ReaderToolbar from "@/components/reader/ReaderToolbar";
@@ -115,6 +116,20 @@ export default function ReaderPage() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [useRealData, comicId]);
+
+  // beforeunload 兜底：浏览器崩溃/强制关闭时用 sendBeacon 保存会话
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (sessionIdRef.current) {
+        const duration = Math.round((Date.now() - sessionStartTimeRef.current) / 1000);
+        if (duration > 2) {
+          endSessionBeacon(sessionIdRef.current, currentPage, duration);
+        }
+      }
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  });
 
   // Save progress on page change (debounced)
   useEffect(() => {

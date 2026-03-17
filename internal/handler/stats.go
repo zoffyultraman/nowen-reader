@@ -99,3 +99,13 @@ func (h *StatsHandler) GetEnhancedStats(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, stats)
 }
+
+// GET /api/stats/files — 文件统计
+func (h *StatsHandler) GetFileStats(c *gin.Context) {
+	stats, err := store.GetFileStats()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get file stats"})
+		return
+	}
+	c.JSON(http.StatusOK, stats)
+}

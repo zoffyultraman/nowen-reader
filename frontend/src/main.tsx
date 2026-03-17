@@ -24,6 +24,7 @@ import EHentai from "@/app/ehentai/page";
 import Recommendations from "@/app/recommendations/page";
 import Stats from "@/app/stats/page";
 import Logs from "@/app/logs/page";
+import Settings from "@/app/settings/page";
 
 function App() {
   return (
@@ -43,6 +44,7 @@ function App() {
                     <Route path="/recommendations" element={<Recommendations />} />
                     <Route path="/stats" element={<Stats />} />
                     <Route path="/logs" element={<Logs />} />
+                    <Route path="/settings" element={<Settings />} />
                   </Routes>
                 </AuthGuard>
                 <MobileBottomNav />

@@ -277,6 +277,11 @@ const en: Translations = {
     title: "Settings",
     ai: "AI",
     about: "About",
+    groupGeneral: "General",
+    groupData: "Data",
+    aboutDesc: "Version & project info",
+    aboutSlogan: "High-performance self-hosted manga & novel platform",
+    aboutTechStack: "Tech Stack",
   },
 
   // Error Logs

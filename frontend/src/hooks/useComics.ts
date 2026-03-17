@@ -32,6 +32,7 @@ export {
   deleteComicById,
   startSession,
   endSession,
+  endSessionBeacon,
   updateSortOrders,
   addComicCategories,
   setComicCategories,

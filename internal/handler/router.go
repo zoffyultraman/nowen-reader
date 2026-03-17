@@ -135,7 +135,9 @@ func SetupRoutes(r *gin.Engine) {
 	api.GET("/stats/yearly", stats.GetYearlyReport)
 	api.POST("/stats/session", stats.StartSession)
 	api.PUT("/stats/session", stats.EndSession)
+	api.POST("/stats/session/end", stats.EndSession) // sendBeacon 兜底（sendBeacon 只支持 POST）
 	api.GET("/stats/enhanced", stats.GetEnhancedStats)
+	api.GET("/stats/files", stats.GetFileStats)
 
 	// ============================================================
 	// Upload (Phase 2) — requires auth

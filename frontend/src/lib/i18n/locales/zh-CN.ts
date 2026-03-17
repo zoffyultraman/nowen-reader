@@ -275,6 +275,11 @@ const zhCN = {
     title: "设置",
     ai: "AI",
     about: "关于",
+    groupGeneral: "通用",
+    groupData: "数据",
+    aboutDesc: "版本与项目信息",
+    aboutSlogan: "高性能自托管漫画 & 小说管理平台",
+    aboutTechStack: "技术栈",
   },
 
   // Error Logs
@@ -781,6 +786,11 @@ export interface Translations {
     title: string;
     ai: string;
     about: string;
+    groupGeneral: string;
+    groupData: string;
+    aboutDesc: string;
+    aboutSlogan: string;
+    aboutTechStack: string;
   };
   errorLogs: {
     tab: string;

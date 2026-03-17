@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { X, Info, Brain, Globe, BookOpen } from "lucide-react";
+import { X, Info, Brain, Globe, BookOpen, Github, ExternalLink } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
 import dynamic from "next/dynamic";
 
@@ -159,6 +159,15 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
 }
 
 function AboutPanel() {
+  const [versionInfo, setVersionInfo] = useState<{ version: string; uptime: string } | null>(null);
+
+  useEffect(() => {
+    fetch("/api/health")
+      .then((res) => res.json())
+      .then((data) => setVersionInfo(data))
+      .catch(() => {});
+  }, []);
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
@@ -173,7 +182,7 @@ function AboutPanel() {
         </div>
         <div className="flex items-center justify-between text-sm">
           <span className="text-muted">Version</span>
-          <span className="text-foreground">0.1.0</span>
+          <span className="text-foreground">{versionInfo ? versionInfo.version : "..."}</span>
         </div>
         <div className="flex items-center justify-between text-sm">
           <span className="text-muted">Backend</span>
@@ -185,7 +194,7 @@ function AboutPanel() {
         </div>
         <div className="flex items-center justify-between text-sm">
           <span className="text-muted">Database</span>
-          <span className="text-foreground">SQLite</span>
+          <span className="text-foreground">SQLite (WAL)</span>
         </div>
         <div className="flex items-center justify-between text-sm">
           <span className="text-muted">Comics</span>
@@ -195,7 +204,22 @@ function AboutPanel() {
           <span className="text-muted">Novels</span>
           <span className="text-foreground">TXT/EPUB/MOBI/AZW3</span>
         </div>
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-muted">i18n</span>
+          <span className="text-foreground">中文 / English / 日本語</span>
+        </div>
       </div>
+
+      <a
+        href="https://github.com/cropflre/nowen-reader"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex items-center justify-center gap-2 rounded-xl bg-background p-3 text-sm text-muted transition-colors hover:text-accent"
+      >
+        <Github className="h-4 w-4" />
+        GitHub
+        <ExternalLink className="h-3 w-3 opacity-50" />
+      </a>
     </div>
   );
 }

@@ -176,6 +176,22 @@ export async function endSession(sessionId: number, endPage: number, duration: n
   }
 }
 
+/**
+ * 使用 navigator.sendBeacon 发送会话结束请求（用于 beforeunload 兜底）。
+ * sendBeacon 在页面卸载/崩溃时仍能可靠地发出请求。
+ */
+export function endSessionBeacon(sessionId: number, endPage: number, duration: number) {
+  try {
+    const data = JSON.stringify({ sessionId, endPage, duration });
+    // sendBeacon 只支持 POST，后端需要兼容
+    const blob = new Blob([data], { type: "application/json" });
+    navigator.sendBeacon("/api/stats/session/end", blob);
+  } catch {
+    // 如果 sendBeacon 不可用，回退到普通请求
+    endSession(sessionId, endPage, duration);
+  }
+}
+
 // ============================================================
 // 排序
 // ============================================================

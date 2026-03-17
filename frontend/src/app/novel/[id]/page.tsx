@@ -12,6 +12,7 @@ import {
   removeComicTag,
   startSession,
   endSession,
+  endSessionBeacon,
 } from "@/hooks/useComics";
 import TextReaderView from "@/components/reader/TextReaderView";
 import NovelToolbar from "@/components/reader/NovelToolbar";
@@ -102,6 +103,20 @@ export default function NovelReaderPage() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [comicId, totalChapters > 0]);
+
+  // beforeunload 兜底：浏览器崩溃/强制关闭时用 sendBeacon 保存会话
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (sessionIdRef.current) {
+        const duration = Math.round((Date.now() - sessionStartTimeRef.current) / 1000);
+        if (duration > 2) {
+          endSessionBeacon(sessionIdRef.current, currentPage, duration);
+        }
+      }
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  });
 
   // Save progress on chapter change (debounced)
   useEffect(() => {

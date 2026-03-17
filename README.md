@@ -112,7 +112,7 @@ nowen-reader/
 
 ```bash
 # 克隆项目
-git clone https://github.com/nowen-reader/nowen-reader.git
+git clone https://github.com/cropflre/nowen-reader.git
 cd nowen-reader
 
 # 一键启动（从源码构建）
@@ -125,7 +125,7 @@ docker compose up -d
 
 ```bash
 # 下载配置文件
-curl -O https://raw.githubusercontent.com/nowen-reader/nowen-reader/main/docker-compose.prod.yml
+curl -O https://raw.githubusercontent.com/cropflre/nowen-reader/main/docker-compose.prod.yml
 
 # 启动
 docker compose -f docker-compose.prod.yml up -d
@@ -139,7 +139,7 @@ docker compose -f docker-compose.prod.yml up -d
 
 ```bash
 # 下载 NAS 配置文件
-curl -O https://raw.githubusercontent.com/nowen-reader/nowen-reader/main/docker-compose.nas.yml
+curl -O https://raw.githubusercontent.com/cropflre/nowen-reader/main/docker-compose.nas.yml
 
 # 编辑配置，修改漫画目录路径
 vi docker-compose.nas.yml
@@ -154,7 +154,7 @@ docker compose -f docker-compose.nas.yml up -d
 # 前提条件: Go 1.23+, Node.js 20+ (可选，用于前端)
 
 # 克隆
-git clone https://github.com/nowen-reader/nowen-reader.git
+git clone https://github.com/cropflre/nowen-reader.git
 cd nowen-reader
 
 # 仅构建后端
@@ -452,6 +452,7 @@ make fmt
 | 前端嵌入 | go:embed |
 | 文件监听 | fsnotify |
 | 容器化 | Docker 多阶段构建（Alpine 3.20） |
+| 多语言 | i18n（中文 / English / 日本語） |
 | CI/CD | GitHub Actions |
 
 ## 📄 License
