@@ -1501,3 +1501,233 @@ func GetDefaultPromptTemplates() PromptTemplates {
 		},
 	}
 }
+
+// ============================================================
+// Phase 3-1: AI 阅读助手 (Chat)
+// ============================================================
+
+// ChatMessage 聊天消息
+type ChatMessage struct {
+	Role    string `json:"role"` // "user" 或 "assistant"
+	Content string `json:"content"`
+}
+
+// ChatWithContextStream 带上下文的 AI 阅读助手，流式返回。
+// context: 当前阅读内容（漫画页图片 base64 或小说文本）
+// history: 对话历史
+// question: 用户当前问题
+func ChatWithContextStream(cfg AIConfig, title, contentType, targetLang string,
+	contextText string, contextImage *ImageContent,
+	history []ChatMessage, question string, callback StreamCallback) error {
+
+	if !cfg.EnableCloudAI || cfg.CloudAPIKey == "" {
+		return fmt.Errorf("cloud AI not configured")
+	}
+
+	langName := "Chinese (简体中文)"
+	if targetLang == "en" {
+		langName = "English"
+	}
+
+	systemPrompt := fmt.Sprintf(`You are a helpful reading assistant for a %s titled "%s". The user is currently reading this work and may ask about characters, plot, vocabulary, cultural references, or request translations.
+
+Rules:
+- Answer in %s
+- Be concise but helpful (1-3 sentences unless more detail is needed)
+- If you're given the current page/chapter content, use it to provide context-aware answers
+- If the user asks about something not in the current context, answer based on general knowledge
+- For manga/comics: you may receive the current page image — describe what you see if asked
+- For novels: you may receive the current chapter text — help with comprehension if asked
+- Be friendly and conversational, like a knowledgeable reading companion`, contentType, title, langName)
+
+	// 构建完整的用户消息（包含上下文）
+	fullUserMsg := question
+	if contextText != "" {
+		// 截断过长的文本上下文（避免超出 token 限制）
+		ctx := contextText
+		if len(ctx) > 3000 {
+			ctx = ctx[:3000] + "\n...[text truncated]..."
+		}
+		fullUserMsg = fmt.Sprintf("[Current reading content]\n%s\n\n[User question]\n%s", ctx, question)
+	} else if contextImage == nil {
+		fullUserMsg = fmt.Sprintf("[User question]\n%s", question)
+	}
+
+	// 构建对话历史为 prompt（简化实现：将历史拼接到 user prompt 中）
+	if len(history) > 0 {
+		// 只保留最近 6 轮对话
+		recent := history
+		if len(recent) > 12 {
+			recent = recent[len(recent)-12:]
+		}
+		var historyText strings.Builder
+		historyText.WriteString("[Conversation history]\n")
+		for _, msg := range recent {
+			if msg.Role == "user" {
+				historyText.WriteString(fmt.Sprintf("User: %s\n", msg.Content))
+			} else {
+				historyText.WriteString(fmt.Sprintf("Assistant: %s\n", msg.Content))
+			}
+		}
+		historyText.WriteString("\n")
+		fullUserMsg = historyText.String() + fullUserMsg
+	}
+
+	// 使用流式调用
+	opts := &LLMCallOptions{
+		Scenario:  "chat",
+		MaxTokens: cfg.MaxTokens,
+	}
+
+	// 如果有图片上下文（漫画当前页），使用多模态
+	if contextImage != nil {
+		// 多模态流式尚不支持，回退到非流式调用后逐字模拟
+		opts.Images = []ImageContent{*contextImage}
+		result, err := CallCloudLLM(cfg, systemPrompt, fullUserMsg, opts)
+		if err != nil {
+			return err
+		}
+		// 逐段返回（模拟流式体验）
+		chunkSize := 20 // 每次返回约 20 字符
+		for i := 0; i < len(result); i += chunkSize {
+			end := i + chunkSize
+			if end > len(result) {
+				end = len(result)
+			}
+			if !callback(StreamChunk{Content: result[i:end]}) {
+				return nil
+			}
+		}
+		callback(StreamChunk{Done: true})
+		return nil
+	}
+
+	return CallCloudLLMStream(cfg, systemPrompt, fullUserMsg, opts, callback)
+}
+
+// ============================================================
+// Phase 3-2: 小说章节 AI 总结
+// ============================================================
+
+// ChapterSummary 章节摘要缓存
+type ChapterSummary struct {
+	ChapterIndex int       `json:"chapterIndex"`
+	Title        string    `json:"title"`
+	Summary      string    `json:"summary"`
+	GeneratedAt  time.Time `json:"generatedAt"`
+}
+
+// 章节摘要缓存（内存缓存，key = comicID:chapterIndex）
+var (
+	chapterSummaryCache   = make(map[string]*ChapterSummary)
+	chapterSummaryCacheMu sync.RWMutex
+)
+
+func chapterSummaryCacheKey(comicID string, chapterIndex int) string {
+	return fmt.Sprintf("%s:%d", comicID, chapterIndex)
+}
+
+// GetChapterSummaryFromCache 从缓存获取章节摘要
+func GetChapterSummaryFromCache(comicID string, chapterIndex int) *ChapterSummary {
+	chapterSummaryCacheMu.RLock()
+	defer chapterSummaryCacheMu.RUnlock()
+	return chapterSummaryCache[chapterSummaryCacheKey(comicID, chapterIndex)]
+}
+
+// SummarizeChapter 使用 AI 为小说章节生成摘要。
+// chapterText: 章节文本内容
+// chapterTitle: 章节标题
+func SummarizeChapter(cfg AIConfig, comicID string, chapterIndex int, chapterTitle, chapterText, bookTitle, targetLang string) (*ChapterSummary, error) {
+	// 先检查缓存
+	if cached := GetChapterSummaryFromCache(comicID, chapterIndex); cached != nil {
+		return cached, nil
+	}
+
+	if !cfg.EnableCloudAI || cfg.CloudAPIKey == "" {
+		return nil, fmt.Errorf("cloud AI not configured")
+	}
+
+	langName := "Chinese (简体中文)"
+	if targetLang == "en" {
+		langName = "English"
+	}
+
+	systemPrompt := fmt.Sprintf(`You are a concise book summarizer. Summarize the given novel chapter in %s.
+
+Requirements:
+- Write 2-3 sentences (60-150 characters for Chinese, 80-200 characters for English)
+- Capture the key events, character actions, and emotional tone
+- Avoid spoiling future events — summarize only what happens in THIS chapter
+- Do NOT include any prefixes, labels, or markdown — return only the summary text
+- If the text appears to be non-content (e.g. copyright, table of contents), say "（非正文内容）" or "(Non-content page)"`, langName)
+
+	// 截断过长的章节文本
+	text := chapterText
+	if len(text) > 4000 {
+		text = text[:4000] + "\n...[text truncated]..."
+	}
+
+	userPrompt := fmt.Sprintf("Book: %s\nChapter: %s\n\nChapter text:\n%s\n\nSummarize this chapter in %s.",
+		bookTitle, chapterTitle, text, langName)
+
+	summary, err := CallCloudLLM(cfg, systemPrompt, userPrompt, &LLMCallOptions{
+		Scenario:  "chapter_summary",
+		MaxTokens: 300,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	result := &ChapterSummary{
+		ChapterIndex: chapterIndex,
+		Title:        chapterTitle,
+		Summary:      strings.TrimSpace(summary),
+		GeneratedAt:  time.Now(),
+	}
+
+	// 写入缓存
+	chapterSummaryCacheMu.Lock()
+	chapterSummaryCache[chapterSummaryCacheKey(comicID, chapterIndex)] = result
+	chapterSummaryCacheMu.Unlock()
+
+	return result, nil
+}
+
+// BatchSummarizeChapters 批量生成章节摘要（用于 TOC 展示）
+// chapters: [{index, title, text}]
+func BatchSummarizeChapters(cfg AIConfig, comicID, bookTitle, targetLang string, chapters []struct {
+	Index int
+	Title string
+	Text  string
+}) ([]*ChapterSummary, error) {
+	if !cfg.EnableCloudAI || cfg.CloudAPIKey == "" {
+		return nil, fmt.Errorf("cloud AI not configured")
+	}
+
+	var results []*ChapterSummary
+	for _, ch := range chapters {
+		summary, err := SummarizeChapter(cfg, comicID, ch.Index, ch.Title, ch.Text, bookTitle, targetLang)
+		if err != nil {
+			// 某章失败不影响其他章，记录空摘要
+			results = append(results, &ChapterSummary{
+				ChapterIndex: ch.Index,
+				Title:        ch.Title,
+				Summary:      "",
+			})
+			continue
+		}
+		results = append(results, summary)
+	}
+	return results, nil
+}
+
+// ClearChapterSummaryCache 清除指定作品的章节摘要缓存
+func ClearChapterSummaryCache(comicID string) {
+	chapterSummaryCacheMu.Lock()
+	defer chapterSummaryCacheMu.Unlock()
+	for key := range chapterSummaryCache {
+		if strings.HasPrefix(key, comicID+":") {
+			delete(chapterSummaryCache, key)
+		}
+	}
+}

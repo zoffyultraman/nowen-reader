@@ -20,6 +20,7 @@ import { Heart, Star, Tag, X, Plus } from "lucide-react";
 import { useTranslation, useLocale } from "@/lib/i18n";
 import { useTheme } from "@/lib/theme-context";
 import type { ReaderTheme } from "@/components/reader/ReaderToolbar";
+import AIChatPanel from "@/components/reader/AIChatPanel";
 
 export default function NovelReaderPage() {
   const params = useParams();
@@ -55,6 +56,8 @@ export default function NovelReaderPage() {
   const [rating, setRating] = useState<number>(0);
   const [readerTheme, setReaderTheme] = useState<ReaderTheme>("night");
   const { theme: globalTheme, toggleTheme: globalToggleTheme } = useTheme();
+  // 章节文本缓存（用于 AI Chat 上下文）
+  const [currentChapterText, setCurrentChapterText] = useState("");
 
   // TOC 和 Settings 的外部控制状态
   const [showTOC, setShowTOC] = useState(false);
@@ -144,6 +147,24 @@ export default function NovelReaderPage() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // 获取当前章节文本（用于 AI Chat 上下文）
+  useEffect(() => {
+    if (totalChapters === 0) return;
+    const chapter = apiChapters[currentPage];
+    if (!chapter) return;
+
+    fetch(`/api/comics/${comicId}/chapter/${currentPage}`)
+      .then((res) => res.ok ? res.json() : null)
+      .then((data) => {
+        if (data?.content) {
+          // 简单 strip HTML tags
+          const text = data.content.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+          setCurrentChapterText(text.length > 3000 ? text.slice(0, 3000) : text);
+        }
+      })
+      .catch(() => {});
+  }, [currentPage, totalChapters, comicId, apiChapters]);
 
   // Auto-hide toolbar
   useEffect(() => {
@@ -309,6 +330,7 @@ export default function NovelReaderPage() {
         externalShowSettings={showSettingsPanel}
         onShowTOCChange={setShowTOC}
         onShowSettingsChange={setShowSettingsPanel}
+        comicId={comicId}
       />
 
       {/* Novel Toolbar */}
@@ -326,6 +348,15 @@ export default function NovelReaderPage() {
         onShowInfo={() => setShowInfoPanel(true)}
         onShowTOC={() => setShowTOC(true)}
         onShowSettings={() => setShowSettingsPanel(true)}
+      />
+
+      {/* AI Chat Panel */}
+      <AIChatPanel
+        comicId={comicId}
+        locale={locale}
+        contextText={currentChapterText}
+        contextLabel={`${apiChapters[currentPage]?.title || `Chapter ${currentPage + 1}`} (${currentPage + 1}/${totalChapters})`}
+        readerTheme={readerTheme}
       />
 
       {/* Info Panel (slide-in from right) */}

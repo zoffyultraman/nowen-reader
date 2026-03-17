@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { ChevronLeft, ChevronRight, List, Minus, Plus, Type } from "lucide-react";
+import { ChevronLeft, ChevronRight, List, Minus, Plus, Type, Brain, Loader2 } from "lucide-react";
 import type { ReaderTheme } from "@/components/reader/ReaderToolbar";
+import { useLocale } from "@/lib/i18n";
 
 interface ChapterInfo {
   index: number;
@@ -21,6 +22,7 @@ interface TextReaderViewProps {
   onShowSettingsChange?: (show: boolean) => void;
   externalShowTOC?: boolean;
   externalShowSettings?: boolean;
+  comicId?: string;
 }
 
 export default function TextReaderView({
@@ -33,7 +35,9 @@ export default function TextReaderView({
   onShowSettingsChange,
   externalShowTOC,
   externalShowSettings,
+  comicId,
 }: TextReaderViewProps) {
+  const locale = useLocale();
   const [content, setContent] = useState("");
   const [chapterTitle, setChapterTitle] = useState("");
   const [isHTML, setIsHTML] = useState(false);
@@ -52,6 +56,10 @@ export default function TextReaderView({
   });
   const [showTOC, setShowTOC] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  // 章节摘要状态
+  const [chapterSummaries, setChapterSummaries] = useState<Record<number, string>>({});
+  const [summaryLoadingIdx, setSummaryLoadingIdx] = useState<number | null>(null);
+  const [showSummaries, setShowSummaries] = useState(false);
 
   // 外部控制TOC和Settings的显示
   useEffect(() => {
@@ -542,16 +550,34 @@ export default function TextReaderView({
               >
                 目录 ({chapters.length} 章)
               </h3>
-              <button
-                onClick={() => setShowTOC(false)}
-                className={`rounded-lg p-1 text-xs ${
-                  isDark
-                    ? "text-zinc-400 hover:text-zinc-200"
-                    : "text-zinc-500 hover:text-zinc-700"
-                }`}
-              >
-                ✕
-              </button>
+              <div className="flex items-center gap-2">
+                {comicId && (
+                  <button
+                    onClick={() => setShowSummaries((v) => !v)}
+                    className={`flex items-center gap-1 rounded-lg px-2 py-1 text-[10px] transition-colors ${
+                      showSummaries
+                        ? "bg-purple-500/20 text-purple-400"
+                        : isDark
+                        ? "text-zinc-400 hover:text-zinc-200"
+                        : "text-zinc-500 hover:text-zinc-700"
+                    }`}
+                    title={locale === "zh" ? "AI 章节摘要" : "AI Chapter Summaries"}
+                  >
+                    <Brain className="h-3 w-3" />
+                    AI
+                  </button>
+                )}
+                <button
+                  onClick={() => setShowTOC(false)}
+                  className={`rounded-lg p-1 text-xs ${
+                    isDark
+                      ? "text-zinc-400 hover:text-zinc-200"
+                      : "text-zinc-500 hover:text-zinc-700"
+                  }`}
+                >
+                  ✕
+                </button>
+              </div>
             </div>
             <div className="px-2 pb-4">
               {chapters.map((ch, i) => (
@@ -574,7 +600,53 @@ export default function TextReaderView({
                   <span className="mr-2 inline-block w-8 text-right text-xs opacity-50">
                     {i + 1}.
                   </span>
-                  {ch.title || ch.name}
+                  <span className="flex-1">
+                    {ch.title || ch.name}
+                    {/* 章节摘要显示 */}
+                    {showSummaries && chapterSummaries[i] && (
+                      <span className={`mt-0.5 block text-[10px] leading-tight ${
+                        isDark ? "text-purple-400/60" : "text-purple-500/60"
+                      }`}>
+                        {chapterSummaries[i]}
+                      </span>
+                    )}
+                    {showSummaries && !chapterSummaries[i] && summaryLoadingIdx === i && (
+                      <span className={`mt-0.5 flex items-center gap-1 text-[10px] ${
+                        isDark ? "text-zinc-500" : "text-zinc-400"
+                      }`}>
+                        <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                        {locale === "zh" ? "生成中..." : "Generating..."}
+                      </span>
+                    )}
+                  </span>
+                  {/* AI 摘要按钮 */}
+                  {showSummaries && comicId && !chapterSummaries[i] && summaryLoadingIdx !== i && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSummaryLoadingIdx(i);
+                        fetch(`/api/comics/${comicId}/ai-chapter-summary`, {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ chapterIndex: i, targetLang: locale }),
+                        })
+                          .then((res) => res.ok ? res.json() : null)
+                          .then((data) => {
+                            if (data?.summary?.summary) {
+                              setChapterSummaries((prev) => ({ ...prev, [i]: data.summary.summary }));
+                            }
+                          })
+                          .finally(() => setSummaryLoadingIdx(null));
+                      }}
+                      className={`ml-auto shrink-0 rounded px-1.5 py-0.5 text-[9px] transition-colors ${
+                        isDark
+                          ? "bg-purple-500/10 text-purple-400 hover:bg-purple-500/20"
+                          : "bg-purple-500/10 text-purple-500 hover:bg-purple-500/20"
+                      }`}
+                    >
+                      <Brain className="h-2.5 w-2.5" />
+                    </button>
+                  )}
                 </button>
               ))}
             </div>

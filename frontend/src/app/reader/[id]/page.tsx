@@ -24,6 +24,7 @@ import WebtoonView from "@/components/reader/WebtoonView";
 import PdfView from "@/components/reader/PdfView";
 import { Heart, Star, Tag, X, Plus } from "lucide-react";
 import { useTranslation, useLocale } from "@/lib/i18n";
+import AIChatPanel from "@/components/reader/AIChatPanel";
 
 export default function ReaderPage() {
   const params = useParams();
@@ -414,6 +415,15 @@ export default function ReaderPage() {
           </span>
         </div>
       )}
+
+      {/* AI Chat Panel */}
+      <AIChatPanel
+        comicId={comicId}
+        locale={locale}
+        contextImageUrl={pages[currentPage] || undefined}
+        contextLabel={`${t.reader.currentPage}: ${currentPage + 1} / ${pages.length}`}
+        readerTheme={readerTheme}
+      />
 
       {/* Info Panel (slide-in from right) */}
       {showInfoPanel && useRealData && (

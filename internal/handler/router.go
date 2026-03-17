@@ -282,6 +282,13 @@ func SetupRoutes(r *gin.Engine) {
 	aiGroup.PUT("/prompts", ai.UpdatePromptTemplates)
 	aiGroup.DELETE("/prompts", ai.ResetPromptTemplates)
 
+	// AI Chat (Phase 3)
+	aiGroup.POST("/chat", ai.Chat)
+
+	// AI chapter summary (Phase 3)
+	comicByIDWrite.POST("/ai-chapter-summary", ai.ChapterSummary)
+	comicByIDWrite.POST("/ai-chapter-summaries", ai.BatchChapterSummaries)
+
 	// OPDS protocol
 	opds := NewOPDSHandler()
 	opdsGroup := api.Group("/opds")
