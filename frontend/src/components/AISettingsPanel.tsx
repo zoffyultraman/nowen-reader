@@ -787,7 +787,7 @@ function PromptTemplatesSection({ aiT }: { aiT: Record<string, string> }) {
     setTemplates({
       ...templates,
       [scenario]: {
-        ...(templates as Record<string, PromptPair>)[scenario],
+      ...(templates as unknown as Record<string, PromptPair>)[scenario],
         [field]: value,
       },
     });
@@ -828,8 +828,8 @@ function PromptTemplatesSection({ aiT }: { aiT: Record<string, string> }) {
                 {Object.keys(SCENARIO_LABELS).map((scenario) => {
                   const label = SCENARIO_LABELS[scenario];
                   const isEditing = editingScenario === scenario;
-                  const currentTemplate = templates ? (templates as Record<string, PromptPair>)[scenario] : null;
-                  const defaultTemplate = defaults ? (defaults as Record<string, PromptPair>)[scenario] : null;
+                  const currentTemplate = templates ? (templates as unknown as Record<string, PromptPair>)[scenario] : null;
+                  const defaultTemplate = defaults ? (defaults as unknown as Record<string, PromptPair>)[scenario] : null;
                   const hasCustom = currentTemplate?.system || currentTemplate?.user;
 
                   return (

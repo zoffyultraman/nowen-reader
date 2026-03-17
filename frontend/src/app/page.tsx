@@ -22,6 +22,7 @@ import { useTranslation, useLocale } from "@/lib/i18n";
 import { CheckSquare, CheckCheck, LayoutGrid, List, Copy, Upload, Download, BookMarked, Image, BookOpen, Brain, Loader2 } from "lucide-react";
 import DuplicateDetector from "@/components/DuplicateDetector";
 import { useToast } from "@/components/Toast";
+import { useAIStatus } from "@/hooks/useAIStatus";
 
 const DEFAULT_PAGE_SIZE = 24;
 
@@ -77,6 +78,7 @@ export default function Home() {
   const initializedRef = useRef(false);
 
   // AI 语义搜索 (Phase 4)
+  const { aiConfigured } = useAIStatus();
   const [aiSearchMode, setAiSearchMode] = useState(false);
   const [aiSearchLoading, setAiSearchLoading] = useState(false);
   const [aiSearchResults, setAiSearchResults] = useState<{comicId:string;title:string;score:number;reason:string;matchedOn:string[]}[]>([]);
@@ -362,7 +364,7 @@ accept=".zip,.cbz,.cbr,.rar,.7z,.cb7,.pdf,.txt,.epub,.mobi,.azw3,.html,.htm"
         onUpload={handleUpload}
         uploading={uploading}
         aiSearchMode={aiSearchMode}
-        onAiSearchModeChange={setAiSearchMode}
+        onAiSearchModeChange={aiConfigured ? setAiSearchMode : undefined}
       />
 
       {/* Main Content */}

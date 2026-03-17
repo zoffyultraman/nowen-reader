@@ -1198,50 +1198,50 @@ export default function ComicDetailPage() {
                   </div>
                 </div>
                 <div className="grid gap-2 text-xs sm:grid-cols-2">
-                  {(aiCoverResult as Record<string, unknown>).style && (
+                  {!!(aiCoverResult as Record<string, unknown>).style && (
                     <div className="flex gap-2">
                       <span className="w-20 shrink-0 text-muted">{t.comicDetail.aiCoverStyle || "Style"}:</span>
                       <span className="text-foreground">{String((aiCoverResult as Record<string, unknown>).style)}</span>
                     </div>
                   )}
-                  {(aiCoverResult as Record<string, unknown>).mood && (
+                  {!!(aiCoverResult as Record<string, unknown>).mood && (
                     <div className="flex gap-2">
                       <span className="w-20 shrink-0 text-muted">{t.comicDetail.aiCoverMood || "Mood"}:</span>
                       <span className="text-foreground">{String((aiCoverResult as Record<string, unknown>).mood)}</span>
                     </div>
                   )}
-                  {(aiCoverResult as Record<string, unknown>).theme && (
+                  {!!(aiCoverResult as Record<string, unknown>).theme && (
                     <div className="flex gap-2">
                       <span className="w-20 shrink-0 text-muted">{t.comicDetail.aiCoverTheme || "Theme"}:</span>
                       <span className="text-foreground">{String((aiCoverResult as Record<string, unknown>).theme)}</span>
                     </div>
                   )}
-                  {(aiCoverResult as Record<string, unknown>).ageRating && (
+                  {!!(aiCoverResult as Record<string, unknown>).ageRating && (
                     <div className="flex gap-2">
                       <span className="w-20 shrink-0 text-muted">{t.comicDetail.aiCoverAgeRating || "Rating"}:</span>
                       <span className="text-foreground">{String((aiCoverResult as Record<string, unknown>).ageRating)}</span>
                     </div>
                   )}
-                  {(aiCoverResult as Record<string, unknown>).colorTone && (
+                  {!!(aiCoverResult as Record<string, unknown>).colorTone && (
                     <div className="flex gap-2">
                       <span className="w-20 shrink-0 text-muted">{t.comicDetail.aiCoverColorTone || "Color"}:</span>
                       <span className="text-foreground">{String((aiCoverResult as Record<string, unknown>).colorTone)}</span>
                     </div>
                   )}
-                  {(aiCoverResult as Record<string, unknown>).confidence && (
+                  {!!(aiCoverResult as Record<string, unknown>).confidence && (
                     <div className="flex gap-2">
                       <span className="w-20 shrink-0 text-muted">{t.comicDetail.aiCoverConfidence || "Conf."}:</span>
                       <span className="text-foreground">{String((aiCoverResult as Record<string, unknown>).confidence)}</span>
                     </div>
                   )}
                 </div>
-                {(aiCoverResult as Record<string, unknown>).characters && (
+                {!!(aiCoverResult as Record<string, unknown>).characters && (
                   <div className="mt-2 text-xs">
                     <span className="text-muted">{t.comicDetail.aiCoverCharacters || "Characters"}: </span>
                     <span className="text-foreground">{String((aiCoverResult as Record<string, unknown>).characters)}</span>
                   </div>
                 )}
-                {(aiCoverResult as Record<string, unknown>).description && (
+                {!!(aiCoverResult as Record<string, unknown>).description && (
                   <div className="mt-2 text-xs italic text-foreground/70">
                     {String((aiCoverResult as Record<string, unknown>).description)}
                   </div>
