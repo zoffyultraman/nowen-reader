@@ -124,6 +124,7 @@ export default function PdfView({
         const renderContext = {
           canvasContext: ctx,
           viewport: scaledViewport,
+          canvas,
         };
 
         const renderTask = page.render(renderContext);
