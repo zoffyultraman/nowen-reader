@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { ChevronLeft, ChevronRight, List, Minus, Plus, Type, Brain, Loader2 } from "lucide-react";
 import type { ReaderTheme } from "@/components/reader/ReaderToolbar";
 import { useLocale } from "@/lib/i18n";
+import { useAIStatus } from "@/hooks/useAIStatus";
 
 interface ChapterInfo {
   index: number;
@@ -38,6 +39,7 @@ export default function TextReaderView({
   comicId,
 }: TextReaderViewProps) {
   const { locale } = useLocale();
+  const { aiConfigured } = useAIStatus();
   const [content, setContent] = useState("");
   const [chapterTitle, setChapterTitle] = useState("");
   const [isHTML, setIsHTML] = useState(false);
@@ -551,7 +553,7 @@ export default function TextReaderView({
                 目录 ({chapters.length} 章)
               </h3>
               <div className="flex items-center gap-2">
-                {comicId && (
+                {comicId && aiConfigured && (
                   <button
                     onClick={() => setShowSummaries((v) => !v)}
                     className={`flex items-center gap-1 rounded-lg px-2 py-1 text-[10px] transition-colors ${
@@ -620,7 +622,7 @@ export default function TextReaderView({
                     )}
                   </span>
                   {/* AI 摘要按钮 */}
-                  {showSummaries && comicId && !chapterSummaries[i] && summaryLoadingIdx !== i && (
+                  {showSummaries && comicId && aiConfigured && !chapterSummaries[i] && summaryLoadingIdx !== i && (
                     <button
                       onClick={(e) => {
                         e.stopPropagation();

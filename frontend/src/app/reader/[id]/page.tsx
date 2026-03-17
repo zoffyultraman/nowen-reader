@@ -37,6 +37,7 @@ export default function ReaderPage() {
   const { aiConfigured } = useAIStatus();
 
   // Try API first
+  const {
     pages: apiPages,
     title: apiTitle,
     isNovel,

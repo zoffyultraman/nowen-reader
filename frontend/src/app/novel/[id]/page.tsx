@@ -21,6 +21,7 @@ import { useTranslation, useLocale } from "@/lib/i18n";
 import { useTheme } from "@/lib/theme-context";
 import type { ReaderTheme } from "@/components/reader/ReaderToolbar";
 import AIChatPanel from "@/components/reader/AIChatPanel";
+import { useAIStatus } from "@/hooks/useAIStatus";
 
 export default function NovelReaderPage() {
   const params = useParams();
@@ -28,6 +29,7 @@ export default function NovelReaderPage() {
   const comicId = params.id as string;
   const t = useTranslation();
   const { locale } = useLocale();
+  const { aiConfigured } = useAIStatus();
 
   // Fetch chapters from API
   const {
@@ -351,13 +353,15 @@ export default function NovelReaderPage() {
       />
 
       {/* AI Chat Panel */}
-      <AIChatPanel
-        comicId={comicId}
-        locale={locale}
-        contextText={currentChapterText}
-        contextLabel={`${apiChapters[currentPage]?.title || `Chapter ${currentPage + 1}`} (${currentPage + 1}/${totalChapters})`}
-        readerTheme={readerTheme}
-      />
+      {aiConfigured && (
+        <AIChatPanel
+          comicId={comicId}
+          locale={locale}
+          contextText={currentChapterText}
+          contextLabel={`${apiChapters[currentPage]?.title || `Chapter ${currentPage + 1}`} (${currentPage + 1}/${totalChapters})`}
+          readerTheme={readerTheme}
+        />
+      )}
 
       {/* Info Panel (slide-in from right) */}
       {showInfoPanel && (

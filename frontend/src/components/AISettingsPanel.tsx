@@ -17,6 +17,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
+import { useAIStatus } from "@/hooks/useAIStatus";
 
 type CloudProvider =
   | "openai"
@@ -111,6 +112,7 @@ interface AIUsageStats {
 
 export function AISettingsPanel() {
   const t = useTranslation();
+  const { refreshAIStatus } = useAIStatus();
   const [config, setConfig] = useState<AIConfig | null>(null);
   const [status, setStatus] = useState<AIStatus | null>(null);
   const [saving, setSaving] = useState(false);
@@ -154,6 +156,8 @@ export function AISettingsPanel() {
       // Refresh status
       const st = await fetch("/api/ai/status").then((r) => r.json());
       setStatus(st);
+      // 刷新全局AI状态缓存
+      refreshAIStatus();
     } finally {
       setSaving(false);
     }

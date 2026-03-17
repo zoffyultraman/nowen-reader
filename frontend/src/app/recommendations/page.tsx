@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { ArrowLeft, Sparkles, RefreshCw, Brain, Loader2 } from "lucide-react";
 import { useTranslation, useLocale } from "@/lib/i18n";
+import { useAIStatus } from "@/hooks/useAIStatus";
 
 interface RecommendedComic {
   id: string;
@@ -21,6 +22,7 @@ interface RecommendedComic {
 export default function RecommendationsPage() {
   const t = useTranslation();
   const locale = useLocale();
+  const { aiConfigured } = useAIStatus();
   const [recommendations, setRecommendations] = useState<RecommendedComic[]>([]);
   const [loading, setLoading] = useState(true);
   const [aiReasonsLoading, setAiReasonsLoading] = useState(false);
@@ -99,14 +101,16 @@ export default function RecommendationsPage() {
             </h1>
           </div>
           <div className="flex-1" />
-          <button
-            onClick={fetchAiReasons}
-            disabled={aiReasonsLoading || recommendations.length === 0}
-            className="flex items-center gap-1.5 rounded-lg bg-purple-500/10 px-3 py-1.5 text-sm text-purple-400 transition-colors hover:bg-purple-500/20 disabled:opacity-50"
-          >
-            {aiReasonsLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Brain className="h-4 w-4" />}
-            {t.recommend?.aiReasonGenerate || "AI Reasons"}
-          </button>
+          {aiConfigured && (
+            <button
+              onClick={fetchAiReasons}
+              disabled={aiReasonsLoading || recommendations.length === 0}
+              className="flex items-center gap-1.5 rounded-lg bg-purple-500/10 px-3 py-1.5 text-sm text-purple-400 transition-colors hover:bg-purple-500/20 disabled:opacity-50"
+            >
+              {aiReasonsLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Brain className="h-4 w-4" />}
+              {t.recommend?.aiReasonGenerate || "AI Reasons"}
+            </button>
+          )}
           <button
             onClick={fetchRecommendations}
             disabled={loading}
