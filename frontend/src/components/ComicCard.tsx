@@ -208,7 +208,7 @@ const ComicCard = memo(function ComicCard({
             )}
           </div>
         ) : (
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 min-w-0">
             {draggable && (
               <div className="flex-shrink-0 cursor-grab text-muted/40 hover:text-muted active:cursor-grabbing">
                 <GripVertical className="h-4 w-4" />
@@ -216,7 +216,7 @@ const ComicCard = memo(function ComicCard({
             )}
             <Link
               href={getReaderUrl(comic)}
-              className="flex flex-1 items-center gap-3 sm:gap-4 rounded-xl bg-card p-2.5 sm:p-3 transition-all duration-200 group-hover:bg-card-hover group-hover:shadow-lg group-hover:shadow-accent/5"
+              className="flex flex-1 min-w-0 items-center gap-3 sm:gap-4 rounded-xl bg-card p-2.5 sm:p-3 transition-all duration-200 group-hover:bg-card-hover group-hover:shadow-lg group-hover:shadow-accent/5"
             >
               {/* Thumbnail */}
               <div className="relative h-20 w-14 sm:h-16 sm:w-12 flex-shrink-0 overflow-hidden rounded-lg">
