@@ -977,7 +977,7 @@ export default function TextReaderView({
 
   return (
     <div
-      className={`relative flex h-screen w-full flex-col transition-colors duration-300 ${theme.bg} ${theme.text}`}
+      className={`relative flex h-dvh w-full flex-col transition-colors duration-300 ${theme.bg} ${theme.text}`}
     >
       {/* Chapter title bar */}
       <div

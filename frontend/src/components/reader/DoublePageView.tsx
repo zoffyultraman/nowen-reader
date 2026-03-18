@@ -242,7 +242,7 @@ export default function DoublePageView({
 
   return (
     <div
-      className={`relative flex h-screen w-full cursor-pointer items-center justify-center select-none transition-colors duration-300 ${
+      className={`relative flex h-dvh w-full cursor-pointer items-center justify-center select-none transition-colors duration-300 ${
         readerTheme === "day" ? "bg-gray-100" : "bg-black"
       }`}
       onClick={handleClick}

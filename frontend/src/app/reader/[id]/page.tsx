@@ -440,7 +440,7 @@ export default function ReaderPage() {
   // Loading state
   if (isLoading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-black">
+      <div className="flex h-dvh items-center justify-center bg-black">
         <div className="flex flex-col items-center gap-4">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/20 border-t-accent" />
           <p className="text-sm text-white/40">{t.reader.loading || "正在加载..."}</p>
@@ -452,7 +452,7 @@ export default function ReaderPage() {
   // Error state (e.g. timeout for large files)
   if (apiError && pages.length === 0) {
     return (
-      <div className="flex h-screen items-center justify-center bg-black text-white">
+      <div className="flex h-dvh items-center justify-center bg-black text-white">
         <div className="text-center">
           <p className="text-lg font-medium">{t.reader.loadError || "加载失败"}</p>
           <p className="mt-2 text-sm text-white/50">{apiError}</p>
@@ -478,7 +478,7 @@ export default function ReaderPage() {
   // 404
   if (pages.length === 0) {
     return (
-      <div className="flex h-screen items-center justify-center bg-black text-white">
+      <div className="flex h-dvh items-center justify-center bg-black text-white">
         <div className="text-center">
           <p className="text-lg font-medium">{ t.reader.comicNotFound}</p>
           <button
@@ -493,7 +493,7 @@ export default function ReaderPage() {
   }
 
   return (
-    <div className={`relative h-screen w-full overflow-hidden transition-colors duration-300 ${
+    <div className={`relative h-dvh w-full overflow-hidden transition-colors duration-300 ${
       readerTheme === "day" ? "bg-gray-100" : "bg-black"
     }`}>
       {/* Reading View */}

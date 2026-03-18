@@ -180,7 +180,7 @@ export default function WebtoonView({
   return (
     <div
       ref={containerRef}
-      className={`h-screen w-full overflow-y-auto select-none transition-colors duration-300 ${
+      className={`h-dvh w-full overflow-y-auto select-none transition-colors duration-300 ${
         readerTheme === "day" ? "bg-gray-100" : "bg-black"
       }`}
       onScroll={handleScroll}

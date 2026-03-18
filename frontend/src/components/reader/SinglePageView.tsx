@@ -314,7 +314,7 @@ export default function SinglePageView({
 
   return (
     <div
-      className={`relative flex h-screen w-full cursor-pointer items-center justify-center select-none transition-colors duration-300 overflow-hidden ${
+      className={`relative flex h-dvh w-full cursor-pointer items-center justify-center select-none transition-colors duration-300 overflow-hidden ${
         readerTheme === "day" ? "bg-gray-100" : "bg-black"
       }`}
       onClick={handleClick}
