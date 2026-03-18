@@ -53,6 +53,8 @@ const en: Translations = {
     prevPage: "Previous Page",
     nextPage: "Next Page",
     lastPage: "Last Page",
+    goToPage: "Go",
+    pageInputPlaceholder: "Page",
   },
 
   // Stats Bar

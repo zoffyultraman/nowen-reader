@@ -51,6 +51,8 @@ const zhCN = {
     prevPage: "上一页",
     nextPage: "下一页",
     lastPage: "最后一页",
+    goToPage: "跳转",
+    pageInputPlaceholder: "页码",
   },
 
   // Stats Bar
@@ -770,6 +772,8 @@ export interface Translations {
     prevPage: string;
     nextPage: string;
     lastPage: string;
+    goToPage: string;
+    pageInputPlaceholder: string;
   };
   statsBar: {
     total: string;

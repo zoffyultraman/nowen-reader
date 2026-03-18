@@ -1181,6 +1181,48 @@ accept=".zip,.cbz,.cbr,.rar,.7z,.cb7,.pdf,.txt,.epub,.mobi,.azw3,.html,.htm"
                 <span className="ml-2 sm:ml-3 text-xs text-muted">
                   {activePage} / {effectiveTotalPages}
                 </span>
+
+                {/* 页码跳转 */}
+                <div className="ml-2 sm:ml-3 flex items-center gap-1">
+                  <input
+                    type="number"
+                    min={1}
+                    max={effectiveTotalPages}
+                    placeholder={t.home.pageInputPlaceholder || "页码"}
+                    className="w-14 sm:w-16 rounded-lg border border-border/60 bg-card px-2 py-1 text-xs text-center text-foreground outline-none focus:border-accent/50 transition-colors [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        const val = parseInt((e.target as HTMLInputElement).value, 10);
+                        if (val >= 1 && val <= effectiveTotalPages) {
+                          setActivePage(val);
+                          (e.target as HTMLInputElement).value = "";
+                          (e.target as HTMLInputElement).blur();
+                        }
+                      }
+                    }}
+                    onBlur={(e) => {
+                      const val = parseInt(e.target.value, 10);
+                      if (val >= 1 && val <= effectiveTotalPages) {
+                        setActivePage(val);
+                        e.target.value = "";
+                      }
+                    }}
+                  />
+                  <button
+                    onClick={(e) => {
+                      const input = (e.currentTarget as HTMLElement).previousElementSibling as HTMLInputElement;
+                      const val = parseInt(input?.value, 10);
+                      if (val >= 1 && val <= effectiveTotalPages) {
+                        setActivePage(val);
+                        input.value = "";
+                      }
+                    }}
+                    className="rounded-lg border border-border/60 px-2 py-1 text-xs text-muted hover:text-foreground hover:border-border transition-colors"
+                  >
+                    {t.home.goToPage || "跳转"}
+                  </button>
+                </div>
+
                 {!showGroupView && (
                 <div className="hidden sm:flex ml-4 items-center gap-1.5">
                   <LayoutGrid className="h-3.5 w-3.5 text-muted" />
