@@ -51,16 +51,17 @@ func (h *ComicHandler) ListComics(c *gin.Context) {
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("pageSize", "0"))
 
 	result, err := store.GetAllComics(store.ComicListOptions{
-		Search:        search,
-		Tags:          tags,
-		FavoritesOnly: favoritesOnly,
-		SortBy:        sortBy,
-		SortOrder:     sortOrder,
-		Page:          page,
-		PageSize:      pageSize,
-		Category:      category,
-		ContentType:   contentType,
-		ReadingStatus: c.Query("readingStatus"),
+		Search:         search,
+		Tags:           tags,
+		FavoritesOnly:  favoritesOnly,
+		SortBy:         sortBy,
+		SortOrder:      sortOrder,
+		Page:           page,
+		PageSize:       pageSize,
+		Category:       category,
+		ContentType:    contentType,
+		ReadingStatus:  c.Query("readingStatus"),
+		ExcludeGrouped: c.Query("excludeGrouped") == "true",
 	})
 	if err != nil {
 		log.Printf("[API] ListComics error: %v (sortBy=%s, contentType=%s, readingStatus=%s)",
@@ -423,8 +424,6 @@ func (h *ComicHandler) UpdateMetadata(c *gin.Context) {
 		Description *string `json:"description"`
 		Language    *string `json:"language"`
 		Genre       *string `json:"genre"`
-		SeriesName  *string `json:"seriesName"`
-		SeriesIndex *int    `json:"seriesIndex"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
@@ -460,12 +459,6 @@ func (h *ComicHandler) UpdateMetadata(c *gin.Context) {
 	}
 	if body.Genre != nil {
 		updates["genre"] = *body.Genre
-	}
-	if body.SeriesName != nil {
-		updates["seriesName"] = *body.SeriesName
-	}
-	if body.SeriesIndex != nil {
-		updates["seriesIndex"] = *body.SeriesIndex
 	}
 
 	if len(updates) == 0 {

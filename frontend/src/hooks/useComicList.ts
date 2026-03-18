@@ -48,6 +48,7 @@ export function useComics(options?: {
   pageSize?: number;
   category?: string;
   contentType?: string; // "comic" | "novel" | ""
+  excludeGrouped?: boolean; // 排除已在分组中的漫画（分组视图）
 }) {
   const [comics, setComics] = useState<ApiComic[]>([]);
   const [loading, setLoading] = useState(true);
@@ -68,6 +69,7 @@ export function useComics(options?: {
     if (options?.pageSize) params.set("pageSize", String(options.pageSize));
     if (options?.category) params.set("category", options.category);
     if (options?.contentType) params.set("contentType", options.contentType);
+    if (options?.excludeGrouped) params.set("excludeGrouped", "true");
 
     const qs = params.toString();
     const cacheKey = qs || "__default__";
@@ -113,7 +115,7 @@ export function useComics(options?: {
       setLoading(false);
       setFetching(false);
     }
-  }, [options?.search, options?.tags, options?.favoritesOnly, options?.sortBy, options?.sortOrder, options?.page, options?.pageSize, options?.category, options?.contentType]);
+  }, [options?.search, options?.tags, options?.favoritesOnly, options?.sortBy, options?.sortOrder, options?.page, options?.pageSize, options?.category, options?.contentType, options?.excludeGrouped]);
 
   useEffect(() => {
     fetchComics();

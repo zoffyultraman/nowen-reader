@@ -27,7 +27,9 @@ func InitDB(dbPath string) error {
 
 	var err error
 	// modernc.org/sqlite uses "sqlite" as driver name
-	db, err = sql.Open("sqlite", dbPath)
+	// 在 DSN 中通过 _pragma 参数设置 foreign_keys=ON，确保连接池中的每个连接都启用外键约束
+	dsn := fmt.Sprintf("file:%s?_pragma=foreign_keys(1)", dbPath)
+	db, err = sql.Open("sqlite", dsn)
 	if err != nil {
 		return fmt.Errorf("failed to open database: %w", err)
 	}
@@ -129,8 +131,6 @@ func createTables() error {
 			"year"           INTEGER,
 			"description"    TEXT NOT NULL DEFAULT '',
 			"language"       TEXT NOT NULL DEFAULT '',
-			"seriesName"     TEXT NOT NULL DEFAULT '',
-			"seriesIndex"    INTEGER,
 			"genre"          TEXT NOT NULL DEFAULT '',
 			"metadataSource" TEXT NOT NULL DEFAULT '',
 			"coverImageUrl"  TEXT NOT NULL DEFAULT '',
@@ -143,7 +143,6 @@ func createTables() error {
 		`CREATE INDEX IF NOT EXISTS "Comic_lastReadAt_idx" ON "Comic"("lastReadAt")`,
 		`CREATE INDEX IF NOT EXISTS "Comic_sortOrder_idx" ON "Comic"("sortOrder")`,
 		`CREATE INDEX IF NOT EXISTS "Comic_author_idx" ON "Comic"("author")`,
-		`CREATE INDEX IF NOT EXISTS "Comic_seriesName_idx" ON "Comic"("seriesName")`,
 		`CREATE INDEX IF NOT EXISTS "Comic_rating_idx" ON "Comic"("rating")`,
 		`CREATE INDEX IF NOT EXISTS "Comic_addedAt_idx" ON "Comic"("addedAt")`,
 		`CREATE INDEX IF NOT EXISTS "Comic_fileSize_pageCount_idx" ON "Comic"("fileSize", "pageCount")`,
@@ -235,31 +234,59 @@ func createTables() error {
 		`CREATE UNIQUE INDEX IF NOT EXISTS "ReadingGoal_goalType_key" ON "ReadingGoal"("goalType")`,
 
 		// ============================================================
+		// ComicGroup (自定义合并分组)
+		// ============================================================
+		`CREATE TABLE IF NOT EXISTS "ComicGroup" (
+			"id"        INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+			"name"      TEXT NOT NULL,
+			"coverUrl"  TEXT NOT NULL DEFAULT '',
+			"sortOrder" INTEGER NOT NULL DEFAULT 0,
+			"createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			"updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE INDEX IF NOT EXISTS "ComicGroup_name_idx" ON "ComicGroup"("name")`,
+
+		// ============================================================
+		// ComicGroupItem (分组内漫画关联)
+		// ============================================================
+		`CREATE TABLE IF NOT EXISTS "ComicGroupItem" (
+			"groupId" INTEGER NOT NULL,
+			"comicId" TEXT NOT NULL,
+			"sortIndex" INTEGER NOT NULL DEFAULT 0,
+			PRIMARY KEY ("groupId", "comicId"),
+			CONSTRAINT "ComicGroupItem_groupId_fkey" FOREIGN KEY ("groupId")
+				REFERENCES "ComicGroup" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+			CONSTRAINT "ComicGroupItem_comicId_fkey" FOREIGN KEY ("comicId")
+				REFERENCES "Comic" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+		)`,
+		`CREATE INDEX IF NOT EXISTS "ComicGroupItem_comicId_idx" ON "ComicGroupItem"("comicId")`,
+
+		// ============================================================
 		// FTS5 全文搜索虚拟表
 		// ============================================================
 		`CREATE VIRTUAL TABLE IF NOT EXISTS "ComicFTS" USING fts5(
-			title, author, filename, description, seriesName, genre,
+			title, author, filename, description, genre,
 			content="Comic", content_rowid="rowid"
 		)`,
 
 		// 触发器：插入时同步到 FTS
 		`CREATE TRIGGER IF NOT EXISTS "Comic_ai_fts" AFTER INSERT ON "Comic" BEGIN
-			INSERT INTO "ComicFTS"(rowid, title, author, filename, description, seriesName, genre)
-			VALUES (new.rowid, new.title, new.author, new.filename, new.description, new.seriesName, new.genre);
+			INSERT INTO "ComicFTS"(rowid, title, author, filename, description, genre)
+			VALUES (new.rowid, new.title, new.author, new.filename, new.description, new.genre);
 		END`,
 
 		// 触发器：删除时同步到 FTS
 		`CREATE TRIGGER IF NOT EXISTS "Comic_ad_fts" AFTER DELETE ON "Comic" BEGIN
-			INSERT INTO "ComicFTS"("ComicFTS", rowid, title, author, filename, description, seriesName, genre)
-			VALUES ('delete', old.rowid, old.title, old.author, old.filename, old.description, old.seriesName, old.genre);
+			INSERT INTO "ComicFTS"("ComicFTS", rowid, title, author, filename, description, genre)
+			VALUES ('delete', old.rowid, old.title, old.author, old.filename, old.description, old.genre);
 		END`,
 
 		// 触发器：更新时同步到 FTS
 		`CREATE TRIGGER IF NOT EXISTS "Comic_au_fts" AFTER UPDATE ON "Comic" BEGIN
-			INSERT INTO "ComicFTS"("ComicFTS", rowid, title, author, filename, description, seriesName, genre)
-			VALUES ('delete', old.rowid, old.title, old.author, old.filename, old.description, old.seriesName, old.genre);
-			INSERT INTO "ComicFTS"(rowid, title, author, filename, description, seriesName, genre)
-			VALUES (new.rowid, new.title, new.author, new.filename, new.description, new.seriesName, new.genre);
+			INSERT INTO "ComicFTS"("ComicFTS", rowid, title, author, filename, description, genre)
+			VALUES ('delete', old.rowid, old.title, old.author, old.filename, old.description, old.genre);
+			INSERT INTO "ComicFTS"(rowid, title, author, filename, description, genre)
+			VALUES (new.rowid, new.title, new.author, new.filename, new.description, new.genre);
 		END`,
 	}
 

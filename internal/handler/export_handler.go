@@ -102,7 +102,7 @@ func (h *ExportHandler) ExportComicsCSV(c *gin.Context) {
 
 	w.Write([]string{
 		"ID", "标题", "文件名", "作者", "出版社", "年份",
-		"类型", "语言", "系列", "页数", "文件大小(bytes)",
+		"类型", "语言", "页数", "文件大小(bytes)",
 		"阅读进度(%)", "总阅读时长(秒)", "评分", "收藏",
 		"标签", "分类", "添加时间", "最后阅读时间",
 	})
@@ -152,7 +152,7 @@ func (h *ExportHandler) ExportComicsCSV(c *gin.Context) {
 
 		w.Write([]string{
 			c.ID, c.Title, c.Filename, c.Author, c.Publisher, year,
-			c.Genre, c.Language, c.SeriesName,
+			c.Genre, c.Language,
 			strconv.Itoa(c.PageCount), strconv.FormatInt(c.FileSize, 10),
 			strconv.Itoa(progress), strconv.Itoa(c.TotalReadTime), rating, fav,
 			tags, cats, c.AddedAt, lastRead,

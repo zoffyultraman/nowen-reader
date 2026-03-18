@@ -112,8 +112,8 @@ func (h *OPDSHandler) Search(c *gin.Context) {
 
 	baseURL := getBaseURL(c)
 	searchPattern := "%" + query + "%"
-	where := `WHERE (c."title" LIKE ? OR c."author" LIKE ? OR c."seriesName" LIKE ?)`
-	args := []interface{}{searchPattern, searchPattern, searchPattern}
+	where := `WHERE (c."title" LIKE ? OR c."author" LIKE ?)`
+	args := []interface{}{searchPattern, searchPattern}
 
 	limit, offset := parseOPDSPagination(c)
 	comics, err := store.GetOPDSComics(where, args, `ORDER BY c."title" ASC`, limit, offset)

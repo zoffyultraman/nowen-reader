@@ -87,6 +87,12 @@ const en: Translations = {
     tags: "Tags",
     category: "Category",
     tagInputPlaceholder: "Enter tags (comma separated), press Enter...",
+    aiSuggestTags: "AI Tags",
+    aiSuggestTagsRunning: "AI analyzing tags...",
+    aiSuggestTagsDone: "AI tags complete",
+    aiSuggestCategory: "AI Category",
+    aiSuggestCategoryRunning: "AI categorizing...",
+    aiSuggestCategoryDone: "AI category complete",
     confirmDelete: "Confirm Delete",
     confirmDeleteMsg: "Are you sure you want to delete {count} selected comics? This cannot be undone.",
   },
@@ -94,6 +100,21 @@ const en: Translations = {
   // Comic Card
   comicCard: {
     detail: "Details",
+  },
+
+  // Context Menu (Right-click)
+  contextMenu: {
+    read: "Read",
+    detail: "View Details",
+    favorite: "Favorite",
+    unfavorite: "Unfavorite",
+    addToGroup: "Add to Group",
+    delete: "Delete",
+    confirmDelete: "Confirm Delete?",
+    openGroup: "Open Group",
+    renameGroup: "Rename",
+    deleteGroup: "Delete Group",
+    renameSuccess: "Renamed",
   },
 
   // Comic Detail Page
@@ -151,6 +172,10 @@ const en: Translations = {
     aiCoverCharacters: "Characters",
     aiCoverConfidence: "Confidence",
     aiVisionNotSupported: "Current AI provider does not support image analysis",
+    aiCompleteMetadata: "AI Complete",
+    aiCompleteMetadataLoading: "Completing...",
+    aiSuggestCategory: "AI Category",
+    aiSuggestCategoryLoading: "Analyzing...",
   },
 
   // Stats Page
@@ -287,7 +312,6 @@ const en: Translations = {
     year: "Year",
     description: "Description",
     genre: "Genre",
-    series: "Series",
     language: "Language",
     metadataSource: "Source",
     scrapeMetadata: "Scrape Metadata",
@@ -308,7 +332,6 @@ const en: Translations = {
     translatingMetadata: "Translating...",
     editMetadata: "Edit",
     editingMetadata: "Edit Metadata",
-    seriesIndex: "Volume",
   },
 
   // Recommendations
@@ -320,13 +343,10 @@ const en: Translations = {
     tagMatch: "Similar tags",
     genreMatch: "Similar genre",
     sameAuthor: "Same author",
-    seriesContinuation: "Series continuation",
-    seriesInProgress: "Continue series",
     highlyRated: "Highly rated",
     unread: "Unread",
     similarTags: "Similar tags",
     similarGenre: "Similar genre",
-    sameSeries: "Same series",
     sameCategory: "Same category",
     semanticMatch: "AI semantic match",
     aiReasonLoading: "Generating AI reasons...",
@@ -420,7 +440,7 @@ const en: Translations = {
     batchFailed: "Failed",
     batchSkipped: "Skipped",
     batchTranslateMetadata: "Batch Translate Metadata",
-    batchTranslateMetadataDesc: "Translate all comic metadata (title, description, genre, series) to the current language",
+    batchTranslateMetadataDesc: "Translate all comic metadata (title, description, genre) to the current language",
     startBatchTranslate: "Start Translating",
     batchTranslateComplete: "Batch translation complete",
     pageSize: "Items Per Page",
@@ -491,6 +511,8 @@ const en: Translations = {
     sameFile: "Identical file content",
     sameSize: "Same file size and page count",
     sameName: "Similar title",
+    partialHash: "Partial hash match",
+    fuzzyName: "Fuzzy title match",
     fileSize: "Size",
     pageCount: "Pages",
     addedAt: "Added",
@@ -506,6 +528,10 @@ const en: Translations = {
     confirmDeleteAllMsg: "This will delete {count} duplicate files (keeping one selected per group). This cannot be undone.",
     deletedCount: "Deleted {count} files",
     selectToKeep: "Click to select the item to keep",
+    confidence: "Confidence",
+    details: "Details",
+    compareCover: "Compare Covers",
+    filterAll: "All types",
   },
 
   // Continue Reading
@@ -546,6 +572,10 @@ const en: Translations = {
     genrePreference: "Genre Preference",
     sessionsUnit: " sessions",
     comicsUnit: " comics",
+    aiInsight: "AI Reading Insight",
+    aiInsightGenerating: "Generating insight report...",
+    aiInsightError: "Generation failed",
+    aiInsightEmpty: "Not enough data to generate insights",
   },
 
   // Content Type Tab
@@ -579,25 +609,51 @@ const en: Translations = {
     deleteGoal: "Delete",
   },
 
-  // Series
-  series: {
-    title: "Series",
-    viewMode: "Series View",
-    volumeCount: "{count} vols",
-    totalPages: "{count} pages total",
-    volumes: "Volumes",
+  // Comic Groups
+  comicGroup: {
+    title: "Comic Groups",
+    groups: "Groups",
+    createGroup: "Create Group",
+    editGroup: "Edit Group",
+    deleteGroup: "Delete Group",
+    groupName: "Group Name",
+    groupNamePlaceholder: "Enter group name...",
+    addToGroup: "Add to Group",
+    removeFromGroup: "Remove from Group",
+    volumes: "vols",
+    totalPages: "Total Pages",
+    totalReadTime: "Total Read Time",
+    autoDetect: "Auto Detect",
+    autoDetecting: "Detecting...",
+    autoDetectDesc: "Auto-detect mergeable comic series",
+    foundSuggestions: "Found {count} mergeable series",
+    noSuggestions: "No mergeable series found",
+    createAll: "Create All",
+    createSelected: "Create Selected",
+    created: "Created {count} groups",
+    confirmDelete: "Confirm Delete Group",
+    confirmDeleteMsg: "Delete group \"{name}\"? Comics in this group will not be deleted.",
+    emptyGroup: "This group has no comics",
+    mergeSelected: "Merge to Group",
+    viewGroup: "View Group",
+    backToLibrary: "Back to Library",
     continueReading: "Continue Reading",
-    readFromStart: "Read from Start",
-    noSeries: "No Series Found",
-    noSeriesHint: "The system auto-detects series from filenames. You can also manually set series in comic detail page.",
-    progress: "Progress",
-    author: "Author",
-    currentVolume: "Current Volume",
+    volumeIndex: "Vol. {index}",
+    dragToReorder: "Drag to reorder",
+    noGroups: "No groups yet",
+    noGroupsHint: "Select multiple comics and merge them, or use auto-detect to find series",
+    aiEnhanceDetect: "Smart + AI Detect",
+    aiDetecting: "AI Analyzing...",
+    searchComicHint: "Type to search comics",
+    searchGroupHint: "Search groups...",
+    noMatchGroup: "No matching groups",
+  },
+
+  // Series navigation
+  series: {
     nextVolume: "Next Volume",
     prevVolume: "Previous Volume",
-    seriesComplete: "Series Complete",
-    volumeFinished: "Volume finished. Loading next volume...",
-    searchPlaceholder: "Search series...",
+    volumes: "Volumes",
   },
 };
 

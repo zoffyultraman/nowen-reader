@@ -1,13 +1,13 @@
 package store
 
 import (
-	"crypto/sha256"
 	"database/sql"
 	"fmt"
-	"io"
-	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // ============================================================
@@ -188,8 +188,10 @@ func GetComicReadingHistory(comicID string) ([]RecentSessionItem, error) {
 
 // DuplicateGroup 表示一组重复的漫画。
 type DuplicateGroup struct {
-	Reason string               `json:"reason"`
-	Comics []DuplicateComicInfo `json:"comics"`
+	Reason     string               `json:"reason"`
+	Confidence int                  `json:"confidence"` // 置信度 0-100
+	Details    string               `json:"details"`    // 详细说明
+	Comics     []DuplicateComicInfo `json:"comics"`
 }
 
 type DuplicateComicInfo struct {
@@ -200,12 +202,17 @@ type DuplicateComicInfo struct {
 	PageCount int    `json:"pageCount"`
 	AddedAt   string `json:"addedAt"`
 	CoverURL  string `json:"coverUrl"`
+	Author    string `json:"author,omitempty"`
+	Genre     string `json:"genre,omitempty"`
+	Format    string `json:"format,omitempty"` // cbz, cbr, pdf, zip 等
 }
 
-// DetectDuplicates 通过哈希、大小+页数、标准化标题查找重复漫画。
+// DetectDuplicates 通过多种策略查找重复漫画。
+// 4 pass 检测：MD5 哈希（数据库预计算）→ 大小+页数 → 标准化标题 → 模糊标题匹配。
 func DetectDuplicates(comicsDir string) ([]DuplicateGroup, error) {
 	rows, err := db.Query(`
-		SELECT "id", "filename", "title", "fileSize", "pageCount", "addedAt"
+		SELECT "id", "filename", "title", "fileSize", "pageCount", "addedAt",
+		       COALESCE("author", ''), COALESCE("genre", ''), COALESCE("md5Hash", '')
 		FROM "Comic" ORDER BY "title" ASC
 	`)
 	if err != nil {
@@ -220,14 +227,26 @@ func DetectDuplicates(comicsDir string) ([]DuplicateGroup, error) {
 		FileSize  int64
 		PageCount int
 		AddedAt   time.Time
+		Author    string
+		Genre     string
+		MD5Hash   string
 	}
 
 	var comics []comicInfo
 	for rows.Next() {
 		var c comicInfo
-		if rows.Scan(&c.ID, &c.Filename, &c.Title, &c.FileSize, &c.PageCount, &c.AddedAt) == nil {
+		if rows.Scan(&c.ID, &c.Filename, &c.Title, &c.FileSize, &c.PageCount, &c.AddedAt, &c.Author, &c.Genre, &c.MD5Hash) == nil {
 			comics = append(comics, c)
 		}
+	}
+
+	// 提取文件扩展名作为格式
+	fileFormat := func(filename string) string {
+		ext := strings.ToLower(filepath.Ext(filename))
+		if ext != "" {
+			ext = ext[1:] // 去掉点
+		}
+		return ext
 	}
 
 	toInfo := func(c comicInfo) DuplicateComicInfo {
@@ -239,28 +258,25 @@ func DetectDuplicates(comicsDir string) ([]DuplicateGroup, error) {
 			PageCount: c.PageCount,
 			AddedAt:   c.AddedAt.UTC().Format(time.RFC3339Nano),
 			CoverURL:  fmt.Sprintf("/api/comics/%s/thumbnail", c.ID),
+			Author:    c.Author,
+			Genre:     c.Genre,
+			Format:    fileFormat(c.Filename),
 		}
 	}
 
 	var groups []DuplicateGroup
 	usedIDs := make(map[string]bool)
 
-	// Pass 1: Exact content hash (SHA-256)
+	// ─── Pass 1: MD5 哈希匹配（数据库预计算）───
+	// 置信度 100%: 文件 MD5 完全相同，内容一定相同
 	hashMap := make(map[string][]comicInfo)
+	var unhashed int
 	for _, c := range comics {
-		fp := filepath.Join(comicsDir, c.Filename)
-		f, err := os.Open(fp)
-		if err != nil {
-			continue
+		if c.MD5Hash == "" {
+			unhashed++
+			continue // MD5 尚未计算，跳过
 		}
-		h := sha256.New()
-		if _, err := io.Copy(h, f); err != nil {
-			f.Close()
-			continue
-		}
-		f.Close()
-		hash := fmt.Sprintf("%x", h.Sum(nil))
-		hashMap[hash] = append(hashMap[hash], c)
+		hashMap[c.MD5Hash] = append(hashMap[c.MD5Hash], c)
 	}
 	for _, arr := range hashMap {
 		if len(arr) > 1 {
@@ -269,11 +285,17 @@ func DetectDuplicates(comicsDir string) ([]DuplicateGroup, error) {
 				usedIDs[c.ID] = true
 				infos = append(infos, toInfo(c))
 			}
-			groups = append(groups, DuplicateGroup{Reason: "sameFile", Comics: infos})
+			groups = append(groups, DuplicateGroup{
+				Reason:     "sameFile",
+				Confidence: 100,
+				Details:    fmt.Sprintf("MD5 hash identical (%s)", arr[0].MD5Hash),
+				Comics:     infos,
+			})
 		}
 	}
 
-	// Pass 2: Same fileSize + pageCount
+	// ─── Pass 2: Same fileSize + pageCount ───
+	// 置信度 80%: 大小和页数完全一致
 	sizePageMap := make(map[string][]comicInfo)
 	for _, c := range comics {
 		if usedIDs[c.ID] {
@@ -289,11 +311,17 @@ func DetectDuplicates(comicsDir string) ([]DuplicateGroup, error) {
 				usedIDs[c.ID] = true
 				infos = append(infos, toInfo(c))
 			}
-			groups = append(groups, DuplicateGroup{Reason: "sameSize", Comics: infos})
+			groups = append(groups, DuplicateGroup{
+				Reason:     "sameSize",
+				Confidence: 80,
+				Details:    fmt.Sprintf("File size: %d bytes, Pages: %d", arr[0].FileSize, arr[0].PageCount),
+				Comics:     infos,
+			})
 		}
 	}
 
-	// Pass 3: Normalized title
+	// ─── Pass 3: Normalized title ───
+	// 置信度 70%: 去除标点/空格/卷号后标题相同
 	titleMap := make(map[string][]comicInfo)
 	for _, c := range comics {
 		if usedIDs[c.ID] {
@@ -309,16 +337,207 @@ func DetectDuplicates(comicsDir string) ([]DuplicateGroup, error) {
 		if len(arr) > 1 {
 			var infos []DuplicateComicInfo
 			for _, c := range arr {
+				usedIDs[c.ID] = true
 				infos = append(infos, toInfo(c))
 			}
-			groups = append(groups, DuplicateGroup{Reason: "sameName", Comics: infos})
+			// 如果同组漫画有相同作者，提高置信度
+			confidence := 70
+			var authors []string
+			for _, c := range arr {
+				authors = append(authors, c.Author)
+			}
+			if hasDuplicateAuthor(authors) {
+				confidence = 85
+			}
+			groups = append(groups, DuplicateGroup{
+				Reason:     "sameName",
+				Confidence: confidence,
+				Details:    fmt.Sprintf("Normalized title: %s", normalizeTitle(arr[0].Title)),
+				Comics:     infos,
+			})
 		}
 	}
+
+	// ─── Pass 4: Fuzzy title matching (编辑距离/相似度) ───
+	// 置信度 40-65%: 标题高度相似但不完全相同
+	type fuzzyCandidate struct {
+		comic      comicInfo
+		normalized string
+	}
+	var fuzzyCandidates []fuzzyCandidate
+	for _, c := range comics {
+		if usedIDs[c.ID] {
+			continue
+		}
+		norm := normalizeTitle(c.Title)
+		if norm == "" || utf8.RuneCountInString(norm) < 3 {
+			continue
+		}
+		fuzzyCandidates = append(fuzzyCandidates, fuzzyCandidate{comic: c, normalized: norm})
+	}
+
+	// 两两比较模糊候选项
+	fuzzyUsed := make(map[string]bool)
+	fuzzyGroups := make(map[int][]fuzzyCandidate) // groupID -> candidates
+	groupCounter := 0
+	candidateGroup := make(map[string]int) // comicID -> groupID
+
+	for i := 0; i < len(fuzzyCandidates); i++ {
+		if fuzzyUsed[fuzzyCandidates[i].comic.ID] {
+			continue
+		}
+		for j := i + 1; j < len(fuzzyCandidates); j++ {
+			if fuzzyUsed[fuzzyCandidates[j].comic.ID] {
+				continue
+			}
+			sim := titleSimilarity(fuzzyCandidates[i].normalized, fuzzyCandidates[j].normalized)
+			if sim >= 0.80 {
+				// 查找或创建组
+				gid, ok := candidateGroup[fuzzyCandidates[i].comic.ID]
+				if !ok {
+					gid = groupCounter
+					groupCounter++
+					candidateGroup[fuzzyCandidates[i].comic.ID] = gid
+					fuzzyGroups[gid] = append(fuzzyGroups[gid], fuzzyCandidates[i])
+					fuzzyUsed[fuzzyCandidates[i].comic.ID] = true
+				}
+				if _, already := candidateGroup[fuzzyCandidates[j].comic.ID]; !already {
+					candidateGroup[fuzzyCandidates[j].comic.ID] = gid
+					fuzzyGroups[gid] = append(fuzzyGroups[gid], fuzzyCandidates[j])
+					fuzzyUsed[fuzzyCandidates[j].comic.ID] = true
+				}
+			}
+		}
+	}
+
+	for _, arr := range fuzzyGroups {
+		if len(arr) > 1 {
+			var infos []DuplicateComicInfo
+			var titles []string
+			for _, fc := range arr {
+				infos = append(infos, toInfo(fc.comic))
+				titles = append(titles, fc.comic.Title)
+			}
+			// 计算组内最低相似度作为置信度参考
+			minSim := 1.0
+			for a := 0; a < len(arr); a++ {
+				for b := a + 1; b < len(arr); b++ {
+					s := titleSimilarity(arr[a].normalized, arr[b].normalized)
+					if s < minSim {
+						minSim = s
+					}
+				}
+			}
+			confidence := int(minSim * 65) // 0.80 → 52, 1.0 → 65
+			if confidence < 40 {
+				confidence = 40
+			}
+			// 如果有相同作者，提高置信度
+			var authors []string
+			for _, fc := range arr {
+				authors = append(authors, fc.comic.Author)
+			}
+			if hasDuplicateAuthor(authors) {
+				confidence += 15
+				if confidence > 75 {
+					confidence = 75
+				}
+			}
+			groups = append(groups, DuplicateGroup{
+				Reason:     "fuzzyName",
+				Confidence: confidence,
+				Details:    fmt.Sprintf("Titles: %s (similarity: %.0f%%)", strings.Join(titles, " ↔ "), minSim*100),
+				Comics:     infos,
+			})
+		}
+	}
+
+	// 按置信度降序排序
+	sort.Slice(groups, func(i, j int) bool {
+		return groups[i].Confidence > groups[j].Confidence
+	})
 
 	if groups == nil {
 		groups = []DuplicateGroup{}
 	}
 	return groups, nil
+}
+
+// hasDuplicateAuthor 检查作者列表中是否有相同的非空作者
+func hasDuplicateAuthor(authors []string) bool {
+	counts := make(map[string]int)
+	for _, a := range authors {
+		a = strings.TrimSpace(strings.ToLower(a))
+		if a != "" {
+			counts[a]++
+		}
+	}
+	for _, cnt := range counts {
+		if cnt >= 2 {
+			return true
+		}
+	}
+	return false
+}
+
+// titleSimilarity 计算两个标题的相似度 (0.0 ~ 1.0)，使用编辑距离。
+func titleSimilarity(a, b string) float64 {
+	if a == b {
+		return 1.0
+	}
+	ra := []rune(a)
+	rb := []rune(b)
+	lenA := len(ra)
+	lenB := len(rb)
+
+	// 长度差异过大直接返回低相似度
+	if lenA == 0 || lenB == 0 {
+		return 0.0
+	}
+	lenDiff := lenA - lenB
+	if lenDiff < 0 {
+		lenDiff = -lenDiff
+	}
+	maxLen := lenA
+	if lenB > maxLen {
+		maxLen = lenB
+	}
+	if float64(lenDiff)/float64(maxLen) > 0.5 {
+		return 0.0
+	}
+
+	// Levenshtein 距离（优化：只保留两行）
+	prev := make([]int, lenB+1)
+	curr := make([]int, lenB+1)
+	for j := 0; j <= lenB; j++ {
+		prev[j] = j
+	}
+	for i := 1; i <= lenA; i++ {
+		curr[0] = i
+		for j := 1; j <= lenB; j++ {
+			cost := 1
+			if ra[i-1] == rb[j-1] {
+				cost = 0
+			}
+			curr[j] = min3(prev[j]+1, curr[j-1]+1, prev[j-1]+cost)
+		}
+		prev, curr = curr, prev
+	}
+	dist := prev[lenB]
+	return 1.0 - float64(dist)/float64(maxLen)
+}
+
+func min3(a, b, c int) int {
+	if a < b {
+		if a < c {
+			return a
+		}
+		return c
+	}
+	if b < c {
+		return b
+	}
+	return c
 }
 
 // ============================================================

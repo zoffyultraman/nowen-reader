@@ -56,19 +56,45 @@ export default function NovelReaderPage() {
   const [newTag, setNewTag] = useState("");
   const [isFavorite, setIsFavorite] = useState(false);
   const [rating, setRating] = useState<number>(0);
-  const [readerTheme, setReaderTheme] = useState<ReaderTheme>("night");
-  const { theme: globalTheme, toggleTheme: globalToggleTheme } = useTheme();
+  const [readerTheme, setReaderTheme] = useState<ReaderTheme>(() => {
+    if (typeof window !== "undefined") {
+      return (localStorage.getItem("novelReaderTheme") as ReaderTheme) || "night";
+    }
+    return "night";
+  });
+  const { theme: globalTheme } = useTheme();
   // 章节文本缓存（用于 AI Chat 上下文）
   const [currentChapterText, setCurrentChapterText] = useState("");
 
   // TOC 和 Settings 的外部控制状态
   const [showTOC, setShowTOC] = useState(false);
   const [showSettingsPanel, setShowSettingsPanel] = useState(false);
+  // TTS 和 自动翻页状态（仅用于工具栏按钮状态同步）
+  const [isTTSPlaying, setIsTTSPlaying] = useState(false);
+  const [isAutoScrolling, setIsAutoScrolling] = useState(false);
 
-  // Sync readerTheme with global theme
+  // Sync readerTheme with global theme（仅初始化时同步，之后用户可独立选择）
   useEffect(() => {
-    setReaderTheme(globalTheme === "light" ? "day" : "night");
+    const saved = localStorage.getItem("novelReaderTheme");
+    if (!saved) {
+      setReaderTheme(globalTheme === "light" ? "day" : "night");
+    }
   }, [globalTheme]);
+
+  // 保存主题到 localStorage
+  useEffect(() => {
+    localStorage.setItem("novelReaderTheme", readerTheme);
+  }, [readerTheme]);
+
+  // 监听来自 TextReaderView 设置面板的主题切换事件
+  useEffect(() => {
+    const handleThemeChange = (e: Event) => {
+      const detail = (e as CustomEvent).detail as ReaderTheme;
+      if (detail) setReaderTheme(detail);
+    };
+    window.addEventListener('novel-theme-change', handleThemeChange);
+    return () => window.removeEventListener('novel-theme-change', handleThemeChange);
+  }, []);
 
   // Debounced progress save ref
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -168,6 +194,24 @@ export default function NovelReaderPage() {
       .catch(() => {});
   }, [currentPage, totalChapters, comicId, apiChapters]);
 
+  // 监听 TTS 和自动翻页状态变化（从 TextReaderView 同步到工具栏）
+  useEffect(() => {
+    const handleTtsStateChange = (e: Event) => {
+      const detail = (e as CustomEvent).detail as boolean;
+      setIsTTSPlaying(detail);
+    };
+    const handleAutoScrollStateChange = (e: Event) => {
+      const detail = (e as CustomEvent).detail as boolean;
+      setIsAutoScrolling(detail);
+    };
+    window.addEventListener('novel-tts-state-change', handleTtsStateChange);
+    window.addEventListener('novel-auto-scroll-state-change', handleAutoScrollStateChange);
+    return () => {
+      window.removeEventListener('novel-tts-state-change', handleTtsStateChange);
+      window.removeEventListener('novel-auto-scroll-state-change', handleAutoScrollStateChange);
+    };
+  }, []);
+
   // Auto-hide toolbar
   useEffect(() => {
     if (!toolbarVisible) return;
@@ -230,11 +274,6 @@ export default function NovelReaderPage() {
     },
     [totalChapters]
   );
-
-  // Theme toggle
-  const handleToggleTheme = useCallback(() => {
-    globalToggleTheme();
-  }, [globalToggleTheme]);
 
   // Favorite toggle
   const handleToggleFavorite = async () => {
@@ -346,10 +385,28 @@ export default function NovelReaderPage() {
         onBack={() => router.push("/")}
         onChapterChange={handlePageChange}
         onToggleFullscreen={toggleFullscreen}
-        onToggleTheme={handleToggleTheme}
+        onThemeChange={setReaderTheme}
         onShowInfo={() => setShowInfoPanel(true)}
         onShowTOC={() => setShowTOC(true)}
         onShowSettings={() => setShowSettingsPanel(true)}
+        onShowBookmarks={() => {
+          setShowTOC(true);
+          // 利用自定义事件通知 TextReaderView 切换到书签Tab
+          setTimeout(() => {
+            window.dispatchEvent(new CustomEvent('novel-show-bookmarks'));
+          }, 50);
+        }}
+        onShowSearch={() => {
+          window.dispatchEvent(new CustomEvent('novel-show-search'));
+        }}
+        onToggleTTS={() => {
+          window.dispatchEvent(new CustomEvent('novel-tts-toggle'));
+        }}
+        onToggleAutoScroll={() => {
+          window.dispatchEvent(new CustomEvent('novel-auto-scroll-toggle'));
+        }}
+        isTTSPlaying={isTTSPlaying}
+        isAutoScrolling={isAutoScrolling}
       />
 
       {/* AI Chat Panel */}

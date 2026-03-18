@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { BookOpen, ChevronRight, ChevronDown, ChevronUp, Clock } from "lucide-react";
@@ -17,12 +17,9 @@ export function ContinueReading({ contentType }: { contentType?: string }) {
   const t = useTranslation();
   const [recentComics, setRecentComics] = useState<ApiComic[]>([]);
   const [loading, setLoading] = useState(true);
-  const [collapsed, setCollapsed] = useState(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem(STORAGE_KEY) === "true";
-    }
-    return false;
-  });
+  const [collapsed, setCollapsed] = useState(false);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [contentHeight, setContentHeight] = useState<number | undefined>(undefined);
 
   const toggleCollapsed = useCallback(() => {
     setCollapsed((prev) => {
@@ -31,6 +28,19 @@ export function ContinueReading({ contentType }: { contentType?: string }) {
       return next;
     });
   }, []);
+
+  // 测量内容高度用于平滑折叠动画
+  useEffect(() => {
+    if (contentRef.current) {
+      const observer = new ResizeObserver((entries) => {
+        for (const entry of entries) {
+          setContentHeight(entry.contentRect.height);
+        }
+      });
+      observer.observe(contentRef.current);
+      return () => observer.disconnect();
+    }
+  }, [recentComics]);
 
   const fetchRecent = useCallback(async () => {
     try {
@@ -91,42 +101,37 @@ export function ContinueReading({ contentType }: { contentType?: string }) {
 
   return (
     <div className="mb-6">
-      {/* 标题栏 — 可点击折叠 */}
-      <button
-        onClick={toggleCollapsed}
-        className="mb-3 flex w-full items-center gap-2 group cursor-pointer select-none"
-      >
-        <BookOpen className="h-4 w-4 text-accent" />
-        <h2 className="text-sm font-semibold text-foreground">
-          {t.continueReading?.title || "继续阅读"}
-        </h2>
-        <span className="text-xs text-muted">
-          ({recentComics.length})
-        </span>
-        {/* 折叠/展开图标 */}
-        <span className="ml-auto flex items-center gap-1 text-xs text-muted group-hover:text-foreground transition-colors">
-          <span className="hidden sm:inline">
-            {collapsed
-              ? (t.continueReading?.expand || "展开")
-              : (t.continueReading?.collapse || "收起")}
+      {/* 标题栏 — 可点击折叠，与"为你推荐"交互一致 */}
+      <div className="mb-3 flex items-center justify-between">
+        <button
+          onClick={toggleCollapsed}
+          className="flex items-center gap-2 transition-colors hover:opacity-80"
+        >
+          <BookOpen className="h-5 w-5 text-accent" />
+          <h2 className="text-sm font-semibold text-foreground">
+            {t.continueReading?.title || "继续阅读"}
+          </h2>
+          <span className="text-xs text-muted">
+            ({recentComics.length})
           </span>
           {collapsed ? (
-            <ChevronDown className="h-3.5 w-3.5" />
+            <ChevronDown className="h-4 w-4 text-muted" />
           ) : (
-            <ChevronUp className="h-3.5 w-3.5" />
+            <ChevronUp className="h-4 w-4 text-muted" />
           )}
-        </span>
-      </button>
+        </button>
+      </div>
 
-      {/* 横向滚动条 — 折叠动画 */}
+      {/* 横向滚动条 — 折叠动画（与"为你推荐"一致） */}
       <div
-        className={`grid transition-all duration-300 ease-in-out ${
-          collapsed
-            ? "grid-rows-[0fr] opacity-0"
-            : "grid-rows-[1fr] opacity-100"
-        }`}
+        style={{
+          height: collapsed ? 0 : contentHeight ?? "auto",
+          overflow: "hidden",
+          transition: "height 0.3s ease, opacity 0.3s ease",
+          opacity: collapsed ? 0 : 1,
+        }}
       >
-        <div className="overflow-hidden">
+        <div ref={contentRef}>
           <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
             {recentComics.map((comic) => {
               const progress =

@@ -53,7 +53,7 @@ import { MetadataSearch } from "@/components/MetadataSearch";
 import { SimilarComics } from "@/components/Recommendations";
 import { useAIStatus } from "@/hooks/useAIStatus";
 
-function formatFileSize(bytes: number) {
+function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
@@ -103,6 +103,9 @@ export default function ComicDetailPage() {
   const [aiSelectedTags, setAiSelectedTags] = useState<Set<string>>(new Set());
   const [aiCoverLoading, setAiCoverLoading] = useState(false);
   const [aiCoverResult, setAiCoverResult] = useState<Record<string, unknown> | null>(null);
+  const [aiCompleteMetaLoading, setAiCompleteMetaLoading] = useState(false);
+  const [aiCategoryLoading, setAiCategoryLoading] = useState(false);
+  const [aiSuggestedCategories, setAiSuggestedCategories] = useState<string[]>([]);
 
   // 标题编辑 state
   const [editingTitle, setEditingTitle] = useState(false);
@@ -155,8 +158,6 @@ export default function ComicDetailPage() {
         description: comic.description || "",
         language: comic.language || "",
         genre: comic.genre || "",
-        seriesName: comic.seriesName || "",
-        seriesIndex: comic.seriesIndex ?? undefined,
       });
       setEditingMetadata(true);
     }
@@ -378,6 +379,49 @@ export default function ComicDetailPage() {
     }
   }, [comicId, refetch]);
 
+  // AI 元数据补全
+  const handleAiCompleteMetadata = useCallback(async () => {
+    if (aiCompleteMetaLoading) return;
+    setAiCompleteMetaLoading(true);
+    try {
+      const res = await fetch(`/api/comics/${comicId}/ai-complete-metadata`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetLang: locale, apply: true }),
+      });
+      if (res.ok) {
+        refetch();
+      }
+    } catch {
+      // ignore
+    } finally {
+      setAiCompleteMetaLoading(false);
+    }
+  }, [aiCompleteMetaLoading, comicId, locale, refetch]);
+
+  // AI 分类建议
+  const handleAiSuggestCategory = useCallback(async () => {
+    if (aiCategoryLoading) return;
+    setAiCategoryLoading(true);
+    setAiSuggestedCategories([]);
+    try {
+      const res = await fetch("/api/ai/suggest-category", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ comicId, targetLang: locale, apply: true }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAiSuggestedCategories(data.suggestedCategories || []);
+        refetch();
+      }
+    } catch {
+      // ignore
+    } finally {
+      setAiCategoryLoading(false);
+    }
+  }, [aiCategoryLoading, comicId, locale, refetch]);
+
   // AI 建议标签
   const handleAiSuggestTags = useCallback(async () => {
     if (aiSuggestLoading) return;
@@ -501,7 +545,7 @@ export default function ComicDetailPage() {
   const progress = comic.pageCount > 0 ? Math.round((comic.lastReadPage / comic.pageCount) * 100) : 0;
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background overflow-x-hidden">
       {/* Header */}
       <div className="sticky top-0 z-50 border-b border-border/50 bg-background/70 backdrop-blur-xl">
         <div className="mx-auto flex h-14 sm:h-16 max-w-5xl items-center gap-3 sm:gap-4 px-3 sm:px-6">
@@ -529,7 +573,7 @@ export default function ComicDetailPage() {
                 sizes="280px"
               />
               {/* Cover overlay buttons */}
-              <div className="absolute inset-0 flex items-end justify-center bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-0 transition-opacity group-hover:opacity-100">
+              <div className="absolute inset-0 flex items-end justify-center bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-100 sm:opacity-0 transition-opacity sm:group-hover:opacity-100">
                 <button
                   onClick={() => setShowCoverMenu(!showCoverMenu)}
                   disabled={coverLoading}
@@ -679,18 +723,18 @@ export default function ComicDetailPage() {
                     </button>
                   </div>
                 ) : (
-                  <div className="group/title flex items-center gap-2">
-                  <h2 className="text-xl sm:text-2xl font-bold text-foreground truncate">{comic.title}</h2>
+                  <div className="group/title flex items-center gap-2 min-w-0">
+                  <h2 className="text-xl sm:text-2xl font-bold text-foreground break-words line-clamp-2">{comic.title}</h2>
                     <button
                       onClick={startEditTitle}
-                      className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md text-muted/40 opacity-0 transition-all hover:text-foreground group-hover/title:opacity-100"
+                      className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md text-muted/40 opacity-100 sm:opacity-0 transition-all hover:text-foreground sm:group-hover/title:opacity-100"
                       title={t.comicDetail.editTitle || "Edit Title"}
                     >
                       <Pencil className="h-3.5 w-3.5" />
                     </button>
                   </div>
                 )}
-                <p className="mt-1 text-sm text-muted">{comic.filename}</p>
+                <p className="mt-1 text-sm text-muted truncate">{comic.filename}</p>
               </div>
               <button
                 onClick={handleToggleFavorite}
@@ -1013,6 +1057,28 @@ export default function ComicDetailPage() {
                         <span>{aiCoverLoading ? (t.comicDetail.aiAnalyzeCoverLoading || "Analyzing...") : (t.comicDetail.aiAnalyzeCover || "AI Cover")}</span>
                       </button>
                     )}
+                    {aiConfigured && (
+                      <button
+                        onClick={handleAiCompleteMetadata}
+                        disabled={aiCompleteMetaLoading}
+                        className="flex items-center gap-1 rounded-md border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-400 transition-all hover:bg-amber-500/20 hover:border-amber-500/50 disabled:opacity-50 disabled:pointer-events-none"
+                        title={t.comicDetail.aiCompleteMetadata || "AI 元数据补全"}
+                      >
+                        {aiCompleteMetaLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                        <span>{aiCompleteMetaLoading ? (t.comicDetail.aiCompleteMetadataLoading || "补全中...") : (t.comicDetail.aiCompleteMetadata || "AI 补全")}</span>
+                      </button>
+                    )}
+                    {aiConfigured && (
+                      <button
+                        onClick={handleAiSuggestCategory}
+                        disabled={aiCategoryLoading}
+                        className="flex items-center gap-1 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400 transition-all hover:bg-emerald-500/20 hover:border-emerald-500/50 disabled:opacity-50 disabled:pointer-events-none"
+                        title={t.comicDetail.aiSuggestCategory || "AI 自动分类"}
+                      >
+                        {aiCategoryLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Layers className="h-3 w-3" />}
+                        <span>{aiCategoryLoading ? (t.comicDetail.aiSuggestCategoryLoading || "分析中...") : (t.comicDetail.aiSuggestCategory || "AI 分类")}</span>
+                      </button>
+                    )}
                   </>
                 )}
               </div>
@@ -1036,14 +1102,6 @@ export default function ComicDetailPage() {
                     <div>
                       <label className="mb-1 block text-xs text-muted">{t.metadata?.language || "Language"}</label>
                       <input type="text" value={metaForm.language || ""} onChange={(e) => setMetaForm({ ...metaForm, language: e.target.value })} className="w-full rounded-lg bg-background px-3 py-1.5 text-sm text-foreground outline-none ring-1 ring-border/60 focus:ring-accent/50" />
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-xs text-muted">{t.metadata?.series || "Series"}</label>
-                      <input type="text" value={metaForm.seriesName || ""} onChange={(e) => setMetaForm({ ...metaForm, seriesName: e.target.value })} className="w-full rounded-lg bg-background px-3 py-1.5 text-sm text-foreground outline-none ring-1 ring-border/60 focus:ring-accent/50" />
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-xs text-muted">{t.metadata?.seriesIndex || "Volume"}</label>
-                      <input type="number" value={metaForm.seriesIndex ?? ""} onChange={(e) => setMetaForm({ ...metaForm, seriesIndex: e.target.value ? Number(e.target.value) : undefined })} className="w-full rounded-lg bg-background px-3 py-1.5 text-sm text-foreground outline-none ring-1 ring-border/60 focus:ring-accent/50" />
                     </div>
                   </div>
                   <div>
@@ -1071,7 +1129,7 @@ export default function ComicDetailPage() {
                     </button>
                   </div>
                 </div>
-              ) : (comic.author || comic.description || comic.publisher || comic.year || comic.genre || comic.seriesName) ? (
+              ) : (comic.author || comic.description || comic.publisher || comic.year || comic.genre) ? (
                 /* 元数据只读展示 */
                 <div className="space-y-2 rounded-xl bg-card p-4">
                   {comic.author && (
@@ -1093,16 +1151,6 @@ export default function ComicDetailPage() {
                       <Calendar className="h-4 w-4 text-muted" />
                       <span className="text-muted">{t.metadata?.year || "Year"}:</span>
                       <span className="text-foreground">{comic.year}</span>
-                    </div>
-                  )}
-                  {comic.seriesName && (
-                    <div className="flex items-center gap-2 text-sm">
-                      <BookOpen className="h-4 w-4 text-muted" />
-                      <span className="text-muted">{t.metadata?.series || "Series"}:</span>
-                      <span className="text-foreground">
-                        {comic.seriesName}
-                        {comic.seriesIndex != null && ` #${comic.seriesIndex}`}
-                      </span>
                     </div>
                   )}
                   {comic.language && (
@@ -1176,7 +1224,7 @@ export default function ComicDetailPage() {
                 <div className="grid gap-1.5 text-xs">
                   {Object.entries(aiParsedResult).filter(([, v]) => v != null && v !== "").map(([key, value]) => (
                     <div key={key} className="flex gap-2">
-                      <span className="w-24 shrink-0 text-muted">{key}:</span>
+                      <span className="w-20 sm:w-24 shrink-0 text-muted">{key}:</span>
                       <span className="text-foreground">{String(value)}</span>
                     </div>
                   ))}

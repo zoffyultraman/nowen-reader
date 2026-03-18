@@ -30,8 +30,6 @@ export interface ApiComic {
   year: number | null;
   description: string;
   language: string;
-  seriesName: string;
-  seriesIndex: number | null;
   genre: string;
   metadataSource: string;
 }
@@ -50,4 +48,51 @@ export interface ApiCategory {
   slug: string;
   icon: string;
   count: number;
+}
+
+// ============================================================
+// Comic Groups (自定义合并分组)
+// ============================================================
+
+export interface ComicGroup {
+  id: number;
+  name: string;
+  coverUrl: string;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+  comicCount: number;
+}
+
+export interface GroupComicItem {
+  id: string;
+  filename: string;
+  title: string;
+  pageCount: number;
+  fileSize: number;
+  lastReadPage: number;
+  totalReadTime: number;
+  coverUrl: string;
+  sortIndex: number;
+  readingStatus: string;
+  lastReadAt: string | null;
+}
+
+export interface ComicGroupDetail {
+  id: number;
+  name: string;
+  coverUrl: string;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+  comicCount: number;
+  comics: GroupComicItem[];
+}
+
+export interface AutoDetectGroup {
+  name: string;
+  comicIds: string[];
+  titles: string[];
+  reason?: string;  // AI 分析理由
+  source?: "local" | "ai"; // 检测来源
 }

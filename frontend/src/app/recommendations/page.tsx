@@ -21,12 +21,11 @@ interface RecommendedComic {
 
 export default function RecommendationsPage() {
   const t = useTranslation();
-  const locale = useLocale();
+  const { locale } = useLocale();
   const { aiConfigured } = useAIStatus();
   const [recommendations, setRecommendations] = useState<RecommendedComic[]>([]);
   const [loading, setLoading] = useState(true);
   const [aiReasonsLoading, setAiReasonsLoading] = useState(false);
-  const [aiReasons, setAiReasons] = useState<Record<string, string>>({});
 
   const fetchRecommendations = useCallback(async () => {
     setLoading(true);
@@ -34,8 +33,7 @@ export default function RecommendationsPage() {
       const res = await fetch("/api/recommendations?limit=30&excludeRead=false");
       if (res.ok) {
         const data = await res.json();
-        setRecommendations(data.recommendations || []);
-        setAiReasons({}); // 清除旧的 AI 理由
+        setRecommendations((data.recommendations || []).map((c: RecommendedComic) => ({ ...c, aiReason: undefined })));
       }
     } catch { /* ignore */ }
     finally { setLoading(false); }
@@ -64,7 +62,14 @@ export default function RecommendationsPage() {
       });
       if (res.ok) {
         const data = await res.json();
-        setAiReasons(data.reasons || {});
+        const reasonsMap: Record<string, string> = data.reasons || {};
+        // 将 AI 理由直接合并到 recommendations state 中
+        setRecommendations((prev) =>
+          prev.map((c) => ({
+            ...c,
+            aiReason: reasonsMap[c.id] || c.aiReason,
+          }))
+        );
       }
     } catch { /* ignore */ }
     finally { setAiReasonsLoading(false); }
@@ -74,20 +79,17 @@ export default function RecommendationsPage() {
     tag_match: t.recommend?.tagMatch || "Similar tags",
     genre_match: t.recommend?.genreMatch || "Similar genre",
     same_author: t.recommend?.sameAuthor || "Same author",
-    series_continuation: t.recommend?.seriesContinuation || "Series continuation",
-    series_in_progress: t.recommend?.seriesInProgress || "Continue series",
     highly_rated: t.recommend?.highlyRated || "Highly rated",
     unread: t.recommend?.unread || "Unread",
     similar_tags: t.recommend?.similarTags || "Similar tags",
     similar_genre: t.recommend?.similarGenre || "Similar genre",
-    same_series: t.recommend?.sameSeries || "Same series",
   };
 
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
       <div className="sticky top-0 z-50 border-b border-border/50 bg-background/70 backdrop-blur-xl">
-        <div className="mx-auto flex h-16 max-w-5xl items-center gap-4 px-6">
+        <div className="mx-auto flex h-14 sm:h-16 max-w-5xl items-center gap-2 sm:gap-4 px-3 sm:px-6">
           <Link
             href="/"
             className="flex h-9 w-9 items-center justify-center rounded-lg border border-border/60 text-muted transition-colors hover:text-foreground"
@@ -108,7 +110,7 @@ export default function RecommendationsPage() {
               className="flex items-center gap-1.5 rounded-lg bg-purple-500/10 px-3 py-1.5 text-sm text-purple-400 transition-colors hover:bg-purple-500/20 disabled:opacity-50"
             >
               {aiReasonsLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Brain className="h-4 w-4" />}
-              {t.recommend?.aiReasonGenerate || "AI Reasons"}
+              <span className="hidden sm:inline">{t.recommend?.aiReasonGenerate || "AI Reasons"}</span>
             </button>
           )}
           <button
@@ -117,12 +119,12 @@ export default function RecommendationsPage() {
             className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-muted transition-colors hover:text-foreground"
           >
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-            {t.recommend?.refresh || "Refresh"}
+            <span className="hidden sm:inline">{t.recommend?.refresh || "Refresh"}</span>
           </button>
         </div>
       </div>
 
-      <main className="mx-auto max-w-5xl px-6 py-8">
+      <main className="mx-auto max-w-5xl px-3 sm:px-6 py-6 sm:py-8 pb-24 sm:pb-8">
         {loading && recommendations.length === 0 && (
           <div className="flex items-center justify-center py-32">
             <div className="h-8 w-8 animate-spin rounded-full border-2 border-muted border-t-accent" />
@@ -138,7 +140,7 @@ export default function RecommendationsPage() {
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
           {recommendations.map((comic) => (
             <Link key={comic.id} href={`/comic/${comic.id}`} className="group">
               <div className="space-y-2">
@@ -179,10 +181,10 @@ export default function RecommendationsPage() {
                     </p>
                   )}
                   {/* AI 推荐理由 */}
-                  {aiReasons[comic.id] && (
-                    <p className="mt-1 line-clamp-2 text-[10px] leading-tight text-purple-400/80">
-                      <Brain className="mr-0.5 inline h-2.5 w-2.5" />
-                      {aiReasons[comic.id]}
+                  {comic.aiReason && (
+                    <p className="mt-1 line-clamp-2 text-xs leading-snug text-purple-400">
+                      <Brain className="mr-1 inline h-3 w-3" />
+                      {comic.aiReason}
                     </p>
                   )}
                 </div>

@@ -23,13 +23,12 @@ import DoublePageView from "@/components/reader/DoublePageView";
 import WebtoonView from "@/components/reader/WebtoonView";
 import PdfView from "@/components/reader/PdfView";
 import ReaderOptionsPanel from "@/components/reader/ReaderOptionsPanel";
-import { Heart, Star, Tag, X, Plus } from "lucide-react";
+import { Heart, Star, Tag, X, Plus, List } from "lucide-react";
 import { useTranslation, useLocale } from "@/lib/i18n";
 import AIChatPanel from "@/components/reader/AIChatPanel";
 import PageTranslateOverlay from "@/components/reader/PageTranslateOverlay";
 import { useAIStatus } from "@/hooks/useAIStatus";
 import { useReaderOptions } from "@/hooks/useReaderOptions";
-import { fetchSeriesDetail, type SeriesVolumeInfo } from "@/api/series";
 
 export default function ReaderPage() {
   const params = useParams();
@@ -88,8 +87,11 @@ export default function ReaderPage() {
 
   // 系列跨卷连续阅读
   const [seriesVolumes, setSeriesVolumes] = useState<SeriesVolumeInfo[]>([]);
-  const [showNextVolume, setShowNextVolume] = useState(false);
   const [seriesName, setSeriesName] = useState<string>("");
+  const [showChapterDrawer, setShowChapterDrawer] = useState(false);
+  // 无感跳转过渡提示
+  const [volumeTransitionHint, setVolumeTransitionHint] = useState<string | null>(null);
+  const transitionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // 从选项同步模式、方向
   useEffect(() => {
@@ -210,6 +212,28 @@ export default function ReaderPage() {
     return () => clearTimeout(timer);
   }, [toolbarVisible, currentPage, showOptionsPanel]);
 
+  // 系列导航辅助函数
+  const currentVolumeIdx = seriesVolumes.findIndex(v => v.comicId === comicId);
+  const prevVolume = currentVolumeIdx > 0 ? seriesVolumes[currentVolumeIdx - 1] : null;
+  const nextVolume = currentVolumeIdx >= 0 && currentVolumeIdx < seriesVolumes.length - 1 ? seriesVolumes[currentVolumeIdx + 1] : null;
+
+  // 无感跨卷跳转
+  const handleBoundaryReached = useCallback((dir: "next" | "prev") => {
+    if (dir === "next" && nextVolume) {
+      // 显示过渡提示
+      setVolumeTransitionHint(`${t.series.nextVolume}: ${nextVolume.title}`);
+      if (transitionTimerRef.current) clearTimeout(transitionTimerRef.current);
+      transitionTimerRef.current = setTimeout(() => setVolumeTransitionHint(null), 2000);
+      // 延迟 300ms 跳转，让用户看到提示
+      setTimeout(() => router.push(`/reader/${nextVolume.comicId}`), 300);
+    } else if (dir === "prev" && prevVolume) {
+      setVolumeTransitionHint(`${t.series.prevVolume}: ${prevVolume.title}`);
+      if (transitionTimerRef.current) clearTimeout(transitionTimerRef.current);
+      transitionTimerRef.current = setTimeout(() => setVolumeTransitionHint(null), 2000);
+      setTimeout(() => router.push(`/reader/${prevVolume.comicId}`), 300);
+    }
+  }, [nextVolume, prevVolume, router, t.series.nextVolume, t.series.prevVolume]);
+
   // Keyboard navigation
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
@@ -232,10 +256,18 @@ export default function ReaderPage() {
 
       if (isForward || e.key === "ArrowDown" || e.key === " ") {
         e.preventDefault();
-        setCurrentPage((p) => Math.min(pages.length - 1, p + step));
+        if (currentPage >= pages.length - 1) {
+          handleBoundaryReached("next");
+        } else {
+          setCurrentPage((p) => Math.min(pages.length - 1, p + step));
+        }
       } else if (isBack || e.key === "ArrowUp") {
         e.preventDefault();
-        setCurrentPage((p) => Math.max(0, p - step));
+        if (currentPage <= 0) {
+          handleBoundaryReached("prev");
+        } else {
+          setCurrentPage((p) => Math.max(0, p - step));
+        }
       } else if (e.key === "Escape") {
         if (showInfoPanel) {
           setShowInfoPanel(false);
@@ -250,7 +282,7 @@ export default function ReaderPage() {
         setShowInfoPanel((v) => !v);
       }
     },
-    [direction, mode, pages.length, isFullscreen, router, showInfoPanel, showOptionsPanel]
+    [direction, mode, pages.length, isFullscreen, router, showInfoPanel, showOptionsPanel, currentPage, handleBoundaryReached]
   );
 
   useEffect(() => {
@@ -285,18 +317,8 @@ export default function ReaderPage() {
     (page: number) => {
       const clamped = Math.max(0, Math.min(pages.length - 1, page));
       setCurrentPage(clamped);
-
-      // 翻到最后一页时，如果有下一卷则显示提示
-      if (clamped >= pages.length - 1 && seriesVolumes.length > 0) {
-        const currentIdx = seriesVolumes.findIndex(v => v.comicId === comicId);
-        if (currentIdx >= 0 && currentIdx < seriesVolumes.length - 1) {
-          setShowNextVolume(true);
-        }
-      } else {
-        setShowNextVolume(false);
-      }
     },
-    [pages.length, seriesVolumes, comicId]
+    [pages.length]
   );
 
   // 自动翻页
@@ -318,11 +340,6 @@ export default function ReaderPage() {
 
     return () => clearInterval(timer);
   }, [autoPageActive, readerOpts.autoPageInterval, mode, pages.length]);
-
-  // 系列导航辅助函数
-  const currentVolumeIdx = seriesVolumes.findIndex(v => v.comicId === comicId);
-  const prevVolume = currentVolumeIdx > 0 ? seriesVolumes[currentVolumeIdx - 1] : null;
-  const nextVolume = currentVolumeIdx >= 0 && currentVolumeIdx < seriesVolumes.length - 1 ? seriesVolumes[currentVolumeIdx + 1] : null;
 
   // 选项面板 onChange 处理
   const handleOptionsChange = useCallback((partial: Partial<typeof readerOpts>) => {
@@ -468,6 +485,7 @@ export default function ReaderPage() {
           fitMode={readerOpts.fitMode}
           containerWidth={containerWidthStyle}
           preloadCount={readerOpts.preloadCount}
+          onBoundaryReached={handleBoundaryReached}
         />
       ) : mode === "double" ? (
         <DoublePageView
@@ -481,6 +499,7 @@ export default function ReaderPage() {
           fitMode={readerOpts.fitMode}
           containerWidth={containerWidthStyle}
           preloadCount={readerOpts.preloadCount}
+          onBoundaryReached={handleBoundaryReached}
         />
       ) : (
         <WebtoonView
@@ -492,35 +511,16 @@ export default function ReaderPage() {
           readerTheme={readerTheme}
           containerWidth={containerWidthStyle}
           preloadCount={readerOpts.preloadCount}
+          onBoundaryReached={handleBoundaryReached}
+          nextVolumeTitle={nextVolume?.title}
         />
       )}
 
-      {/* 跨卷连续阅读：下一卷提示浮层 */}
-      {showNextVolume && nextVolume && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="mx-4 w-full max-w-sm rounded-2xl bg-card p-6 text-center shadow-2xl">
-            <div className="mb-3 text-4xl">🎉</div>
-            <h3 className="mb-1 text-lg font-bold text-foreground">
-              {t.series.volumeFinished}
-            </h3>
-            <p className="mb-4 text-sm text-muted">
-              {t.series.nextVolume}: {nextVolume.title}
-              {nextVolume.seriesIndex != null && ` (Vol.${nextVolume.seriesIndex})`}
-            </p>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setShowNextVolume(false)}
-                className="flex-1 rounded-lg border border-border/60 px-4 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-card-hover"
-              >
-                {t.common.close}
-              </button>
-              <button
-                onClick={() => router.push(`/reader/${nextVolume.comicId}`)}
-                className="flex-1 rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-white shadow-sm shadow-accent/25 transition-colors hover:bg-accent/90"
-              >
-                {t.series.nextVolume} →
-              </button>
-            </div>
+      {/* 无感跳转过渡提示（底部 toast 样式） */}
+      {volumeTransitionHint && (
+        <div className="fixed bottom-8 left-1/2 z-[60] -translate-x-1/2 animate-in fade-in slide-in-from-bottom-4 duration-300">
+          <div className="rounded-full bg-accent/90 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-accent/25 backdrop-blur-sm">
+            {volumeTransitionHint}
           </div>
         </div>
       )}
@@ -550,6 +550,14 @@ export default function ReaderPage() {
               Vol.{nextVolume.seriesIndex ?? "?"} →
             </button>
           )}
+          {/* 章节抽屉入口 */}
+          <button
+            onClick={() => setShowChapterDrawer(true)}
+            className="ml-1 flex h-6 w-6 items-center justify-center rounded-full bg-white/10 text-white/70 hover:bg-white/20 hover:text-white transition-colors"
+            title={t.series.volumes}
+          >
+            <List className="h-3.5 w-3.5" />
+          </button>
         </div>
       )}
 
@@ -616,6 +624,95 @@ export default function ReaderPage() {
         />
       )}
 
+      {/* 章节抽屉（侧边滑入） */}
+      {showChapterDrawer && seriesVolumes.length > 1 && (
+        <>
+          <div
+            className="fixed inset-0 z-[58] bg-black/50"
+            onClick={() => setShowChapterDrawer(false)}
+          />
+          <div className="fixed top-0 right-0 z-[59] h-full w-[85vw] max-w-80 overflow-y-auto bg-zinc-900/95 shadow-2xl backdrop-blur-xl animate-in slide-in-from-right duration-200">
+            {/* 头部 */}
+            <div className="sticky top-0 z-10 flex items-center justify-between bg-zinc-900/95 px-4 py-3 backdrop-blur-sm border-b border-white/10">
+              <div>
+                <h3 className="text-sm font-semibold text-white">{seriesName}</h3>
+                <p className="text-[11px] text-white/40">
+                  {seriesVolumes.length} {t.series.volumes.toLowerCase?.() || t.series.volumes} · {currentVolumeIdx + 1}/{seriesVolumes.length}
+                </p>
+              </div>
+              <button
+                onClick={() => setShowChapterDrawer(false)}
+                className="rounded-lg p-1.5 text-white/50 hover:text-white hover:bg-white/10 transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            {/* 章节列表 */}
+            <div className="p-2 space-y-1">
+              {seriesVolumes.map((vol) => {
+                const progress = vol.pageCount > 0 ? Math.round((vol.lastReadPage / vol.pageCount) * 100) : 0;
+                const isCurrent = vol.comicId === comicId;
+                return (
+                  <button
+                    key={vol.comicId}
+                    onClick={() => {
+                      setShowChapterDrawer(false);
+                      if (!isCurrent) router.push(`/reader/${vol.comicId}`);
+                    }}
+                    className={`flex w-full items-center gap-3 rounded-xl p-2.5 text-left transition-all ${
+                      isCurrent
+                        ? "bg-accent/15 ring-1 ring-accent/30"
+                        : "hover:bg-white/5"
+                    }`}
+                  >
+                    {/* 缩略图 */}
+                    <div className="relative h-12 w-9 shrink-0 overflow-hidden rounded-lg bg-white/5">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={`/api/comics/${vol.comicId}/thumbnail`}
+                        alt={vol.title}
+                        className="h-full w-full object-cover"
+                        loading="lazy"
+                      />
+                      {progress > 0 && (
+                        <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-black/40">
+                          <div className="h-full bg-accent" style={{ width: `${progress}%` }} />
+                        </div>
+                      )}
+                    </div>
+                    {/* 信息 */}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5">
+                        {vol.seriesIndex != null && (
+                          <span className={`shrink-0 rounded px-1 py-0.5 text-[10px] font-bold ${
+                            isCurrent ? "bg-accent/20 text-accent" : "bg-white/10 text-white/50"
+                          }`}>
+                            #{vol.seriesIndex}
+                          </span>
+                        )}
+                        <span className={`truncate text-xs ${
+                          isCurrent ? "font-semibold text-accent" : "text-white/80"
+                        }`}>
+                          {vol.title}
+                        </span>
+                      </div>
+                      <div className="mt-0.5 flex items-center gap-2 text-[10px] text-white/40">
+                        <span>{vol.pageCount}p</span>
+                        {progress > 0 && <span className={isCurrent ? "text-accent/70" : ""}>{progress}%</span>}
+                      </div>
+                    </div>
+                    {/* 当前标记 */}
+                    {isCurrent && (
+                      <div className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </>
+      )}
+
       {/* Archive Overlay (档案覆盖层) */}
       {showOverlay && (
         <>
@@ -659,7 +756,7 @@ export default function ReaderPage() {
           />
 
           {/* Panel */}
-          <div className="fixed top-0 right-0 z-50 h-full w-80 overflow-y-auto bg-zinc-900/95 p-6 shadow-2xl backdrop-blur-xl">
+          <div className="fixed top-0 right-0 z-50 h-full w-[85vw] max-w-80 overflow-y-auto bg-zinc-900/95 p-6 shadow-2xl backdrop-blur-xl">
             {/* Close */}
             <button
               onClick={() => setShowInfoPanel(false)}

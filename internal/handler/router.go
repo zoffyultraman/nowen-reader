@@ -114,20 +114,6 @@ func SetupRoutes(r *gin.Engine) {
 	}
 
 	// ============================================================
-	// Series (系列分组)
-	// ============================================================
-	series := NewSeriesHandler()
-	api.GET("/series", series.ListSeries)
-	api.GET("/series/:name", series.GetSeriesComics)
-
-	seriesWrite := api.Group("")
-	seriesWrite.Use(middleware.AuthRequired())
-	{
-		seriesWrite.PUT("/series/assign", series.AssignSeries)
-		seriesWrite.DELETE("/series/remove", series.RemoveSeries)
-	}
-
-	// ============================================================
 	// Tags (Phase 2)
 	// ============================================================
 	tag := NewTagHandler()
@@ -290,6 +276,10 @@ func SetupRoutes(r *gin.Engine) {
 	comicByIDWrite.POST("/ai-suggest-tags", ai.SuggestTags)
 	// Phase 2
 	comicByIDWrite.POST("/ai-analyze-cover", ai.AnalyzeCover)
+	// Phase 6
+	comicByIDWrite.POST("/ai-complete-metadata", ai.CompleteMetadata)
+	// Phase 7
+	comicByIDWrite.POST("/ai-chapter-recap", ai.ChapterRecap)
 
 	// AI prompt templates (Phase 2)
 	aiGroup.GET("/prompts", ai.GetPromptTemplates)
@@ -301,6 +291,27 @@ func SetupRoutes(r *gin.Engine) {
 
 	// AI semantic search (Phase 4)
 	aiGroup.POST("/semantic-search", ai.SemanticSearch)
+
+	// AI reading insight (Phase 5)
+	aiGroup.POST("/reading-insight", ai.GenerateReadingInsight)
+
+	// AI batch suggest tags (Phase 5)
+	aiGroup.POST("/batch-suggest-tags", ai.BatchSuggestTags)
+
+	// AI enhanced group detection (Phase 6)
+	aiGroup.POST("/enhance-group-detect", ai.EnhanceGroupDetect)
+
+	// AI suggest category (Phase 6)
+	aiGroup.POST("/suggest-category", ai.SuggestCategory)
+
+	// AI batch suggest category (Phase 6)
+	aiGroup.POST("/batch-suggest-category", ai.BatchSuggestCategory)
+
+	// AI verify duplicates (Phase 7)
+	aiGroup.POST("/verify-duplicates", ai.VerifyDuplicates)
+
+	// AI recommend goal (Phase 7)
+	aiGroup.POST("/recommend-goal", ai.RecommendGoal)
 
 	// AI chapter summary (Phase 3)
 	comicByIDWrite.POST("/ai-chapter-summary", ai.ChapterSummary)
@@ -333,6 +344,27 @@ func SetupRoutes(r *gin.Engine) {
 
 	// Per-comic metadata translation (requires auth)
 	comicByIDWrite.POST("/translate-metadata", tagTranslate.TranslateMetadata)
+
+	// ============================================================
+	// Comic Groups (自定义合并分组)
+	// ============================================================
+	group := NewGroupHandler()
+	api.GET("/groups", group.ListGroups)
+	api.GET("/groups/comic-map", group.GetComicMap)
+	api.GET("/groups/:id", group.GetGroup)
+
+	groupWrite := api.Group("/groups")
+	groupWrite.Use(middleware.AuthRequired())
+	{
+		groupWrite.POST("", group.CreateGroup)
+		groupWrite.PUT("/:id", group.UpdateGroup)
+		groupWrite.DELETE("/:id", group.DeleteGroup)
+		groupWrite.POST("/:id/comics", group.AddComics)
+		groupWrite.DELETE("/:id/comics/:comicId", group.RemoveComic)
+		groupWrite.PUT("/:id/reorder", group.ReorderComics)
+		groupWrite.POST("/auto-detect", group.AutoDetect)
+		groupWrite.POST("/batch-create", group.BatchCreate)
+	}
 
 	// ============================================================
 	// Error Logs (错误日志查看) — requires admin

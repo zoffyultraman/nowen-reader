@@ -18,7 +18,7 @@ import {
 import { ComicReadingMode, ReadingDirection } from "@/types/reader";
 import { useTranslation } from "@/lib/i18n";
 
-export type ReaderTheme = "day" | "night";
+export type ReaderTheme = "day" | "night" | "green" | "gray" | "white";
 
 interface ReaderToolbarProps {
   visible: boolean;
@@ -102,7 +102,7 @@ export default function ReaderToolbar({
             {onShowSettings && (
               <button
                 onClick={onShowSettings}
-                className="hidden sm:flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white/80 transition-colors hover:bg-white/10 hover:text-white"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white/80 transition-colors hover:bg-white/10 hover:text-white"
                 title={t.readerToolbar.settings}
               >
                 <Settings className="h-4 w-4" />

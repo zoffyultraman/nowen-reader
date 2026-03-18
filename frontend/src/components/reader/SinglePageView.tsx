@@ -17,6 +17,8 @@ interface SinglePageViewProps {
   fitMode?: FitMode;
   containerWidth?: string;
   preloadCount?: number;
+  /** 翻页超出边界时触发："next" 表示翻过最后一页，"prev" 表示翻到第一页之前 */
+  onBoundaryReached?: (direction: "next" | "prev") => void;
 }
 
 export default function SinglePageView({
@@ -30,6 +32,7 @@ export default function SinglePageView({
   fitMode = "container",
   containerWidth,
   preloadCount = 3,
+  onBoundaryReached,
 }: SinglePageViewProps) {
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
@@ -110,11 +113,21 @@ export default function SinglePageView({
     if (absDx > absDy && absDx > minSwipe && elapsed < maxTime) {
       const swipeLeft = dx < 0;
       if (direction === "ltr") {
-        if (swipeLeft) onPageChange(Math.min(pages.length - 1, currentPage + 1));
-        else onPageChange(Math.max(0, currentPage - 1));
+        if (swipeLeft) {
+          if (currentPage >= pages.length - 1) onBoundaryReached?.("next");
+          else onPageChange(currentPage + 1);
+        } else {
+          if (currentPage <= 0) onBoundaryReached?.("prev");
+          else onPageChange(currentPage - 1);
+        }
       } else {
-        if (swipeLeft) onPageChange(Math.max(0, currentPage - 1));
-        else onPageChange(Math.min(pages.length - 1, currentPage + 1));
+        if (swipeLeft) {
+          if (currentPage <= 0) onBoundaryReached?.("prev");
+          else onPageChange(currentPage - 1);
+        } else {
+          if (currentPage >= pages.length - 1) onBoundaryReached?.("next");
+          else onPageChange(currentPage + 1);
+        }
       }
     } else if (absDx < 10 && absDy < 10 && elapsed < 300) {
       // 轻触（非滑动）- 区域翻页或显示工具栏
@@ -123,11 +136,21 @@ export default function SinglePageView({
       if (ratio > 0.35 && ratio < 0.65) {
         onTapCenter();
       } else if (ratio <= 0.35) {
-        if (direction === "ltr") onPageChange(Math.max(0, currentPage - 1));
-        else onPageChange(Math.min(pages.length - 1, currentPage + 1));
+        if (direction === "ltr") {
+          if (currentPage <= 0) onBoundaryReached?.("prev");
+          else onPageChange(currentPage - 1);
+        } else {
+          if (currentPage >= pages.length - 1) onBoundaryReached?.("next");
+          else onPageChange(currentPage + 1);
+        }
       } else {
-        if (direction === "ltr") onPageChange(Math.min(pages.length - 1, currentPage + 1));
-        else onPageChange(Math.max(0, currentPage - 1));
+        if (direction === "ltr") {
+          if (currentPage >= pages.length - 1) onBoundaryReached?.("next");
+          else onPageChange(currentPage + 1);
+        } else {
+          if (currentPage <= 0) onBoundaryReached?.("prev");
+          else onPageChange(currentPage - 1);
+        }
       }
     }
   }, [direction, currentPage, pages.length, onPageChange, onTapCenter, scale]);
@@ -162,11 +185,23 @@ export default function SinglePageView({
     const isRightTap = ratio >= 0.65;
 
     if (direction === "ltr") {
-      if (isLeftTap) onPageChange(Math.max(0, currentPage - 1));
-      if (isRightTap) onPageChange(Math.min(pages.length - 1, currentPage + 1));
+      if (isLeftTap) {
+        if (currentPage <= 0) onBoundaryReached?.("prev");
+        else onPageChange(currentPage - 1);
+      }
+      if (isRightTap) {
+        if (currentPage >= pages.length - 1) onBoundaryReached?.("next");
+        else onPageChange(currentPage + 1);
+      }
     } else {
-      if (isLeftTap) onPageChange(Math.min(pages.length - 1, currentPage + 1));
-      if (isRightTap) onPageChange(Math.max(0, currentPage - 1));
+      if (isLeftTap) {
+        if (currentPage >= pages.length - 1) onBoundaryReached?.("next");
+        else onPageChange(currentPage + 1);
+      }
+      if (isRightTap) {
+        if (currentPage <= 0) onBoundaryReached?.("prev");
+        else onPageChange(currentPage - 1);
+      }
     }
   };
 

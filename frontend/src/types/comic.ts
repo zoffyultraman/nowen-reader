@@ -28,8 +28,6 @@ export interface Comic {
   year?: number;
   description?: string;
   language?: string;
-  seriesName?: string;
-  seriesIndex?: number;
   genre?: string;
   metadataSource?: string;
   readingStatus?: string; // "want" | "reading" | "finished" | "shelved" | ""

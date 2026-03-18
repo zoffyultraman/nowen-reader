@@ -255,3 +255,38 @@ func UpdateComicPageCount(comicID string, pageCount int) error {
 	_, err := db.Exec(`UPDATE "Comic" SET "pageCount" = ? WHERE "id" = ?`, pageCount, comicID)
 	return err
 }
+
+// UpdateComicMD5Hash 更新单个漫画的 MD5 哈希值。
+func UpdateComicMD5Hash(comicID string, md5Hash string) error {
+	_, err := db.Exec(`UPDATE "Comic" SET "md5Hash" = ? WHERE "id" = ?`, md5Hash, comicID)
+	return err
+}
+
+// GetComicsNeedingMD5 返回 md5Hash 为空的漫画（需要计算 MD5）。
+func GetComicsNeedingMD5(limit int) ([]struct {
+	ID       string
+	Filename string
+}, error) {
+	rows, err := db.Query(`
+		SELECT "id", "filename" FROM "Comic" WHERE "md5Hash" = '' LIMIT ?
+	`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []struct {
+		ID       string
+		Filename string
+	}
+	for rows.Next() {
+		var c struct {
+			ID       string
+			Filename string
+		}
+		if rows.Scan(&c.ID, &c.Filename) == nil {
+			result = append(result, c)
+		}
+	}
+	return result, nil
+}

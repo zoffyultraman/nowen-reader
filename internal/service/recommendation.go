@@ -186,12 +186,6 @@ func GetSimilarComics(comicID string, limit int) ([]ScoredComic, error) {
 			reasons = append(reasons, "same_author")
 		}
 
-		// Same series
-		if comic.SeriesName != "" && comic.SeriesName == target.SeriesName {
-			score += 25
-			reasons = append(reasons, "same_series")
-		}
-
 		// Same category
 		for _, c := range comic.Categories {
 			if targetCats[c.Slug] {
@@ -236,7 +230,6 @@ type userProfile struct {
 	genreWeights  map[string]float64
 	authorWeights map[string]float64
 	avgRating     float64
-	activeSeries  map[string]bool
 }
 
 func buildUserProfile(comics []store.RecommendationComic) userProfile {
@@ -244,7 +237,6 @@ func buildUserProfile(comics []store.RecommendationComic) userProfile {
 		tagWeights:    map[string]float64{},
 		genreWeights:  map[string]float64{},
 		authorWeights: map[string]float64{},
-		activeSeries:  map[string]bool{},
 	}
 
 	var totalRating float64
@@ -276,10 +268,6 @@ func buildUserProfile(comics []store.RecommendationComic) userProfile {
 		if c.Rating != nil {
 			totalRating += float64(*c.Rating)
 			ratedCount++
-		}
-
-		if c.SeriesName != "" && c.LastReadPage > 0 {
-			p.activeSeries[c.SeriesName] = true
 		}
 	}
 
@@ -363,17 +351,6 @@ func calculateRecommendationScore(c store.RecommendationComic, profile userProfi
 			normalized := math.Min(w/5, 20)
 			score += normalized
 			reasons = append(reasons, "same_author")
-		}
-	}
-
-	// Series continuation
-	if c.SeriesName != "" && profile.activeSeries[c.SeriesName] {
-		if c.PageCount > 0 && c.LastReadPage == 0 {
-			score += 15
-			reasons = append(reasons, "series_continuation")
-		} else if c.LastReadPage > 0 && float64(c.LastReadPage) < float64(c.PageCount)*0.9 {
-			score += 10
-			reasons = append(reasons, "series_in_progress")
 		}
 	}
 

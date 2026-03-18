@@ -64,13 +64,10 @@ export function RecommendationStrip({ contentType }: { contentType?: string }) {
     tag_match: t.recommend?.tagMatch || "Similar tags",
     genre_match: t.recommend?.genreMatch || "Similar genre",
     same_author: t.recommend?.sameAuthor || "Same author",
-    series_continuation: t.recommend?.seriesContinuation || "Series continuation",
-    series_in_progress: t.recommend?.seriesInProgress || "Continue series",
     highly_rated: t.recommend?.highlyRated || "Highly rated",
     unread: t.recommend?.unread || "Unread",
     similar_tags: t.recommend?.similarTags || "Similar tags",
     similar_genre: t.recommend?.similarGenre || "Similar genre",
-    same_series: t.recommend?.sameSeries || "Same series",
     semantic_match: t.recommend?.semanticMatch || "AI semantic match",
   };
 
@@ -186,7 +183,7 @@ export function SimilarComics({ comicId }: { comicId: string }) {
       <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted">
         {t.recommend?.similar || "Similar Comics"}
       </h3>
-      <div className="grid grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 sm:gap-3">
         {similar.map((comic) => (
           <Link key={comic.id} href={`/comic/${comic.id}`} className="group">
             <div className="relative aspect-[5/7] overflow-hidden rounded-lg bg-card transition-transform group-hover:scale-105">

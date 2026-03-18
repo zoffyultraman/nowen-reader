@@ -7,13 +7,24 @@ import {
   Maximize,
   Minimize,
   Info,
-  Sun,
-  Moon,
   List,
   Type,
+  Bookmark,
+  Search,
+  Volume2,
+  Timer,
 } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
 import type { ReaderTheme } from "@/components/reader/ReaderToolbar";
+
+// 主题图标和标签映射
+const themeOptions: { value: ReaderTheme; label: string; color: string }[] = [
+  { value: "night", label: "深色", color: "#18181b" },
+  { value: "day", label: "米黄", color: "#fffbeb" },
+  { value: "green", label: "豆沙绿", color: "#C7EDCC" },
+  { value: "gray", label: "浅灰", color: "#E0E0E0" },
+  { value: "white", label: "纯白", color: "#ffffff" },
+];
 
 interface NovelToolbarProps {
   visible: boolean;
@@ -25,10 +36,16 @@ interface NovelToolbarProps {
   onBack: () => void;
   onChapterChange: (chapter: number) => void;
   onToggleFullscreen: () => void;
-  onToggleTheme: () => void;
+  onThemeChange: (theme: ReaderTheme) => void;
   onShowInfo?: () => void;
   onShowTOC?: () => void;
   onShowSettings?: () => void;
+  onShowBookmarks?: () => void;
+  onShowSearch?: () => void;
+  onToggleTTS?: () => void;
+  onToggleAutoScroll?: () => void;
+  isTTSPlaying?: boolean;
+  isAutoScrolling?: boolean;
 }
 
 export default function NovelToolbar({
@@ -41,10 +58,16 @@ export default function NovelToolbar({
   onBack,
   onChapterChange,
   onToggleFullscreen,
-  onToggleTheme,
+  onThemeChange,
   onShowInfo,
   onShowTOC,
   onShowSettings,
+  onShowBookmarks,
+  onShowSearch,
+  onToggleTTS,
+  onToggleAutoScroll,
+  isTTSPlaying,
+  isAutoScrolling,
 }: NovelToolbarProps) {
   const t = useTranslation();
 
@@ -163,22 +186,76 @@ export default function NovelToolbar({
                   <span className="hidden sm:inline">{t.reader?.typesetting || "排版"}</span>
                 </button>
               )}
-            </div>
-            <button
-              onClick={onToggleTheme}
-              className={`flex items-center gap-1 sm:gap-1.5 rounded-lg px-2 sm:px-3 py-1.5 text-xs font-medium transition-all duration-200 ${
-                readerTheme === "day"
-                  ? "bg-amber-500/20 text-amber-400"
-                  : "text-white/60 hover:text-white hover:bg-white/10"
-              }`}
-            >
-              {readerTheme === "day" ? (
-                <Sun className="h-4 w-4" />
-              ) : (
-                <Moon className="h-4 w-4" />
+
+              {/* 书签按钮 */}
+              {onShowBookmarks && (
+                <button
+                  onClick={onShowBookmarks}
+                  className="flex items-center gap-1 sm:gap-1.5 rounded-lg px-2 sm:px-3 py-1.5 text-xs font-medium text-white/60 transition-all duration-200 hover:text-white hover:bg-white/10"
+                >
+                  <Bookmark className="h-4 w-4" />
+                  <span className="hidden sm:inline">书签</span>
+                </button>
               )}
-              <span className="hidden sm:inline">{readerTheme === "day" ? t.readerToolbar.dayMode : t.readerToolbar.nightMode}</span>
-            </button>
+
+              {/* 搜索按钮 */}
+              {onShowSearch && (
+                <button
+                  onClick={onShowSearch}
+                  className="flex items-center gap-1 sm:gap-1.5 rounded-lg px-2 sm:px-3 py-1.5 text-xs font-medium text-white/60 transition-all duration-200 hover:text-white hover:bg-white/10"
+                >
+                  <Search className="h-4 w-4" />
+                  <span className="hidden sm:inline">搜索</span>
+                </button>
+              )}
+
+              {/* TTS 听书按钮 */}
+              {onToggleTTS && (
+                <button
+                  onClick={onToggleTTS}
+                  className={`flex items-center gap-1 sm:gap-1.5 rounded-lg px-2 sm:px-3 py-1.5 text-xs font-medium transition-all duration-200 ${
+                    isTTSPlaying
+                      ? "text-accent bg-accent/10"
+                      : "text-white/60 hover:text-white hover:bg-white/10"
+                  }`}
+                >
+                  <Volume2 className={`h-4 w-4 ${isTTSPlaying ? "animate-pulse" : ""}`} />
+                  <span className="hidden sm:inline">{isTTSPlaying ? "停止" : "听书"}</span>
+                </button>
+              )}
+
+              {/* 自动翻页按钮 */}
+              {onToggleAutoScroll && (
+                <button
+                  onClick={onToggleAutoScroll}
+                  className={`flex items-center gap-1 sm:gap-1.5 rounded-lg px-2 sm:px-3 py-1.5 text-xs font-medium transition-all duration-200 ${
+                    isAutoScrolling
+                      ? "text-green-400 bg-green-500/10"
+                      : "text-white/60 hover:text-white hover:bg-white/10"
+                  }`}
+                >
+                  <Timer className={`h-4 w-4 ${isAutoScrolling ? "animate-spin" : ""}`} />
+                  <span className="hidden sm:inline">{isAutoScrolling ? "停止" : "自动"}</span>
+                </button>
+              )}
+            </div>
+
+            {/* 主题色卡选择 */}
+            <div className="flex items-center gap-1.5">
+              {themeOptions.map((opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() => onThemeChange(opt.value)}
+                  className={`relative h-6 w-6 rounded-full border-2 transition-all ${
+                    readerTheme === opt.value
+                      ? "border-accent scale-110 shadow-md shadow-accent/30"
+                      : "border-white/20 hover:border-white/40"
+                  }`}
+                  style={{ backgroundColor: opt.color }}
+                  title={opt.label}
+                />
+              ))}
+            </div>
           </div>
         </div>
       </div>

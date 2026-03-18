@@ -968,7 +968,7 @@ Respond ONLY with a valid JSON object containing the translated fields.`, langNa
 // ============================================================
 
 // GenerateSummary 根据漫画/小说的元数据信息，让 AI 生成中文简介。
-func GenerateSummary(cfg AIConfig, title, author, genre, seriesName, existingDesc, contentType, targetLang string) (string, error) {
+func GenerateSummary(cfg AIConfig, title, author, genre, existingDesc, contentType, targetLang string) (string, error) {
 	if !cfg.EnableCloudAI || cfg.CloudAPIKey == "" {
 		return "", fmt.Errorf("cloud AI not configured")
 	}
@@ -998,9 +998,6 @@ Requirements:
 	if genre != "" {
 		parts = append(parts, fmt.Sprintf("Genre: %s", genre))
 	}
-	if seriesName != "" && seriesName != title {
-		parts = append(parts, fmt.Sprintf("Series: %s", seriesName))
-	}
 	if existingDesc != "" {
 		parts = append(parts, fmt.Sprintf("Existing description: %s", existingDesc))
 	}
@@ -1020,15 +1017,13 @@ Requirements:
 
 // ParsedFilename AI 从文件名解析出的结构化元数据
 type ParsedFilename struct {
-	Title       string `json:"title,omitempty"`
-	Author      string `json:"author,omitempty"`
-	Group       string `json:"group,omitempty"` // 汉化组/扫图组
-	SeriesName  string `json:"seriesName,omitempty"`
-	SeriesIndex *int   `json:"seriesIndex,omitempty"`
-	Language    string `json:"language,omitempty"`
-	Genre       string `json:"genre,omitempty"`
-	Year        *int   `json:"year,omitempty"`
-	Tags        string `json:"tags,omitempty"` // 逗号分隔的额外标签
+	Title    string `json:"title,omitempty"`
+	Author   string `json:"author,omitempty"`
+	Group    string `json:"group,omitempty"` // 汉化组/扫图组
+	Language string `json:"language,omitempty"`
+	Genre    string `json:"genre,omitempty"`
+	Year     *int   `json:"year,omitempty"`
+	Tags     string `json:"tags,omitempty"` // 逗号分隔的额外标签
 }
 
 // AIParseFilename 使用 AI 智能解析复杂文件名，提取结构化元数据。
@@ -1048,7 +1043,6 @@ Extract as much structured metadata as possible from the filename.
 Rules:
 - "Group" refers to scan/translation groups (e.g. 汉化组, scanlation group)
 - Remove file extensions before parsing
-- Volume/chapter numbers map to seriesIndex
 - Return ONLY a valid JSON object, no extra text or markdown`
 
 	userPrompt := fmt.Sprintf(`Parse this filename and extract structured metadata:
@@ -1060,8 +1054,6 @@ Return a JSON object with these fields (omit empty ones):
   "title": "the main title/work name",
   "author": "author/artist name",
   "group": "scan/translation group name",
-  "seriesName": "series name if different from title",
-  "seriesIndex": 1,
   "language": "language code like zh, en, ja",
   "genre": "comma-separated genres if identifiable",
   "year": 2024,
@@ -1408,10 +1400,51 @@ Rules:
 		content = content[start : end+1]
 	}
 
-	var result map[string]string
-	if err := json.Unmarshal([]byte(content), &result); err != nil {
+	var rawResult map[string]string
+	if err := json.Unmarshal([]byte(content), &rawResult); err != nil {
 		return nil, fmt.Errorf("failed to parse AI recommendation reasons: %w", err)
 	}
+
+	// 构建原始 ID 集合，用于校验 AI 返回的 key
+	originalIDs := make(map[string]string) // lowercase -> original
+	for _, item := range items {
+		originalIDs[strings.ToLower(strings.TrimSpace(item.ID))] = item.ID
+	}
+
+	// 校验并修正 AI 返回的 key，确保与原始 ID 一致
+	result := make(map[string]string, len(rawResult))
+	for key, reason := range rawResult {
+		cleanKey := strings.ToLower(strings.TrimSpace(key))
+		if origID, ok := originalIDs[cleanKey]; ok {
+			result[origID] = reason
+		} else {
+			// AI 可能修改了 ID，尝试部分匹配
+			matched := false
+			for lowerID, origID := range originalIDs {
+				if strings.Contains(lowerID, cleanKey) || strings.Contains(cleanKey, lowerID) {
+					result[origID] = reason
+					matched = true
+					break
+				}
+			}
+			if !matched {
+				// 仍然保留，使用原始 key
+				result[key] = reason
+			}
+		}
+	}
+
+	// 如果 AI 用顺序索引(0,1,2...)作为 key，则按顺序映射回原始 ID
+	if len(result) == 0 && len(rawResult) > 0 {
+		idx := 0
+		for _, reason := range rawResult {
+			if idx < len(items) {
+				result[items[idx].ID] = reason
+				idx++
+			}
+		}
+	}
+
 	return result, nil
 }
 
@@ -1480,8 +1513,8 @@ func GetDefaultPromptTemplates() PromptTemplates {
 			User:   "Generate a {language} summary for this {contentType} based on the following metadata:\n\n{metadata}",
 		},
 		ParseFilename: PromptPair{
-			System: "You are an expert at parsing manga/comic/novel filenames. Extract structured metadata from complex filename conventions.\n\nRules:\n- \"Group\" refers to scan/translation groups\n- Remove file extensions before parsing\n- Volume/chapter numbers map to seriesIndex\n- Return ONLY a valid JSON object",
-			User:   "Parse this filename and extract structured metadata:\n\n\"{filename}\"\n\nReturn a JSON object with fields: title, author, group, seriesName, seriesIndex, language, genre, year, tags",
+			System: "You are an expert at parsing manga/comic/novel filenames. Extract structured metadata from complex filename conventions.\n\nRules:\n- \"Group\" refers to scan/translation groups\n- Remove file extensions before parsing\n- Return ONLY a valid JSON object",
+			User:   "Parse this filename and extract structured metadata:\n\n\"{filename}\"\n\nReturn a JSON object with fields: title, author, group, language, genre, year, tags",
 		},
 		SuggestTags: PromptPair{
 			System: "You are an expert {contentType} librarian and tagger. Suggest 5-10 relevant tags in {language}.\n\nRequirements:\n- Tags should be concise (1-4 words)\n- Include genre, theme, and mood/style tags\n- Don't repeat existing tags\n- Return ONLY a JSON array of tag strings",
@@ -1972,6 +2005,660 @@ Rules:
 	}
 
 	return &result, nil
+}
+
+// ============================================================
+// Phase 5-1: AI 阅读统计洞察报告
+// ============================================================
+
+// GenerateReadingInsight 使用 AI 分析用户阅读数据，生成个性化洞察报告（流式）。
+func GenerateReadingInsight(cfg AIConfig, statsData map[string]interface{}, targetLang string, callback StreamCallback) error {
+	if !cfg.EnableCloudAI || cfg.CloudAPIKey == "" {
+		return fmt.Errorf("cloud AI not configured")
+	}
+
+	langName := "Chinese (简体中文)"
+	if targetLang == "en" {
+		langName = "English"
+	}
+
+	systemPrompt := fmt.Sprintf(`You are a friendly and insightful reading analyst. Based on the user's reading statistics data, generate a personalized reading insight report in %s.
+
+Requirements:
+- Write in a warm, encouraging tone, like a reading companion
+- Include 3-5 key insights/observations about the user's reading habits
+- Provide specific, data-driven observations (mention actual numbers)
+- Suggest improvements or new reading directions based on patterns
+- Use appropriate emoji for visual appeal
+- Structure your response with clear sections using markdown headings (##)
+- Keep total length around 300-500 characters for Chinese, 400-800 characters for English
+- If the data shows very little reading activity, be encouraging rather than critical
+
+Sections to cover (pick the most relevant):
+1. 📊 Overall Summary - Brief overview of reading activity
+2. 🔥 Reading Habits - Patterns, streaks, time preferences
+3. 📚 Genre Insights - Reading preferences and diversity
+4. ⏱️ Reading Speed & Efficiency - Pages per hour analysis
+5. 🎯 Recommendations - Personalized suggestions
+6. 🏆 Achievements - Celebrate milestones`, langName)
+
+	// 序列化统计数据
+	statsJSON, _ := json.MarshalIndent(statsData, "", "  ")
+
+	userPrompt := fmt.Sprintf("Analyze this user's reading statistics and generate a personalized insight report in %s:\n\n```json\n%s\n```\n\nGenerate an engaging, data-driven insight report.", langName, string(statsJSON))
+
+	return CallCloudLLMStream(cfg, systemPrompt, userPrompt, &LLMCallOptions{
+		Scenario:  "reading_insight",
+		MaxTokens: 1200,
+	}, callback)
+}
+
+// ============================================================
+// Phase 6-1: AI 智能分组检测增强
+// ============================================================
+
+// AIGroupCandidate 一组候选漫画，供 AI 分析是否属于同系列
+type AIGroupCandidate struct {
+	ID    string `json:"id"`
+	Title string `json:"title"`
+}
+
+// AIGroupSuggestion AI 分析后返回的分组建议
+type AIGroupSuggestion struct {
+	GroupName string   `json:"groupName"` // 建议的分组名
+	ComicIDs  []string `json:"comicIds"`  // 属于该组的漫画 ID
+	Reason    string   `json:"reason"`    // AI 判断理由
+}
+
+// AIAnalyzeGroupCandidates 使用 AI 对候选漫画进行语义分析，判断哪些属于同系列。
+// candidates: 所有未分组的漫画 ID+标题
+// 返回 AI 建议的分组列表
+func AIAnalyzeGroupCandidates(cfg AIConfig, candidates []AIGroupCandidate, targetLang string) ([]AIGroupSuggestion, error) {
+	if !cfg.EnableCloudAI || cfg.CloudAPIKey == "" {
+		return nil, fmt.Errorf("cloud AI not configured")
+	}
+
+	langName := "Chinese (简体中文)"
+	if targetLang == "en" {
+		langName = "English"
+	}
+
+	systemPrompt := fmt.Sprintf(`You are an expert manga/comic librarian. Given a list of comic titles, group them by series.
+
+Rules:
+- Identify comics that belong to the SAME series (same work, different volumes/editions)
+- Consider: different volume numbers, different translations of the same title, different editions, sequel/prequel with VERY similar names
+- Do NOT group different works together just because they share a genre or author
+- Handle multilingual titles: "進撃の巨人" = "Attack on Titan" = "进击的巨人"
+- Handle common filename patterns: "[Group] Title Vol.01", "Title 第1巻", "Title_v01"
+- Each group must have at least 2 comics
+- Provide a clean series name for each group (without volume numbers) in %s
+- Return ONLY a JSON array, no extra text or markdown
+
+Response format:
+[
+  {"groupName": "Series Name", "comicIds": ["id1", "id2"], "reason": "brief reason"}
+]
+
+If no groupable series found, return: []`, langName)
+
+	// 构建候选列表（限制数量避免超出 token）
+	maxCandidates := 100
+	if len(candidates) > maxCandidates {
+		candidates = candidates[:maxCandidates]
+	}
+	var lines []string
+	for _, c := range candidates {
+		lines = append(lines, fmt.Sprintf("- id:%s | title:%s", c.ID, c.Title))
+	}
+
+	userPrompt := fmt.Sprintf("Analyze these comic titles and group by series. Return a JSON array:\n\n%s", strings.Join(lines, "\n"))
+
+	// 根据候选数量动态计算 MaxTokens（每本漫画约需 40-80 token 输出）
+	estimatedTokens := len(candidates) * 80
+	if estimatedTokens < 2048 {
+		estimatedTokens = 2048
+	}
+	if estimatedTokens > 8192 {
+		estimatedTokens = 8192
+	}
+	content, err := CallCloudLLM(cfg, systemPrompt, userPrompt, &LLMCallOptions{
+		Scenario:  "ai_group_detect",
+		MaxTokens: estimatedTokens,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// 清理并解析 JSON
+	content = strings.ReplaceAll(content, "```json", "")
+	content = strings.ReplaceAll(content, "```", "")
+	content = strings.TrimSpace(content)
+
+	// 防御空响应
+	if content == "" {
+		return nil, fmt.Errorf("AI returned empty response")
+	}
+
+	start := strings.Index(content, "[")
+	end := strings.LastIndex(content, "]")
+	if start >= 0 && end > start {
+		content = content[start : end+1]
+	} else if start >= 0 {
+		// 找到了 [ 但没有 ]，说明 JSON 被截断了，尝试修复
+		content = repairTruncatedJSONArray(content[start:])
+	} else {
+		// 没有找到 JSON 数组
+		return nil, fmt.Errorf("AI response does not contain a valid JSON array: %s", truncateStr(content, 200))
+	}
+
+	var suggestions []AIGroupSuggestion
+	if err := json.Unmarshal([]byte(content), &suggestions); err != nil {
+		// 二次尝试：修复后再解析
+		repaired := repairTruncatedJSONArray(content)
+		if err2 := json.Unmarshal([]byte(repaired), &suggestions); err2 != nil {
+			log.Printf("[AI] Failed to parse group suggestions, raw: %s", truncateStr(content, 500))
+			return nil, fmt.Errorf("failed to parse AI group suggestions: %w", err)
+		}
+	}
+
+	// 过滤掉少于 2 本的分组
+	var valid []AIGroupSuggestion
+	for _, s := range suggestions {
+		if len(s.ComicIDs) >= 2 {
+			valid = append(valid, s)
+		}
+	}
+
+	return valid, nil
+}
+
+// truncateStr 截断字符串到指定长度
+func truncateStr(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "..."
+}
+
+// repairTruncatedJSONArray 尝试修复被截断的 JSON 数组。
+// 策略：找到最后一个完整的 JSON 对象（以 } 结尾），截断后面的不完整部分，补上 ]。
+func repairTruncatedJSONArray(s string) string {
+	s = strings.TrimSpace(s)
+	// 如果已经是完整的 JSON 数组，直接返回
+	if strings.HasSuffix(s, "]") {
+		return s
+	}
+
+	// 找到最后一个 "}," 或 "}" 的位置
+	lastBrace := strings.LastIndex(s, "}")
+	if lastBrace < 0 {
+		return "[]" // 完全无法修复
+	}
+
+	// 截取到最后一个完整对象
+	result := strings.TrimSpace(s[:lastBrace+1])
+	// 去掉尾部逗号
+	result = strings.TrimRight(result, ", \t\n\r")
+	// 补上 ]
+	if !strings.HasSuffix(result, "]") {
+		result += "]"
+	}
+	return result
+}
+
+// ============================================================
+// Phase 6-2: AI 智能元数据补全
+// ============================================================
+
+// AICompletedMetadata AI 补全后的元数据
+type AICompletedMetadata struct {
+	Title       string `json:"title,omitempty"`
+	Author      string `json:"author,omitempty"`
+	Genre       string `json:"genre,omitempty"`
+	Description string `json:"description,omitempty"`
+	Language    string `json:"language,omitempty"`
+	Year        *int   `json:"year,omitempty"`
+	Tags        string `json:"tags,omitempty"` // 逗号分隔
+}
+
+// AICompleteMetadata 当外部元数据源搜索不到时，使用 AI 根据文件名和封面推断元数据。
+func AICompleteMetadata(cfg AIConfig, filename, title string, coverData []byte, targetLang string) (*AICompletedMetadata, error) {
+	if !cfg.EnableCloudAI || cfg.CloudAPIKey == "" {
+		return nil, fmt.Errorf("cloud AI not configured")
+	}
+
+	langName := "Chinese (简体中文)"
+	if targetLang == "en" {
+		langName = "English"
+	}
+
+	systemPrompt := fmt.Sprintf(`You are an expert manga/comic/novel metadata specialist. Based on the filename (and optionally cover image), infer as much metadata as possible.
+
+Use your knowledge of manga, comics, light novels, and related media to identify:
+- The likely title (clean, without volume numbers or group tags)
+- The author/artist if recognizable from naming conventions
+- Genre(s) based on title keywords and any visual cues
+- A brief description in %s
+- Language (auto-detect from filename)
+- Estimated year if possible
+- Relevant tags (comma-separated)
+
+Return ONLY a valid JSON object:
+{
+  "title": "clean title",
+  "author": "author name or empty",
+  "genre": "genre1, genre2",
+  "description": "2-3 sentence description in %s",
+  "language": "language code (zh/ja/en/ko)",
+  "year": 2024 or null,
+  "tags": "tag1, tag2, tag3"
+}
+
+If you cannot determine a field with reasonable confidence, omit it.`, langName, langName)
+
+	userPrompt := fmt.Sprintf("Infer metadata for this file:\n\nFilename: %s\nCurrent title: %s\n\nReturn a JSON object.", filename, title)
+
+	opts := &LLMCallOptions{
+		Scenario:  "ai_metadata_complete",
+		MaxTokens: 600,
+	}
+
+	// 如果有封面数据且 provider 支持 Vision，附加封面图片
+	if len(coverData) > 0 {
+		if preset, ok := ProviderPresets[cfg.CloudProvider]; ok && preset.SupportsVision {
+			mimeType := "image/jpeg"
+			if len(coverData) > 4 && coverData[0] == 0x89 && coverData[1] == 0x50 {
+				mimeType = "image/png"
+			}
+			b64 := encodeBase64(coverData)
+			opts.Images = []ImageContent{{Base64: b64, MimeType: mimeType}}
+			userPrompt += "\n\nA cover image is also provided for visual analysis."
+		}
+	}
+
+	content, err := CallCloudLLM(cfg, systemPrompt, userPrompt, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	// 清理并解析 JSON
+	content = strings.ReplaceAll(content, "```json", "")
+	content = strings.ReplaceAll(content, "```", "")
+	content = strings.TrimSpace(content)
+
+	start := strings.Index(content, "{")
+	end := strings.LastIndex(content, "}")
+	if start >= 0 && end > start {
+		content = content[start : end+1]
+	}
+
+	var meta AICompletedMetadata
+	if err := json.Unmarshal([]byte(content), &meta); err != nil {
+		return nil, fmt.Errorf("failed to parse AI metadata: %w", err)
+	}
+	return &meta, nil
+}
+
+// ============================================================
+// Phase 6-3: AI 自动分类
+// ============================================================
+
+// SuggestCategory 根据漫画/小说的元数据，AI 推荐最合适的分类 slug 列表。
+// availableCategories: 系统中可用的分类 [{slug, name}]
+func SuggestCategory(cfg AIConfig, title, author, genre, description, contentType string, tags []string, availableCategories []map[string]string, targetLang string) ([]string, error) {
+	if !cfg.EnableCloudAI || cfg.CloudAPIKey == "" {
+		return nil, fmt.Errorf("cloud AI not configured")
+	}
+
+	systemPrompt := `You are a manga/comic/novel categorization expert. Based on the work's metadata, suggest the most appropriate categories from the available list.
+
+Rules:
+- Suggest 1-3 categories that best fit this work
+- Only use slugs from the provided available categories list
+- Consider title, genre, author style, description, and tags
+- Return ONLY a JSON array of category slugs, no extra text
+- If unsure, return the single most likely category
+
+Example response: ["action", "shounen", "adventure"]`
+
+	// 构建可用分类列表
+	var catLines []string
+	for _, c := range availableCategories {
+		catLines = append(catLines, fmt.Sprintf("- slug: %s | name: %s", c["slug"], c["name"]))
+	}
+
+	// 构建作品元数据
+	var metaParts []string
+	if title != "" {
+		metaParts = append(metaParts, "Title: "+title)
+	}
+	if author != "" {
+		metaParts = append(metaParts, "Author: "+author)
+	}
+	if genre != "" {
+		metaParts = append(metaParts, "Genre: "+genre)
+	}
+	if description != "" {
+		desc := description
+		if len(desc) > 300 {
+			desc = desc[:300] + "..."
+		}
+		metaParts = append(metaParts, "Description: "+desc)
+	}
+	if len(tags) > 0 {
+		metaParts = append(metaParts, "Tags: "+strings.Join(tags, ", "))
+	}
+	metaParts = append(metaParts, "Content type: "+contentType)
+
+	userPrompt := fmt.Sprintf("Available categories:\n%s\n\nWork metadata:\n%s\n\nSuggest categories. Return a JSON array of slugs.",
+		strings.Join(catLines, "\n"), strings.Join(metaParts, "\n"))
+
+	content, err := CallCloudLLM(cfg, systemPrompt, userPrompt, &LLMCallOptions{
+		Scenario:  "suggest_category",
+		MaxTokens: 200,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// 清理并解析 JSON
+	content = strings.ReplaceAll(content, "```json", "")
+	content = strings.ReplaceAll(content, "```", "")
+	content = strings.TrimSpace(content)
+
+	start := strings.Index(content, "[")
+	end := strings.LastIndex(content, "]")
+	if start >= 0 && end > start {
+		content = content[start : end+1]
+	}
+
+	var slugs []string
+	if err := json.Unmarshal([]byte(content), &slugs); err != nil {
+		return nil, fmt.Errorf("failed to parse AI category suggestion: %w", err)
+	}
+
+	// 验证 slugs 是否都在可用列表中
+	validSet := make(map[string]bool)
+	for _, c := range availableCategories {
+		validSet[c["slug"]] = true
+	}
+	var validSlugs []string
+	for _, s := range slugs {
+		if validSet[s] {
+			validSlugs = append(validSlugs, s)
+		}
+	}
+
+	return validSlugs, nil
+}
+
+// ============================================================
+// Phase 7-1: AI 章节回顾 / 前情提要
+// ============================================================
+
+// ChapterRecap AI 生成的前情提要
+type ChapterRecap struct {
+	Summary         string `json:"summary"`         // 前情提要文本
+	KeyCharacters   string `json:"keyCharacters"`   // 关键角色
+	LastCliffhanger string `json:"lastCliffhanger"` // 上一章的悬念/未解问题
+}
+
+// GenerateChapterRecap 使用 AI 生成前情提要（回顾之前的章节）。
+// previousSummaries: 之前各章节的摘要；currentChapterTitle: 当前章节标题
+func GenerateChapterRecap(cfg AIConfig, bookTitle string, previousSummaries []string, currentChapterTitle string, targetLang string) (*ChapterRecap, error) {
+	if !cfg.EnableCloudAI || cfg.CloudAPIKey == "" {
+		return nil, fmt.Errorf("cloud AI not configured")
+	}
+
+	langName := "Chinese (简体中文)"
+	if targetLang == "en" {
+		langName = "English"
+	}
+
+	systemPrompt := fmt.Sprintf(`You are a reading companion helping a reader recall what happened before in a novel. Generate a concise "Previously On" recap in %s.
+
+Requirements:
+- Write a cohesive 3-5 sentence recap of the story so far, based on the chapter summaries provided
+- Highlight the most important plot points, character developments, and unresolved tensions
+- End with a brief mention of what to expect or watch for in the upcoming chapter
+- Keep it engaging and spoiler-free for future chapters
+- Respond ONLY with a valid JSON object
+
+Response format:
+{
+  "summary": "A cohesive recap of the story so far...",
+  "keyCharacters": "Character A (role), Character B (role)",
+  "lastCliffhanger": "The last unresolved tension or question"
+}`, langName)
+
+	// 构建之前章节的摘要
+	var summaryLines []string
+	for i, s := range previousSummaries {
+		if s != "" {
+			summaryLines = append(summaryLines, fmt.Sprintf("Chapter %d: %s", i+1, s))
+		}
+	}
+	if len(summaryLines) == 0 {
+		return nil, fmt.Errorf("no previous chapter summaries available")
+	}
+
+	// 限制最多使用最近 20 章的摘要
+	if len(summaryLines) > 20 {
+		summaryLines = summaryLines[len(summaryLines)-20:]
+	}
+
+	userPrompt := fmt.Sprintf("Book: %s\nAbout to read: %s\n\nPrevious chapter summaries:\n%s\n\nGenerate a \"Previously On\" recap in %s. Return a JSON object.",
+		bookTitle, currentChapterTitle, strings.Join(summaryLines, "\n"), langName)
+
+	content, err := CallCloudLLM(cfg, systemPrompt, userPrompt, &LLMCallOptions{
+		Scenario:  "chapter_recap",
+		MaxTokens: 500,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// 清理并解析 JSON
+	content = strings.ReplaceAll(content, "```json", "")
+	content = strings.ReplaceAll(content, "```", "")
+	content = strings.TrimSpace(content)
+
+	start := strings.Index(content, "{")
+	end := strings.LastIndex(content, "}")
+	if start >= 0 && end > start {
+		content = content[start : end+1]
+	}
+
+	var recap ChapterRecap
+	if err := json.Unmarshal([]byte(content), &recap); err != nil {
+		// 如果 JSON 解析失败，至少把内容当作纯文本摘要
+		return &ChapterRecap{
+			Summary: strings.TrimSpace(content),
+		}, nil
+	}
+	return &recap, nil
+}
+
+// ============================================================
+// Phase 7-2: AI 重复漫画智能判定
+// ============================================================
+
+// AIDuplicateVerification AI 判断两本漫画是否真正重复
+type AIDuplicateVerification struct {
+	IsDuplicate bool   `json:"isDuplicate"` // AI 判断是否为同一作品
+	Confidence  string `json:"confidence"`  // high/medium/low
+	Reason      string `json:"reason"`      // AI 判断理由
+}
+
+// AIVerifyDuplicates 使用 AI 分析一组疑似重复的漫画，判断是否真正重复。
+// 通过元数据 + 可选封面对比来判断。
+func AIVerifyDuplicates(cfg AIConfig, candidates []map[string]string, coverDataList [][]byte, targetLang string) ([]AIDuplicateVerification, error) {
+	if !cfg.EnableCloudAI || cfg.CloudAPIKey == "" {
+		return nil, fmt.Errorf("cloud AI not configured")
+	}
+
+	langName := "Chinese (简体中文)"
+	if targetLang == "en" {
+		langName = "English"
+	}
+
+	systemPrompt := fmt.Sprintf(`You are an expert at identifying duplicate manga/comic files. Given metadata of comics in a suspected duplicate group, analyze if they are truly the same work or different works.
+
+Consider:
+- Different volume numbers of the SAME series are NOT duplicates
+- Same work but different format (CBZ vs PDF vs ZIP) ARE duplicates
+- Same work but different resolution/quality ARE duplicates
+- Same work with slightly different filenames ARE duplicates
+- Different translations of the same title ARE duplicates
+- Completely different works that happen to have similar titles are NOT duplicates
+
+Return a JSON array with one verdict per pair comparison in %s:
+[
+  {"isDuplicate": true/false, "confidence": "high/medium/low", "reason": "brief reason"}
+]
+
+The array should have exactly one element representing the overall group verdict.`, langName)
+
+	var lines []string
+	for i, c := range candidates {
+		line := fmt.Sprintf("Comic %d: filename=%s | title=%s | size=%s | pages=%s",
+			i+1, c["filename"], c["title"], c["fileSize"], c["pageCount"])
+		lines = append(lines, line)
+	}
+
+	userPrompt := fmt.Sprintf("Analyze these comics in a suspected duplicate group:\n\n%s\n\nAre they truly duplicates? Return a JSON array.", strings.Join(lines, "\n"))
+
+	opts := &LLMCallOptions{
+		Scenario:  "ai_verify_duplicate",
+		MaxTokens: 300,
+	}
+
+	// 如果有封面数据且支持 Vision，附加封面图片
+	if len(coverDataList) >= 2 {
+		if preset, ok := ProviderPresets[cfg.CloudProvider]; ok && preset.SupportsVision {
+			var images []ImageContent
+			for _, data := range coverDataList {
+				if len(data) > 0 {
+					mimeType := "image/jpeg"
+					if len(data) > 4 && data[0] == 0x89 && data[1] == 0x50 {
+						mimeType = "image/png"
+					}
+					images = append(images, ImageContent{
+						Base64:   encodeBase64(data),
+						MimeType: mimeType,
+					})
+				}
+				if len(images) >= 2 {
+					break // 最多比较 2 张封面
+				}
+			}
+			if len(images) >= 2 {
+				opts.Images = images
+				userPrompt += "\n\nCover images of the comics are also provided for visual comparison."
+			}
+		}
+	}
+
+	content, err := CallCloudLLM(cfg, systemPrompt, userPrompt, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	// 清理并解析 JSON
+	content = strings.ReplaceAll(content, "```json", "")
+	content = strings.ReplaceAll(content, "```", "")
+	content = strings.TrimSpace(content)
+
+	start := strings.Index(content, "[")
+	end := strings.LastIndex(content, "]")
+	if start >= 0 && end > start {
+		content = content[start : end+1]
+	}
+
+	var results []AIDuplicateVerification
+	if err := json.Unmarshal([]byte(content), &results); err != nil {
+		return nil, fmt.Errorf("failed to parse AI duplicate verification: %w", err)
+	}
+
+	return results, nil
+}
+
+// ============================================================
+// Phase 7-3: AI 阅读目标推荐
+// ============================================================
+
+// AIGoalRecommendation AI 推荐的阅读目标
+type AIGoalRecommendation struct {
+	DailyMins     int    `json:"dailyMins"`     // 推荐每日阅读分钟数
+	DailyBooks    int    `json:"dailyBooks"`    // 推荐每日阅读本数
+	WeeklyMins    int    `json:"weeklyMins"`    // 推荐每周阅读分钟数
+	WeeklyBooks   int    `json:"weeklyBooks"`   // 推荐每周阅读本数
+	Reasoning     string `json:"reasoning"`     // AI 推荐理由
+	Encouragement string `json:"encouragement"` // 鼓励语
+}
+
+// AIRecommendGoal 根据用户历史阅读数据，AI 推荐合理的阅读目标。
+func AIRecommendGoal(cfg AIConfig, statsData map[string]interface{}, currentGoals []map[string]interface{}, targetLang string) (*AIGoalRecommendation, error) {
+	if !cfg.EnableCloudAI || cfg.CloudAPIKey == "" {
+		return nil, fmt.Errorf("cloud AI not configured")
+	}
+
+	langName := "Chinese (简体中文)"
+	if targetLang == "en" {
+		langName = "English"
+	}
+
+	systemPrompt := fmt.Sprintf(`You are a reading coach. Based on the user's reading history and current habits, suggest optimal daily and weekly reading goals in %s.
+
+Rules:
+- Be realistic: base suggestions on their actual reading patterns
+- If they read ~30 min/day, suggest 35-40 min (slight stretch)
+- If they barely read, suggest a gentle 15-20 min/day start
+- Weekly goal should be slightly more ambitious than daily*7 (to encourage weekend reading)
+- Book goals: only suggest if they finish books regularly; otherwise set to 0
+- Provide encouraging reasoning
+- Return ONLY a valid JSON object
+
+Response format:
+{
+  "dailyMins": 30,
+  "dailyBooks": 0,
+  "weeklyMins": 240,
+  "weeklyBooks": 2,
+  "reasoning": "Based on your reading patterns...",
+  "encouragement": "A motivating message"
+}`, langName)
+
+	statsJSON, _ := json.MarshalIndent(statsData, "", "  ")
+	goalsJSON, _ := json.MarshalIndent(currentGoals, "", "  ")
+
+	userPrompt := fmt.Sprintf("User's reading statistics:\n```json\n%s\n```\n\nCurrent goals (if any):\n```json\n%s\n```\n\nRecommend optimal reading goals. Return a JSON object.", string(statsJSON), string(goalsJSON))
+
+	content, err := CallCloudLLM(cfg, systemPrompt, userPrompt, &LLMCallOptions{
+		Scenario:  "ai_recommend_goal",
+		MaxTokens: 400,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// 清理并解析 JSON
+	content = strings.ReplaceAll(content, "```json", "")
+	content = strings.ReplaceAll(content, "```", "")
+	content = strings.TrimSpace(content)
+
+	start := strings.Index(content, "{")
+	end := strings.LastIndex(content, "}")
+	if start >= 0 && end > start {
+		content = content[start : end+1]
+	}
+
+	var rec AIGoalRecommendation
+	if err := json.Unmarshal([]byte(content), &rec); err != nil {
+		return nil, fmt.Errorf("failed to parse AI goal recommendation: %w", err)
+	}
+	return &rec, nil
 }
 
 // 页面翻译缓存

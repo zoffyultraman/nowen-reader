@@ -370,13 +370,233 @@ func SetComicCategories(comicID string, categorySlugs []string) error {
 // ============================================================
 
 // normalizeTitle 标准化标题用于比较。
+// 增强版：提取核心标题，去除卷号、扫图组、作者等元信息。
 func normalizeTitle(title string) string {
-	s := strings.ToLower(title)
-	replacer := strings.NewReplacer(" ", "", "_", "", "-", "", ".", "")
+	// 第一步：如果包含方括号，尝试提取核心书名部分
+	core := extractCoreTitle(title)
+	if core == "" {
+		core = title
+	}
+
+	// 第二步：去除常见卷号后缀模式（在小写化之前处理中文模式）
+	core = removeVolumePatterns(core)
+
+	// 第三步：统一小写，去除标点和空白
+	s := strings.ToLower(core)
+	replacer := strings.NewReplacer(" ", "", "_", "", "-", "", ".", "", "~", "", "　", "")
 	s = replacer.Replace(s)
+
+	// 去掉残留的括号字符
 	for _, ch := range []string{"(", ")", "[", "]", "{", "}", "【", "】", "（", "）", "「", "」", "『", "』"} {
 		s = strings.ReplaceAll(s, ch, "")
 	}
-	s = strings.TrimRight(s, "0123456789")
+
+	// 只去掉末尾 1-3 位数字（卷号），保留 4 位及以上的数字（可能是年份）
+	for i := len(s) - 1; i >= 0; i-- {
+		if s[i] >= '0' && s[i] <= '9' {
+			continue
+		}
+		digitLen := len(s) - 1 - i
+		if digitLen >= 1 && digitLen <= 3 {
+			s = s[:i+1]
+		}
+		break
+	}
 	return strings.TrimSpace(s)
+}
+
+// extractCoreTitle 从包含方括号的文件名中提取核心标题。
+// 典型格式:
+//   - "[扫图组][作品名01][作者][出版社]" → "作品名01"
+//   - "[Group] Title Vol.01 [Author]" → "Title Vol.01"
+//   - "作品名 第3巻" → "作品名 第3巻" (无方括号直接返回)
+func extractCoreTitle(title string) string {
+	if !strings.ContainsAny(title, "[]【】「」『』") {
+		return title
+	}
+
+	// 分割出方括号内外的所有部分
+	type segment struct {
+		text      string
+		inBracket bool
+	}
+	var segments []segment
+	inBracket := false
+	var current strings.Builder
+	for _, r := range title {
+		switch r {
+		case '[', '【', '「', '『':
+			if current.Len() > 0 {
+				segments = append(segments, segment{text: strings.TrimSpace(current.String()), inBracket: inBracket})
+				current.Reset()
+			}
+			inBracket = true
+		case ']', '】', '」', '』':
+			if current.Len() > 0 {
+				segments = append(segments, segment{text: strings.TrimSpace(current.String()), inBracket: inBracket})
+				current.Reset()
+			}
+			inBracket = false
+		default:
+			current.WriteRune(r)
+		}
+	}
+	if current.Len() > 0 {
+		segments = append(segments, segment{text: strings.TrimSpace(current.String()), inBracket: inBracket})
+	}
+
+	// 策略：找含卷号的CJK部分（最高优先级）→ 最长CJK部分 → 最长非标签部分
+	type candidate struct {
+		text     string
+		score    int // 越高越好
+		cjkCount int
+	}
+	var candidates []candidate
+	for _, seg := range segments {
+		t := strings.TrimSpace(seg.text)
+		if t == "" {
+			continue
+		}
+		lp := strings.ToLower(t)
+		// 跳过明显的标签
+		if lp == "comic" || lp == "manga" || lp == "漫画" || lp == "同人" {
+			continue
+		}
+		// 跳过看起来是编号的短字符串
+		if isLikelyCode(t) {
+			continue
+		}
+
+		cc := cjkRuneCount(t)
+		score := cc * 10 // CJK 字符加权
+
+		// 含卷号的加分（说明是书名+卷号组合）
+		if hasVolumeIndicator(t) {
+			score += 50
+		}
+
+		// 方括号外的长文本更可能是标题
+		if !seg.inBracket {
+			score += 20
+		}
+
+		candidates = append(candidates, candidate{text: t, score: score, cjkCount: cc})
+	}
+
+	if len(candidates) == 0 {
+		return title
+	}
+
+	// 选分数最高的
+	best := candidates[0]
+	for _, c := range candidates[1:] {
+		if c.score > best.score {
+			best = c
+		}
+	}
+	return best.text
+}
+
+// hasVolumeIndicator 检查字符串是否包含卷号指示符
+func hasVolumeIndicator(s string) bool {
+	lower := strings.ToLower(s)
+	indicators := []string{
+		"vol.", "vol ", "volume", " v0", " v1", " v2", " v3", " v4", " v5", " v6", " v7", " v8", " v9",
+		"第", "巻", "巻", "卷", "集", "話", "话", "册", "編", "编",
+		" ch.", " ch ", "chapter",
+	}
+	for _, ind := range indicators {
+		if strings.Contains(lower, ind) {
+			return true
+		}
+	}
+	// 末尾跟着数字
+	trimmed := strings.TrimSpace(s)
+	if len(trimmed) > 0 {
+		last := trimmed[len(trimmed)-1]
+		if last >= '0' && last <= '9' {
+			return true
+		}
+	}
+	return false
+}
+
+// removeVolumePatterns 去除常见的卷号/话号后缀模式
+func removeVolumePatterns(s string) string {
+	lower := strings.ToLower(s)
+
+	// 处理模式列表（从长到短匹配，避免误删）
+	patterns := []struct {
+		prefix string // 小写匹配用
+		sep    bool   // 是否需要前面有空格/分隔符
+	}{
+		{" volume ", false},
+		{" vol.", false},
+		{" vol ", false},
+		{" chapter ", false},
+		{" ch.", false},
+		{" 第", false},
+	}
+
+	for _, p := range patterns {
+		idx := strings.LastIndex(lower, p.prefix)
+		if idx > 0 {
+			return strings.TrimSpace(s[:idx])
+		}
+	}
+
+	// 处理 "_v01" "v01" 模式（v + 数字）
+	for i := len(lower) - 1; i >= 1; i-- {
+		if lower[i] >= '0' && lower[i] <= '9' {
+			continue
+		}
+		if lower[i] == 'v' && i > 0 && (lower[i-1] == ' ' || lower[i-1] == '_' || lower[i-1] == '-' || lower[i-1] == '.') {
+			digitLen := len(lower) - 1 - i
+			if digitLen >= 1 && digitLen <= 3 {
+				return strings.TrimSpace(s[:i-1])
+			}
+		}
+		break
+	}
+
+	return s
+}
+
+// LevenshteinDistance 计算两个字符串的编辑距离（用于模糊匹配）
+func LevenshteinDistance(a, b string) int {
+	ra := []rune(a)
+	rb := []rune(b)
+	la, lb := len(ra), len(rb)
+	if la == 0 {
+		return lb
+	}
+	if lb == 0 {
+		return la
+	}
+
+	// 使用单行 DP 优化空间
+	prev := make([]int, lb+1)
+	curr := make([]int, lb+1)
+	for j := 0; j <= lb; j++ {
+		prev[j] = j
+	}
+	for i := 1; i <= la; i++ {
+		curr[0] = i
+		for j := 1; j <= lb; j++ {
+			cost := 1
+			if ra[i-1] == rb[j-1] {
+				cost = 0
+			}
+			curr[j] = min(curr[j-1]+1, min(prev[j]+1, prev[j-1]+cost))
+		}
+		prev, curr = curr, prev
+	}
+	return prev[lb]
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }

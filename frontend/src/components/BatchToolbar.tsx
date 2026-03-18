@@ -9,6 +9,10 @@ import {
   Tag,
   Layers,
   CheckSquare,
+  FolderPlus,
+  FolderInput,
+  Sparkles,
+  Loader2,
 } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
 import { useCategories, ApiCategory } from "@/hooks/useComics";
@@ -21,6 +25,12 @@ interface BatchToolbarProps {
   onUnfavorite: () => void;
   onAddTags: (tags: string[]) => void;
   onSetCategory?: (categorySlugs: string[]) => void;
+  onMergeGroup?: () => void;
+  onAddToGroup?: () => void;
+  onAISuggestTags?: () => void;
+  aiTagsLoading?: boolean;
+  onAISuggestCategory?: () => void;
+  aiCategoryLoading?: boolean;
 }
 
 export default function BatchToolbar({
@@ -31,6 +41,12 @@ export default function BatchToolbar({
   onUnfavorite,
   onAddTags,
   onSetCategory,
+  onMergeGroup,
+  onAddToGroup,
+  onAISuggestTags,
+  aiTagsLoading,
+  onAISuggestCategory,
+  aiCategoryLoading,
 }: BatchToolbarProps) {
   const [showTagInput, setShowTagInput] = useState(false);
   const [tagInput, setTagInput] = useState("");
@@ -85,6 +101,56 @@ export default function BatchToolbar({
               <span className="hidden sm:inline">{t.batch.tags}</span>
             </button>
 
+            {/* AI Suggest Tags */}
+            {onAISuggestTags && (
+              <button
+                onClick={onAISuggestTags}
+                disabled={aiTagsLoading}
+                className={`flex h-8 items-center gap-1.5 rounded-lg px-3 text-xs font-medium transition-colors ${
+                  aiTagsLoading
+                    ? "bg-amber-500/20 text-amber-400 cursor-wait"
+                    : "bg-card text-amber-400 hover:bg-amber-500/20"
+                }`}
+                title={t.batch.aiSuggestTags || "AI 标签"}
+              >
+                {aiTagsLoading ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Sparkles className="h-3.5 w-3.5" />
+                )}
+                <span className="hidden sm:inline">
+                  {aiTagsLoading
+                    ? (t.batch.aiSuggestTagsRunning || "AI 标签分析中...")
+                    : (t.batch.aiSuggestTags || "AI 标签")}
+                </span>
+              </button>
+            )}
+
+            {/* AI Suggest Category */}
+            {onAISuggestCategory && (
+              <button
+                onClick={onAISuggestCategory}
+                disabled={aiCategoryLoading}
+                className={`flex h-8 items-center gap-1.5 rounded-lg px-3 text-xs font-medium transition-colors ${
+                  aiCategoryLoading
+                    ? "bg-emerald-500/20 text-emerald-400 cursor-wait"
+                    : "bg-card text-emerald-400 hover:bg-emerald-500/20"
+                }`}
+                title={t.batch.aiSuggestCategory || "AI 分类"}
+              >
+                {aiCategoryLoading ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Layers className="h-3.5 w-3.5" />
+                )}
+                <span className="hidden sm:inline">
+                  {aiCategoryLoading
+                    ? (t.batch.aiSuggestCategoryRunning || "AI 分类中...")
+                    : (t.batch.aiSuggestCategory || "AI 分类")}
+                </span>
+              </button>
+            )}
+
 
             {/* Set Category */}
             {onSetCategory && (
@@ -99,6 +165,30 @@ export default function BatchToolbar({
               >
                 <Layers className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">{t.batch.category || "分类"}</span>
+              </button>
+            )}
+
+            {/* Merge to Group */}
+            {onMergeGroup && (
+              <button
+                onClick={onMergeGroup}
+                className="flex h-8 items-center gap-1.5 rounded-lg bg-card px-3 text-xs font-medium text-accent transition-colors hover:bg-accent/20"
+                title={t.comicGroup?.mergeSelected || "合并为分组"}
+              >
+                <FolderPlus className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">{t.comicGroup?.mergeSelected || "合并为分组"}</span>
+              </button>
+            )}
+
+            {/* Add to Existing Group */}
+            {onAddToGroup && (
+              <button
+                onClick={onAddToGroup}
+                className="flex h-8 items-center gap-1.5 rounded-lg bg-card px-3 text-xs font-medium text-muted transition-colors hover:bg-card-hover hover:text-foreground"
+                title={t.comicGroup?.addToGroup || "加入分组"}
+              >
+                <FolderInput className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">{t.comicGroup?.addToGroup || "加入分组"}</span>
               </button>
             )}
 

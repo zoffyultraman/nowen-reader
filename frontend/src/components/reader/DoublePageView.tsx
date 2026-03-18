@@ -17,6 +17,8 @@ interface DoublePageViewProps {
   fitMode?: FitMode;
   containerWidth?: string;
   preloadCount?: number;
+  /** 翻页超出边界时触发 */
+  onBoundaryReached?: (direction: "next" | "prev") => void;
 }
 
 export default function DoublePageView({
@@ -30,6 +32,7 @@ export default function DoublePageView({
   fitMode = "container",
   containerWidth,
   preloadCount = 4,
+  onBoundaryReached,
 }: DoublePageViewProps) {
   const [loadedLeft, setLoadedLeft] = useState(false);
   const [loadedRight, setLoadedRight] = useState(false);
@@ -70,10 +73,12 @@ export default function DoublePageView({
     const goBack = direction === "ltr" ? ratio <= 0.3 : ratio >= 0.7;
 
     if (goForward) {
-      onPageChange(Math.min(pages.length - 1, spreadIndex + 2));
+      if (spreadIndex + 2 >= pages.length) onBoundaryReached?.("next");
+      else onPageChange(Math.min(pages.length - 1, spreadIndex + 2));
     }
     if (goBack) {
-      onPageChange(Math.max(0, spreadIndex - 2));
+      if (spreadIndex <= 0) onBoundaryReached?.("prev");
+      else onPageChange(Math.max(0, spreadIndex - 2));
     }
   };
 

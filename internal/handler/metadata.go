@@ -461,9 +461,6 @@ func (h *MetadataHandler) TranslateBatch(c *gin.Context) {
 			if detail.Description != "" {
 				fields["description"] = detail.Description
 			}
-			if detail.SeriesName != "" {
-				fields["seriesName"] = detail.SeriesName
-			}
 
 			if len(fields) > 0 {
 				result, err := service.TranslateMetadataFields(aiCfg, fields, body.TargetLang)

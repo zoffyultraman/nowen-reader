@@ -27,8 +27,6 @@ type ComicMetadata struct {
 	Description string `json:"description,omitempty"`
 	Language    string `json:"language,omitempty"`
 	Genre       string `json:"genre,omitempty"`
-	SeriesName  string `json:"seriesName,omitempty"`
-	SeriesIndex *int   `json:"seriesIndex,omitempty"`
 	CoverURL    string `json:"coverUrl,omitempty"`
 	Source      string `json:"source"`
 }
@@ -162,18 +160,11 @@ func ParseComicInfoXML(xmlContent string) *ComicMetadata {
 	m.Description = getValue("Summary")
 	m.Language = getValue("LanguageISO")
 	m.Genre = getValue("Genre")
-	m.SeriesName = getValue("Series")
 
 	if y := getValue("Year"); y != "" {
 		var year int
 		if _, err := fmt.Sscanf(y, "%d", &year); err == nil {
 			m.Year = &year
-		}
-	}
-	if n := getValue("Number"); n != "" {
-		var idx int
-		if _, err := fmt.Sscanf(n, "%d", &idx); err == nil {
-			m.SeriesIndex = &idx
 		}
 	}
 
@@ -227,7 +218,6 @@ func ExtractEpubMetadata(filePath string) (*ComicMetadata, error) {
 		Description: epubMeta.Description,
 		Language:    epubMeta.Language,
 		Genre:       epubMeta.Genre,
-		SeriesName:  epubMeta.Title,
 		Source:      "epub_opf",
 	}
 
@@ -394,7 +384,6 @@ func searchAniListWithType(query, lang, mediaType, sourceName string) []ComicMet
 			Year:        m.StartDate.Year,
 			Description: desc,
 			Genre:       genre,
-			SeriesName:  m.Title.Romaji,
 			CoverURL:    m.CoverImage.Large,
 			Source:      sourceName,
 		})
@@ -539,7 +528,6 @@ func searchBangumiWithType(query, lang string, bangumiType int, sourceName strin
 			Year:        year,
 			Description: s.Summary,
 			Genre:       strings.Join(tagNames, ", "),
-			SeriesName:  s.Name,
 			CoverURL:    coverURL,
 			Source:      sourceName,
 		})
@@ -664,7 +652,6 @@ func SearchMangaDex(query, lang string) []ComicMetadata {
 			Description: desc,
 			Genre:       genre,
 			Language:    attrs.OriginalLanguage,
-			SeriesName:  title,
 			CoverURL:    coverURL,
 			Source:      "mangadex",
 		})
@@ -766,7 +753,6 @@ func SearchMangaUpdates(query, lang string) []ComicMetadata {
 			Year:        year,
 			Description: stripHTML(rec.Description),
 			Genre:       genre,
-			SeriesName:  rec.Title,
 			CoverURL:    rec.Image.URL.Original,
 			Source:      "mangaupdates",
 		})
@@ -857,7 +843,6 @@ func SearchKitsu(query, lang string) []ComicMetadata {
 			Year:        year,
 			Description: attrs.Synopsis,
 			Publisher:   attrs.Serialization,
-			SeriesName:  attrs.CanonicalTitle,
 			CoverURL:    coverURL,
 			Source:      "kitsu",
 		})
@@ -952,7 +937,6 @@ func SearchGoogleBooks(query, lang string) []ComicMetadata {
 			Description: vi.Description,
 			Genre:       genre,
 			Language:    vi.Language,
-			SeriesName:  vi.Title,
 			CoverURL:    coverURL,
 			Source:      "googlebooks",
 		})
@@ -1061,17 +1045,9 @@ func ApplyMetadata(comicID string, meta ComicMetadata, lang string, overwrite bo
 	if meta.Genre != "" && shouldUpdate(existing.Genre) {
 		updates["genre"] = meta.Genre
 	}
-	if meta.SeriesName != "" && shouldUpdate(existing.SeriesName) {
-		updates["seriesName"] = meta.SeriesName
-	}
 	if meta.Year != nil {
 		if overwrite || existing.Year == nil {
 			updates["year"] = *meta.Year
-		}
-	}
-	if meta.SeriesIndex != nil {
-		if overwrite || existing.SeriesIndex == nil {
-			updates["seriesIndex"] = *meta.SeriesIndex
 		}
 	}
 	if meta.Source != "" {

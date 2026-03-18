@@ -95,9 +95,6 @@ func (h *TagTranslateHandler) TranslateMetadata(c *gin.Context) {
 		if comic.Description != "" {
 			fields["description"] = comic.Description
 		}
-		if comic.SeriesName != "" {
-			fields["seriesName"] = comic.SeriesName
-		}
 		if comic.Genre != "" {
 			fields["genre"] = comic.Genre
 		}

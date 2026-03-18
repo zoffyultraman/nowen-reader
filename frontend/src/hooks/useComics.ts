@@ -12,7 +12,7 @@
  */
 
 // 类型导出
-export type { ApiComicTag, ApiComic, ComicsResponse, ApiCategory } from "./useComicTypes";
+export type { ApiComicTag, ApiComic, ComicsResponse, ApiCategory, ComicGroup, ComicGroupDetail, GroupComicItem, AutoDetectGroup } from "./useComicTypes";
 export type { ComicMetadataUpdate } from "@/api/comics";
 
 // Hook 导出

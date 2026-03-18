@@ -95,6 +95,45 @@ var Migrations = []Migration{
 			`CREATE TRIGGER IF NOT EXISTS "Comic_au_fts" AFTER UPDATE ON "Comic" BEGIN INSERT INTO "ComicFTS"("ComicFTS", rowid, title, author, filename, description, seriesName, genre) VALUES ('delete', old.rowid, old.title, old.author, old.filename, old.description, old.seriesName, old.genre); INSERT INTO "ComicFTS"(rowid, title, author, filename, description, seriesName, genre) VALUES (new.rowid, new.title, new.author, new.filename, new.description, new.seriesName, new.genre); END`,
 		}, "\n"),
 	},
+	{
+		Version:     9,
+		Description: "Add ComicGroup and ComicGroupItem tables for custom comic merging",
+		SQL: strings.Join([]string{
+			`CREATE TABLE IF NOT EXISTS "ComicGroup" (
+				"id"        INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+				"name"      TEXT NOT NULL,
+				"coverUrl"  TEXT NOT NULL DEFAULT '',
+				"sortOrder" INTEGER NOT NULL DEFAULT 0,
+				"createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+				"updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+			);`,
+			`CREATE INDEX IF NOT EXISTS "ComicGroup_name_idx" ON "ComicGroup"("name");`,
+			`CREATE TABLE IF NOT EXISTS "ComicGroupItem" (
+				"groupId" INTEGER NOT NULL,
+				"comicId" TEXT NOT NULL,
+				"sortIndex" INTEGER NOT NULL DEFAULT 0,
+				PRIMARY KEY ("groupId", "comicId"),
+				CONSTRAINT "ComicGroupItem_groupId_fkey" FOREIGN KEY ("groupId")
+					REFERENCES "ComicGroup" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+				CONSTRAINT "ComicGroupItem_comicId_fkey" FOREIGN KEY ("comicId")
+					REFERENCES "Comic" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+			);`,
+			`CREATE INDEX IF NOT EXISTS "ComicGroupItem_comicId_idx" ON "ComicGroupItem"("comicId");`,
+		}, "\n"),
+	},
+	{
+		Version:     10,
+		Description: "Cleanup orphaned ComicGroupItem records where ComicGroup was deleted but CASCADE did not fire",
+		SQL:         `DELETE FROM "ComicGroupItem" WHERE "groupId" NOT IN (SELECT "id" FROM "ComicGroup")`,
+	},
+	{
+		Version:     11,
+		Description: "Add md5Hash field to Comic for fast duplicate detection",
+		SQL: strings.Join([]string{
+			`ALTER TABLE "Comic" ADD COLUMN "md5Hash" TEXT NOT NULL DEFAULT '';`,
+			`CREATE INDEX IF NOT EXISTS "Comic_md5Hash_idx" ON "Comic"("md5Hash");`,
+		}, "\n"),
+	},
 }
 
 // ensureMigrationsTable creates the migrations tracking table.

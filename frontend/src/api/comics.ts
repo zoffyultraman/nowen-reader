@@ -260,8 +260,6 @@ export interface ComicMetadataUpdate {
   description?: string;
   language?: string;
   genre?: string;
-  seriesName?: string;
-  seriesIndex?: number | null;
 }
 
 /**

@@ -4,7 +4,6 @@ import { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import ComicCard from "@/components/ComicCard";
-import SeriesCard from "@/components/SeriesCard";
 import TagFilter from "@/components/TagFilter";
 import StatsBar from "@/components/StatsBar";
 import CategoryFilter from "@/components/CategoryFilter";
@@ -21,11 +20,19 @@ import {
 } from "@/hooks/useComics";
 import { Comic } from "@/types/comic";
 import { useTranslation, useLocale } from "@/lib/i18n";
-import { CheckSquare, CheckCheck, LayoutGrid, List, Copy, Upload, Download, BookMarked, Image, BookOpen, Brain, Loader2, Layers } from "lucide-react";
+import { CheckSquare, CheckCheck, LayoutGrid, List, Copy, Upload, BookMarked, Image, BookOpen, Brain, Loader2, Layers, Trash2, X } from "lucide-react";
 import DuplicateDetector from "@/components/DuplicateDetector";
+import GroupCard from "@/components/GroupCard";
+import MergeGroupDialog from "@/components/MergeGroupDialog";
+import AutoDetectPanel from "@/components/AutoDetectPanel";
+import AddToGroupDialog from "@/components/AddToGroupDialog";
+import ComicContextMenu from "@/components/ComicContextMenu";
+import GroupContextMenu from "@/components/GroupContextMenu";
 import { useToast } from "@/components/Toast";
 import { useAIStatus } from "@/hooks/useAIStatus";
-import { useSeriesList } from "@/hooks/useSeries";
+import type { ComicGroup } from "@/hooks/useComicTypes";
+import { fetchGroups, fetchGroupedComicMap, createGroup, updateGroup, deleteGroup } from "@/api/groups";
+import { toggleComicFavorite, deleteComicById } from "@/api/comics";
 
 const DEFAULT_PAGE_SIZE = 24;
 
@@ -60,6 +67,7 @@ function apiToComic(api: ApiComic): Comic {
     totalReadTime: api.totalReadTime,
     categories: api.categories || [],
     filename: api.filename,
+    author: api.author || undefined,
   };
 }
 
@@ -97,12 +105,53 @@ export default function Home() {
   // Batch selection
   const [batchMode, setBatchMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [selectedGroupIds, setSelectedGroupIds] = useState<Set<number>>(new Set());
 
   // Duplicate detection
   const [showDuplicates, setShowDuplicates] = useState(false);
 
+  // Comic Groups (自定义合并分组)
+  const [groups, setGroups] = useState<ComicGroup[]>([]);
+  const [groupedComicMap, setGroupedComicMap] = useState<Record<string, number[]>>({});
+  const [showGroupView, setShowGroupView] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("showGroupView") === "true";
+    }
+    return false;
+  });
+  const [showMergeDialog, setShowMergeDialog] = useState(false);
+  const [showAutoDetect, setShowAutoDetect] = useState(false);
+  const [showAddToGroup, setShowAddToGroup] = useState(false);
+
+  // AI 批量标签状态
+  const [aiTagsLoading, setAiTagsLoading] = useState(false);
+  const [aiCategoryLoading, setAiCategoryLoading] = useState(false);
+
+  // 分组视图分页
+  const [groupPage, setGroupPage] = useState(1);
+  const GROUP_PAGE_SIZE = 24;
+
+  // 右键菜单状态
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    comic: Comic;
+  } | null>(null);
+  // 右键"加入分组"时暂存的漫画ID
+  const [contextAddToGroupIds, setContextAddToGroupIds] = useState<string[] | null>(null);
+
+  // 分组右键菜单状态
+  const [groupContextMenu, setGroupContextMenu] = useState<{
+    x: number;
+    y: number;
+    group: ComicGroup;
+  } | null>(null);
+  // 分组重命名对话框
+  const [renameGroup, setRenameGroup] = useState<{ id: number; name: string } | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+
   // 内容类型 Tab
-  const [contentType, setContentType] = useState<"" | "comic" | "novel" | "series">("");
+  const [contentType, setContentType] = useState<"" | "comic" | "novel">("");
 
   // AI 语义搜索 handler
   const handleAiSearch = useCallback(async (query: string) => {
@@ -157,6 +206,29 @@ export default function Home() {
     localStorage.setItem("viewMode", viewMode);
   }, [viewMode]);
 
+  // 分组视图持久化
+  useEffect(() => {
+    localStorage.setItem("showGroupView", String(showGroupView));
+  }, [showGroupView]);
+
+  // 加载分组数据
+  const loadGroups = useCallback(async () => {
+    const [grps, gmap] = await Promise.all([fetchGroups(), fetchGroupedComicMap()]);
+    setGroups(grps);
+    setGroupedComicMap(gmap);
+  }, []);
+
+  // 分组视图分页计算
+  const groupTotalPages = Math.max(1, Math.ceil(groups.length / GROUP_PAGE_SIZE));
+  const pagedGroups = useMemo(() => {
+    const start = (groupPage - 1) * GROUP_PAGE_SIZE;
+    return groups.slice(start, start + GROUP_PAGE_SIZE);
+  }, [groups, groupPage, GROUP_PAGE_SIZE]);
+
+  useEffect(() => {
+    loadGroups();
+  }, [loadGroups]);
+
   // 分页变化时同步 URL
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -189,25 +261,27 @@ export default function Home() {
     sortBy: sortBy || undefined,
     sortOrder: sortOrder || undefined,
     category: selectedCategory || undefined,
-    contentType: (contentType && contentType !== "series") ? contentType : undefined,
-
+    contentType: contentType || undefined,
+    excludeGrouped: showGroupView || undefined,
   });
   const { categories, refetch: refetchCategories, initCategories } = useCategories();
 
-  // 系列列表
-  const { series: seriesList, loading: seriesLoading, total: seriesTotal, totalPages: seriesTotalPages } = useSeriesList({
-    search: contentType === "series" ? debouncedSearch || undefined : undefined,
-    page: contentType === "series" ? currentPage : undefined,
-    pageSize: contentType === "series" ? pageSize : undefined,
-  });
-
   // 根据当前 contentType 决定分页总页数
-  const effectiveTotalPages = contentType === "series" ? seriesTotalPages : totalPages;
+  const effectiveTotalPages = showGroupView ? groupTotalPages : totalPages;
+  // 统一分页操作：分组视图用 groupPage，漫画视图用 currentPage
+  const activePage = showGroupView ? groupPage : currentPage;
+  const setActivePage = showGroupView ? setGroupPage : setCurrentPage;
 
   // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1);
+    setGroupPage(1);
   }, [debouncedSearch, selectedTags, favoritesOnly, selectedCategory, sortBy, sortOrder, contentType]);
+
+  // 分组视图切换时重置分组分页
+  useEffect(() => {
+    setGroupPage(1);
+  }, [showGroupView]);
 
   // Use real comics if API has been initialized (even if current page is empty due to filters)
   const useRealData = apiTotal > 0 || apiComics.length > 0 || initializedRef.current;
@@ -299,17 +373,52 @@ export default function Home() {
   }, []);
 
   const handleSelectAll = useCallback(() => {
-    if (selectedIds.size === sortedComics.length) {
+    const allComicIds = new Set(sortedComics.map((c) => c.id));
+    const allGroupIds = showGroupView && currentPage === 1 && !debouncedSearch
+      ? new Set(groups.map((g) => g.id))
+      : new Set<number>();
+    const allComicsSelected = selectedIds.size === allComicIds.size;
+    const allGroupsSelected = allGroupIds.size === 0 || selectedGroupIds.size === allGroupIds.size;
+    if (allComicsSelected && allGroupsSelected) {
       setSelectedIds(new Set());
+      setSelectedGroupIds(new Set());
     } else {
-      setSelectedIds(new Set(sortedComics.map((c) => c.id)));
+      setSelectedIds(allComicIds);
+      setSelectedGroupIds(allGroupIds);
     }
-  }, [sortedComics, selectedIds.size]);
+  }, [sortedComics, selectedIds.size, selectedGroupIds.size, groups, showGroupView, currentPage, debouncedSearch]);
 
   const exitBatchMode = useCallback(() => {
     setBatchMode(false);
     setSelectedIds(new Set());
+    setSelectedGroupIds(new Set());
   }, []);
+
+  // 分组批量选择
+  const toggleGroupSelect = useCallback((id: number) => {
+    setSelectedGroupIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  // 分组批量删除
+  const handleBatchDeleteGroups = useCallback(async () => {
+    const ids = Array.from(selectedGroupIds);
+    let deleted = 0;
+    for (const id of ids) {
+      const ok = await deleteGroup(id);
+      if (ok) deleted++;
+    }
+    if (deleted > 0) {
+      await loadGroups();
+      await refetch();
+      toast.success((t.comicGroup?.deleteSuccess || "分组已删除") + ` (${deleted})`);
+    }
+    setSelectedGroupIds(new Set());
+  }, [selectedGroupIds, loadGroups, refetch, toast, t]);
 
   const handleBatchDelete = useCallback(async () => {
     const ids = Array.from(selectedIds);
@@ -339,6 +448,123 @@ export default function Home() {
     [selectedIds, exitBatchMode, refetch]
   );
 
+  // AI 批量标签标注
+  const handleAIBatchSuggestTags = useCallback(async () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    setAiTagsLoading(true);
+    try {
+      const res = await fetch("/api/ai/batch-suggest-tags", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          comicIds: ids,
+          targetLang: locale === "en" ? "en" : "zh",
+          apply: true,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Request failed");
+      }
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder();
+      if (!reader) throw new Error("No reader");
+      let successCount = 0;
+      let failCount = 0;
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split("\n");
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          try {
+            const data = JSON.parse(line.slice(6));
+            if (data.done) {
+              successCount = data.success || successCount;
+              failCount = data.failed || failCount;
+            } else if (data.suggestedTags) {
+              successCount++;
+            } else if (data.error) {
+              failCount++;
+            }
+          } catch {
+            // ignore
+          }
+        }
+      }
+      toast.success(
+        `${t.batch?.aiSuggestTagsDone || "AI 标签完成"}: ${successCount} ✓${failCount > 0 ? ` / ${failCount} ✗` : ""}`
+      );
+      exitBatchMode();
+      await refetch();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "AI tags failed");
+    } finally {
+      setAiTagsLoading(false);
+    }
+  }, [selectedIds, exitBatchMode, refetch, toast, t, locale]);
+
+  // AI 批量分类
+  const handleAIBatchSuggestCategory = useCallback(async () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    setAiCategoryLoading(true);
+    try {
+      const res = await fetch("/api/ai/batch-suggest-category", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          comicIds: ids,
+          targetLang: locale === "en" ? "en" : "zh",
+          apply: true,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Request failed");
+      }
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder();
+      if (!reader) throw new Error("No reader");
+      let successCount = 0;
+      let failCount = 0;
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split("\n");
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          try {
+            const data = JSON.parse(line.slice(6));
+            if (data.done) {
+              successCount = data.success || successCount;
+              failCount = data.failed || failCount;
+            } else if (data.suggestedCategories) {
+              successCount++;
+            } else if (data.error) {
+              failCount++;
+            }
+          } catch {
+            // ignore
+          }
+        }
+      }
+      toast.success(
+        `${t.batch?.aiSuggestCategoryDone || "AI 分类完成"}: ${successCount} ✓${failCount > 0 ? ` / ${failCount} ✗` : ""}`
+      );
+      exitBatchMode();
+      await refetch();
+      refetchCategories();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "AI category failed");
+    } finally {
+      setAiCategoryLoading(false);
+    }
+  }, [selectedIds, exitBatchMode, refetch, refetchCategories, toast, t, locale]);
+
   const handleBatchSetCategory = useCallback(
     async (categorySlugs: string[]) => {
       await batchOperation("setCategory", Array.from(selectedIds), { categorySlugs });
@@ -347,6 +573,22 @@ export default function Home() {
       refetchCategories();
     },
     [selectedIds, exitBatchMode, refetch, refetchCategories]
+  );
+
+  // 合并为分组
+  const handleMergeToGroup = useCallback(
+    async (groupName: string) => {
+      const ids = Array.from(selectedIds);
+      if (ids.length < 2) return;
+      const result = await createGroup(groupName, ids);
+      if (result.success) {
+        toast.success(t.comicGroup?.created?.replace("{count}", "1") || "已创建 1 个分组");
+        exitBatchMode();
+        await loadGroups();
+        setShowGroupView(true);
+      }
+    },
+    [selectedIds, exitBatchMode, loadGroups, toast, t]
   );
 
   // Drag & Drop handlers
@@ -453,7 +695,6 @@ accept=".zip,.cbz,.cbr,.rar,.7z,.cb7,.pdf,.txt,.epub,.mobi,.azw3,.html,.htm"
                   { key: "", label: t.contentTab.all, icon: BookMarked },
                   { key: "comic", label: t.contentTab.comic, icon: Image },
                   { key: "novel", label: t.contentTab.novel, icon: BookOpen },
-                  { key: "series", label: t.series.title, icon: Layers },
                 ] as const).map((tab) => (
                   <button
                     key={tab.key}
@@ -504,8 +745,8 @@ accept=".zip,.cbz,.cbr,.rar,.7z,.cb7,.pdf,.txt,.epub,.mobi,.azw3,.html,.htm"
             {/* Stats + Sort Controls */}
             <div className="flex flex-col sm:flex-row sm:flex-wrap items-start sm:items-center justify-between gap-3 sm:gap-4">
               <StatsBar
-                totalComics={apiTotal}
-                filteredCount={apiTotal}
+                totalComics={showGroupView ? groups.length : apiTotal}
+                filteredCount={showGroupView ? groups.length : apiTotal}
               />
 
               {/* Sort & Filter Controls — horizontally scrollable on mobile */}
@@ -521,39 +762,33 @@ accept=".zip,.cbz,.cbr,.rar,.7z,.cb7,.pdf,.txt,.epub,.mobi,.azw3,.html,.htm"
                   <span className="hidden sm:inline">{t.duplicates.detect}</span>
                 </button>
 
-                {/* Export Data */}
-                <div className="relative group/export">
-                  <button
-                    className="flex h-8 items-center gap-1.5 rounded-lg bg-card px-2.5 sm:px-3 text-xs font-medium text-muted transition-all hover:text-foreground"
-                    title={t.dataExport?.title || "导出数据"}
+                {/* Group View Toggle — 始终显示 */}
+                <button
+                    onClick={() => setShowGroupView(!showGroupView)}
+                    className={`flex h-8 items-center gap-1.5 rounded-lg px-2.5 sm:px-3 text-xs font-medium transition-all ${
+                      showGroupView
+                        ? "bg-accent/20 text-accent"
+                        : "bg-card text-muted hover:text-foreground"
+                    }`}
+                    title={t.comicGroup?.groups || "分组"}
                   >
-                    <Download className="h-3.5 w-3.5" />
-                    <span className="hidden sm:inline">{t.dataExport?.title || "导出"}</span>
+                    <Layers className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">
+                      {groups.length > 0
+                        ? `${t.comicGroup?.groups || "分组"} (${groups.length})`
+                        : (t.comicGroup?.groups || "分组")}
+                    </span>
                   </button>
-                  <div className="absolute right-0 top-full z-50 mt-1 hidden min-w-[160px] rounded-lg bg-card border border-border/60 p-1 shadow-xl group-hover/export:block">
-                    <a
-                      href="/api/export/json"
-                      download
-                      className="flex items-center gap-2 rounded-md px-3 py-2 text-xs text-foreground hover:bg-card-hover"
-                    >
-                      📄 {t.dataExport?.jsonFull || "JSON 完整备份"}
-                    </a>
-                    <a
-                      href="/api/export/csv/comics"
-                      download
-                      className="flex items-center gap-2 rounded-md px-3 py-2 text-xs text-foreground hover:bg-card-hover"
-                    >
-                      📊 {t.dataExport?.csvComics || "CSV 漫画库"}
-                    </a>
-                    <a
-                      href="/api/export/csv/sessions"
-                      download
-                      className="flex items-center gap-2 rounded-md px-3 py-2 text-xs text-foreground hover:bg-card-hover"
-                    >
-                      📈 {t.dataExport?.csvSessions || "CSV 阅读记录"}
-                    </a>
-                  </div>
-                </div>
+
+                {/* Auto Detect Groups */}
+                <button
+                  onClick={() => setShowAutoDetect(true)}
+                  className="flex h-8 items-center gap-1.5 rounded-lg bg-card px-2.5 sm:px-3 text-xs font-medium text-muted transition-all hover:text-foreground"
+                  title={t.comicGroup?.autoDetect || "智能检测"}
+                >
+                  <Brain className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">{t.comicGroup?.autoDetect || "智能检测"}</span>
+                </button>
 
                 {/* Batch Mode Toggle */}
                 <button
@@ -577,7 +812,8 @@ accept=".zip,.cbz,.cbr,.rar,.7z,.cb7,.pdf,.txt,.epub,.mobi,.azw3,.html,.htm"
                   <button
                     onClick={handleSelectAll}
                     className={`flex h-8 items-center gap-1.5 rounded-lg px-2.5 sm:px-3 text-xs font-medium transition-all ${
-                      selectedIds.size === sortedComics.length && sortedComics.length > 0
+                      selectedIds.size === sortedComics.length && sortedComics.length > 0 &&
+                      (!showGroupView || !groups.length || selectedGroupIds.size === groups.length)
                         ? "bg-accent/20 text-accent"
                         : "bg-card text-muted hover:text-foreground"
                     }`}
@@ -702,40 +938,46 @@ accept=".zip,.cbz,.cbr,.rar,.7z,.cb7,.pdf,.txt,.epub,.mobi,.azw3,.html,.htm"
               </div>
             )}
 
-            {/* Series View */}
-            {contentType === "series" ? (
-              <div className={`transition-opacity duration-200 ${seriesLoading ? "opacity-50 pointer-events-none" : "opacity-100"}`}>
-                {seriesList.length > 0 ? (
-                  <div
-                    className={
-                      viewMode === "grid"
-                        ? "grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"
-                        : "grid grid-cols-1 gap-2 sm:gap-3"
-                    }
-                  >
-                    {seriesList.map((s) => (
-                      <SeriesCard key={s.seriesName} series={s} viewMode={viewMode} />
-                    ))}
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center py-24 sm:py-32 text-center">
-                    <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-2xl bg-card">
-                      <Layers className="h-10 w-10 text-muted/30" />
-                    </div>
-                    <h3 className="mb-2 text-lg font-medium text-foreground/80">
-                      {t.series.noSeries}
-                    </h3>
-                    <p className="max-w-sm text-sm text-muted">
-                      {t.series.noSeriesHint}
-                    </p>
-                  </div>
-                )}
-              </div>
-            ) : (
-            <>
             {/* Comics Grid */}
             <div className={`transition-opacity duration-200 ${fetching ? "opacity-50 pointer-events-none" : "opacity-100"}`}>
-            {sortedComics.length > 0 ? (
+            {/* 分组视图模式：只显示分组卡片 */}
+            {showGroupView && !debouncedSearch ? (
+              pagedGroups.length > 0 ? (
+                <div
+                  className={
+                    viewMode === "grid"
+                      ? "grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"
+                      : "grid grid-cols-1 gap-2 sm:gap-3"
+                  }
+                >
+                  {pagedGroups.map((group) => (
+                    <GroupCard
+                      key={`group-${group.id}`}
+                      group={group}
+                      viewMode={viewMode}
+                      batchMode={batchMode}
+                      isSelected={selectedGroupIds.has(group.id)}
+                      onSelect={toggleGroupSelect}
+                      onContextMenu={(e, g) => {
+                        setGroupContextMenu({ x: e.clientX, y: e.clientY, group: g });
+                      }}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-24 sm:py-32 text-center">
+                  <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-2xl bg-card">
+                    <Layers className="h-10 w-10 text-muted/30" />
+                  </div>
+                  <h3 className="mb-2 text-lg font-medium text-foreground/80">
+                    {t.comicGroup?.noGroups || "还没有分组"}
+                  </h3>
+                  <p className="max-w-sm text-sm text-muted mb-5">
+                    {t.comicGroup?.noGroupsHint || "可以通过智能检测或批量选择漫画来创建分组"}
+                  </p>
+                </div>
+              )
+            ) : sortedComics.length > 0 ? (
               <div
                 className={
                   viewMode === "grid"
@@ -743,22 +985,27 @@ accept=".zip,.cbz,.cbr,.rar,.7z,.cb7,.pdf,.txt,.epub,.mobi,.azw3,.html,.htm"
                     : "grid grid-cols-1 gap-2 sm:gap-3"
                 }
               >
-                {sortedComics.map((comic) => (
-                  <ComicCard
-                    key={comic.id}
-                    comic={comic}
-                    isReal={useRealData}
-                    viewMode={viewMode}
-                    batchMode={batchMode}
-                    isSelected={selectedIds.has(comic.id)}
-                    onSelect={toggleSelect}
-                    draggable={sortBy === "custom" && !batchMode}
-                    onDragStart={handleDragStart}
-                    onDragOver={handleDragOver}
-                    onDragEnd={handleDragEnd}
-                    isDragOver={dragOverId === comic.id}
-                    tagData={comic.tagData}
-                  />
+                {/* 漫画卡片 */}
+                {sortedComics
+                  .map((comic) => (
+                    <ComicCard
+                      key={comic.id}
+                      comic={comic}
+                      isReal={useRealData}
+                      viewMode={viewMode}
+                      batchMode={batchMode}
+                      isSelected={selectedIds.has(comic.id)}
+                      onSelect={toggleSelect}
+                      draggable={sortBy === "custom" && !batchMode}
+                      onDragStart={handleDragStart}
+                      onDragOver={handleDragOver}
+                      onDragEnd={handleDragEnd}
+                      isDragOver={dragOverId === comic.id}
+                      tagData={comic.tagData}
+                      onContextMenu={(e, c) => {
+                        setContextMenu({ x: e.clientX, y: e.clientY, comic: c });
+                      }}
+                    />
                 ))}
               </div>
             ) : (
@@ -814,23 +1061,21 @@ accept=".zip,.cbz,.cbr,.rar,.7z,.cb7,.pdf,.txt,.epub,.mobi,.azw3,.html,.htm"
               </div>
             )}
             </div>
-            </>
-            )}
 
             {/* Pagination */}
-            {(contentType === "series" ? seriesTotalPages : totalPages) > 1 && (
+            {effectiveTotalPages > 1 && (
               <div className="mt-6 sm:mt-8 flex flex-wrap items-center justify-center gap-1.5 sm:gap-2">
                 <button
-                  onClick={() => setCurrentPage(1)}
-                  disabled={currentPage === 1}
+                  onClick={() => setActivePage(1)}
+                  disabled={activePage === 1}
                   className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg border border-border/60 text-sm text-muted transition-colors hover:border-border hover:text-foreground disabled:opacity-30 disabled:pointer-events-none"
                   title={t.home.firstPage}
                 >
                   «
                 </button>
                 <button
-                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                  disabled={currentPage === 1}
+                  onClick={() => setActivePage((p) => Math.max(1, p - 1))}
+                  disabled={activePage === 1}
                   className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg border border-border/60 text-sm text-muted transition-colors hover:border-border hover:text-foreground disabled:opacity-30 disabled:pointer-events-none"
                   title={t.home.prevPage}
                 >
@@ -844,11 +1089,11 @@ accept=".zip,.cbz,.cbr,.rar,.7z,.cb7,.pdf,.txt,.epub,.mobi,.azw3,.html,.htm"
                     for (let i = 1; i <= effectiveTotalPages; i++) pages.push(i);
                   } else {
                     pages.push(1);
-                    if (currentPage > 3) pages.push("...");
-                    const start = Math.max(2, currentPage - 1);
-                    const end = Math.min(effectiveTotalPages - 1, currentPage + 1);
+                    if (activePage > 3) pages.push("...");
+                    const start = Math.max(2, activePage - 1);
+                    const end = Math.min(effectiveTotalPages - 1, activePage + 1);
                     for (let i = start; i <= end; i++) pages.push(i);
-                    if (currentPage < effectiveTotalPages - 2) pages.push("...");
+                    if (activePage < effectiveTotalPages - 2) pages.push("...");
                     pages.push(effectiveTotalPages);
                   }
                   return pages.map((p, idx) =>
@@ -859,9 +1104,9 @@ accept=".zip,.cbz,.cbr,.rar,.7z,.cb7,.pdf,.txt,.epub,.mobi,.azw3,.html,.htm"
                     ) : (
                       <button
                         key={p}
-                        onClick={() => setCurrentPage(p)}
+                        onClick={() => setActivePage(p)}
                         className={`flex h-8 min-w-[32px] sm:h-9 sm:min-w-[36px] items-center justify-center rounded-lg px-1.5 sm:px-2 text-xs sm:text-sm font-medium transition-colors ${
-                          currentPage === p
+                          activePage === p
                             ? "bg-accent text-white"
                             : "border border-border/60 text-muted hover:border-border hover:text-foreground"
                         }`}
@@ -873,16 +1118,16 @@ accept=".zip,.cbz,.cbr,.rar,.7z,.cb7,.pdf,.txt,.epub,.mobi,.azw3,.html,.htm"
                 })()}
 
                 <button
-                  onClick={() => setCurrentPage((p) => Math.min(effectiveTotalPages, p + 1))}
-                  disabled={currentPage === effectiveTotalPages}
+                  onClick={() => setActivePage((p) => Math.min(effectiveTotalPages, p + 1))}
+                  disabled={activePage === effectiveTotalPages}
                   className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg border border-border/60 text-sm text-muted transition-colors hover:border-border hover:text-foreground disabled:opacity-30 disabled:pointer-events-none"
                   title={t.home.nextPage}
                 >
                   ›
                 </button>
                 <button
-                  onClick={() => setCurrentPage(effectiveTotalPages)}
-                  disabled={currentPage === effectiveTotalPages}
+                  onClick={() => setActivePage(effectiveTotalPages)}
+                  disabled={activePage === effectiveTotalPages}
                   className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg border border-border/60 text-sm text-muted transition-colors hover:border-border hover:text-foreground disabled:opacity-30 disabled:pointer-events-none"
                   title={t.home.lastPage}
                 >
@@ -890,9 +1135,9 @@ accept=".zip,.cbz,.cbr,.rar,.7z,.cb7,.pdf,.txt,.epub,.mobi,.azw3,.html,.htm"
                 </button>
 
                 <span className="ml-2 sm:ml-3 text-xs text-muted">
-                  {currentPage} / {effectiveTotalPages}
+                  {activePage} / {effectiveTotalPages}
                 </span>
-
+                {!showGroupView && (
                 <div className="hidden sm:flex ml-4 items-center gap-1.5">
                   <LayoutGrid className="h-3.5 w-3.5 text-muted" />
                   <select
@@ -919,11 +1164,48 @@ accept=".zip,.cbz,.cbr,.rar,.7z,.cb7,.pdf,.txt,.epub,.mobi,.azw3,.html,.htm"
                     ))}
                   </select>
                 </div>
+                )}
               </div>
             )}
           </>
         )}
       </main>
+
+      {/* 分组批量操作栏 — 固定在底部，当漫画也被选中时叠在BatchToolbar上方 */}
+      {batchMode && selectedGroupIds.size > 0 && (
+        <div className={`fixed left-0 right-0 z-50 border-t border-border/50 bg-background/95 px-3 sm:px-6 py-2 sm:py-3 backdrop-blur-xl ${
+          selectedIds.size > 0 ? "bottom-[52px] sm:bottom-[56px]" : "bottom-0 safe-bottom"
+        }`}>
+          <div className="mx-auto flex max-w-[1800px] flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <Layers className="h-4 w-4 text-accent" />
+              <span className="text-sm font-medium text-foreground">
+                {t.batch.selected} <span className="text-accent">{selectedGroupIds.size}</span> {t.comicGroup?.groups || "分组"}
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              {/* 批量删除分组 */}
+              <button
+                onClick={handleBatchDeleteGroups}
+                className="flex h-8 items-center gap-1.5 rounded-lg bg-card px-3 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/20"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">{t.contextMenu?.deleteGroup || "删除分组"}</span>
+              </button>
+              {/* 仅当没选漫画时显示取消按钮（漫画操作栏有自己的取消按钮） */}
+              {selectedIds.size === 0 && (
+                <button
+                  onClick={exitBatchMode}
+                  className="flex h-8 items-center gap-1.5 rounded-lg bg-card px-3 text-xs font-medium text-muted transition-colors hover:bg-card-hover"
+                >
+                  <X className="h-3.5 w-3.5" />
+                  {t.common.cancel}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Batch Toolbar */}
       {batchMode && selectedIds.size > 0 && (
@@ -935,6 +1217,174 @@ accept=".zip,.cbz,.cbr,.rar,.7z,.cb7,.pdf,.txt,.epub,.mobi,.azw3,.html,.htm"
           onUnfavorite={handleBatchUnfavorite}
           onAddTags={handleBatchAddTags}
           onSetCategory={handleBatchSetCategory}
+          onMergeGroup={selectedIds.size >= 2 ? () => setShowMergeDialog(true) : undefined}
+          onAddToGroup={() => setShowAddToGroup(true)}
+          onAISuggestTags={aiConfigured ? handleAIBatchSuggestTags : undefined}
+          aiTagsLoading={aiTagsLoading}
+          onAISuggestCategory={aiConfigured ? handleAIBatchSuggestCategory : undefined}
+          aiCategoryLoading={aiCategoryLoading}
+        />
+      )}
+
+      {/* Merge Group Dialog */}
+      {showMergeDialog && (
+        <MergeGroupDialog
+          selectedCount={selectedIds.size}
+          onConfirm={(name) => {
+            handleMergeToGroup(name);
+            setShowMergeDialog(false);
+          }}
+          onClose={() => setShowMergeDialog(false)}
+        />
+      )}
+
+      {/* Add to Group Dialog */}
+      {showAddToGroup && (
+        <AddToGroupDialog
+          comicIds={Array.from(selectedIds)}
+          onClose={() => setShowAddToGroup(false)}
+          onDone={() => {
+            setShowAddToGroup(false);
+            exitBatchMode();
+            loadGroups();
+            toast.success(t.comicGroup?.addToGroup || "已加入分组");
+          }}
+        />
+      )}
+
+      {/* Auto Detect Panel */}
+      <AutoDetectPanel
+        open={showAutoDetect}
+        onClose={() => setShowAutoDetect(false)}
+        onCreated={() => {
+          loadGroups();
+          setShowGroupView(true);
+        }}
+      />
+
+      {/* 分组右键菜单 */}
+      {groupContextMenu && (
+        <GroupContextMenu
+          x={groupContextMenu.x}
+          y={groupContextMenu.y}
+          groupId={groupContextMenu.group.id}
+          groupName={groupContextMenu.group.name}
+          onClose={() => setGroupContextMenu(null)}
+          onOpen={(id) => router.push(`/group/${id}`)}
+          onRename={(id, currentName) => {
+            setRenameGroup({ id, name: currentName });
+            setRenameValue(currentName);
+          }}
+          onDelete={async (id) => {
+            const ok = await deleteGroup(id);
+            if (ok) {
+              await loadGroups();
+              toast.success(t.comicGroup?.deleteSuccess || "分组已删除");
+              await refetch();
+            }
+          }}
+        />
+      )}
+
+      {/* 分组重命名对话框 */}
+      {renameGroup && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setRenameGroup(null)}>
+          <div
+            className="w-full max-w-sm rounded-2xl border border-border/60 bg-card p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-150"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="mb-4 text-lg font-semibold text-foreground">
+              {t.contextMenu?.renameGroup || "重命名分组"}
+            </h3>
+            <input
+              autoFocus
+              type="text"
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              onKeyDown={async (e) => {
+                if (e.key === "Enter" && renameValue.trim() && renameValue.trim() !== renameGroup.name) {
+                  const ok = await updateGroup(renameGroup.id, renameValue.trim());
+                  if (ok) {
+                    await loadGroups();
+                    toast.success(t.contextMenu?.renameSuccess || "已重命名");
+                  }
+                  setRenameGroup(null);
+                }
+                if (e.key === "Escape") setRenameGroup(null);
+              }}
+              className="w-full rounded-xl border border-border/60 bg-background px-4 py-2.5 text-sm text-foreground outline-none transition-colors focus:border-accent/50 focus:ring-1 focus:ring-accent/30"
+              placeholder={t.comicGroup?.groupName || "分组名称"}
+            />
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                onClick={() => setRenameGroup(null)}
+                className="rounded-lg px-4 py-2 text-sm text-muted transition-colors hover:bg-card-hover hover:text-foreground"
+              >
+                {t.comicDetail?.cancel || "取消"}
+              </button>
+              <button
+                onClick={async () => {
+                  if (renameValue.trim() && renameValue.trim() !== renameGroup.name) {
+                    const ok = await updateGroup(renameGroup.id, renameValue.trim());
+                    if (ok) {
+                      await loadGroups();
+                      toast.success(t.contextMenu?.renameSuccess || "已重命名");
+                    }
+                  }
+                  setRenameGroup(null);
+                }}
+                disabled={!renameValue.trim() || renameValue.trim() === renameGroup.name}
+                className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-hover disabled:opacity-40 disabled:pointer-events-none"
+              >
+                {t.comicDetail?.confirm || "确认"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 漫画右键菜单 */}
+      {contextMenu && (
+        <ComicContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          comicId={contextMenu.comic.id}
+          comicTitle={contextMenu.comic.title}
+          isFavorite={contextMenu.comic.isFavorite}
+          onClose={() => setContextMenu(null)}
+          onRead={(id) => {
+            const c = sortedComics.find((c) => c.id === id);
+            if (c) {
+              const isNovel = c.filename && /\.(txt|epub|mobi|azw3|html|htm)$/i.test(c.filename);
+              router.push(isNovel ? `/novel/${id}` : `/reader/${id}`);
+            }
+          }}
+          onDetail={(id) => router.push(`/comic/${id}`)}
+          onToggleFavorite={async (id) => {
+            await toggleComicFavorite(id);
+            await refetch();
+          }}
+          onAddToGroup={(id) => {
+            setContextAddToGroupIds([id]);
+          }}
+          onDelete={async (id) => {
+            await deleteComicById(id);
+            await refetch();
+            toast.success(t.comicDetail?.deleteSuccess || "已删除");
+          }}
+        />
+      )}
+
+      {/* 右键菜单“加入分组”弹窗 */}
+      {contextAddToGroupIds && (
+        <AddToGroupDialog
+          comicIds={contextAddToGroupIds}
+          onClose={() => setContextAddToGroupIds(null)}
+          onDone={() => {
+            setContextAddToGroupIds(null);
+            loadGroups();
+            toast.success(t.comicGroup?.addToGroup || "已加入分组");
+          }}
         />
       )}
 

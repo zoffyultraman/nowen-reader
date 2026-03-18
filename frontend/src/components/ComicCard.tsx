@@ -69,6 +69,8 @@ interface ComicCardProps {
   isDragOver?: boolean;
   /** 带颜色的原始标签数据 */
   tagData?: ApiComicTag[];
+  /** 右键菜单回调 */
+  onContextMenu?: (e: React.MouseEvent, comic: Comic) => void;
 }
 
 /** 渲染标签chip */
@@ -100,6 +102,7 @@ const ComicCard = memo(function ComicCard({
   onDragEnd,
   isDragOver,
   tagData,
+  onContextMenu,
 }: ComicCardProps) {
 
   // 构建 tag name → ApiComicTag 的映射
@@ -121,11 +124,20 @@ const ComicCard = memo(function ComicCard({
     onClick?.(comic);
   };
 
+  // 通用右键处理
+  const handleContextMenu = (e: React.MouseEvent) => {
+    if (batchMode || !onContextMenu) return;
+    e.preventDefault();
+    e.stopPropagation();
+    onContextMenu(e, comic);
+  };
+
   if (viewMode === "list") {
     return (
       <div
         className={`group relative block ${isDragOver ? "ring-2 ring-accent rounded-xl" : ""}`}
         draggable={draggable}
+        onContextMenu={handleContextMenu}
         onDragStart={(e) => {
           e.dataTransfer.effectAllowed = "move";
           onDragStart?.(comic.id);
@@ -254,6 +266,7 @@ const ComicCard = memo(function ComicCard({
     <div
       className={`group relative ${isDragOver ? "ring-2 ring-accent rounded-xl" : ""}`}
       draggable={draggable}
+      onContextMenu={handleContextMenu}
       onDragStart={(e) => {
         e.dataTransfer.effectAllowed = "move";
         onDragStart?.(comic.id);

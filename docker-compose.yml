@@ -21,6 +21,10 @@ services:
     # --- 方式2: 本地构建（自动匹配当前平台）---
     build:
       context: .
+      # 多平台支持: buildx 构建时自动设置，本地构建时使用当前平台
+      platforms:
+        - "linux/amd64"
+        - "linux/arm64"
       args:
         VERSION: "0.2.0"
     container_name: nowen-reader

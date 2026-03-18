@@ -64,8 +64,6 @@ type Comic struct {
 	Year           *int   `json:"year"`
 	Description    string `json:"description"`
 	Language       string `json:"language"`
-	SeriesName     string `json:"seriesName"`
-	SeriesIndex    *int   `json:"seriesIndex"`
 	Genre          string `json:"genre"`          // comma-separated
 	MetadataSource string `json:"metadataSource"` // "comicvine" | "anilist" | "manual"
 	CoverImageURL  string `json:"coverImageUrl"`  // external cover URL
@@ -122,4 +120,25 @@ type ReadingSession struct {
 	Duration  int        `json:"duration"` // seconds
 	StartPage int        `json:"startPage"`
 	EndPage   int        `json:"endPage"`
+}
+
+// ============================================================
+// Comic Groups (自定义合并分组)
+// ============================================================
+
+type ComicGroup struct {
+	ID        int       `json:"id"`
+	Name      string    `json:"name"`
+	CoverURL  string    `json:"coverUrl"`
+	SortOrder int       `json:"sortOrder"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+	// 查询时填充
+	ComicCount int `json:"comicCount,omitempty"`
+}
+
+type ComicGroupItem struct {
+	GroupID   int    `json:"groupId"`
+	ComicID   string `json:"comicId"`
+	SortIndex int    `json:"sortIndex"`
 }

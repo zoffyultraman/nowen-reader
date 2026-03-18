@@ -24,6 +24,7 @@ import Recommendations from "@/app/recommendations/page";
 import Stats from "@/app/stats/page";
 import Logs from "@/app/logs/page";
 import Settings from "@/app/settings/page";
+import GroupDetail from "@/app/group/[id]/page";
 
 function App() {
   return (
@@ -43,6 +44,7 @@ function App() {
                     <Route path="/stats" element={<Stats />} />
                     <Route path="/logs" element={<Logs />} />
                     <Route path="/settings" element={<Settings />} />
+                    <Route path="/group/:id" element={<GroupDetail />} />
                   </Routes>
                 </AuthGuard>
                 <MobileBottomNav />

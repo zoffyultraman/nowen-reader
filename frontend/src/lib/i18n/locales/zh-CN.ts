@@ -85,6 +85,12 @@ const zhCN = {
     tags: "标签",
     category: "分类",
     tagInputPlaceholder: "输入标签 (逗号分隔多个)，回车确认...",
+    aiSuggestTags: "AI 标签",
+    aiSuggestTagsRunning: "AI 标签分析中...",
+    aiSuggestTagsDone: "AI 标签完成",
+    aiSuggestCategory: "AI 分类",
+    aiSuggestCategoryRunning: "AI 分类中...",
+    aiSuggestCategoryDone: "AI 分类完成",
     confirmDelete: "确认删除",
     confirmDeleteMsg: "确定要删除选中的 {count} 本漫画吗？此操作不可撤销。",
   },
@@ -92,6 +98,21 @@ const zhCN = {
   // Comic Card
   comicCard: {
     detail: "详情",
+  },
+
+  // Context Menu (右键菜单)
+  contextMenu: {
+    read: "阅读",
+    detail: "查看详情",
+    favorite: "收藏",
+    unfavorite: "取消收藏",
+    addToGroup: "加入分组",
+    delete: "删除",
+    confirmDelete: "确认删除？",
+    openGroup: "打开分组",
+    renameGroup: "重命名",
+    deleteGroup: "删除分组",
+    renameSuccess: "已重命名",
   },
 
   // Comic Detail Page
@@ -149,6 +170,10 @@ const zhCN = {
     aiCoverCharacters: "角色",
     aiCoverConfidence: "置信度",
     aiVisionNotSupported: "当前 AI 服务商不支持图像分析",
+    aiCompleteMetadata: "AI 补全",
+    aiCompleteMetadataLoading: "补全中...",
+    aiSuggestCategory: "AI 分类",
+    aiSuggestCategoryLoading: "分析中...",
   },
 
   // Stats Page
@@ -285,7 +310,6 @@ const zhCN = {
     year: "年份",
     description: "简介",
     genre: "类型",
-    series: "系列",
     language: "语言",
     metadataSource: "数据来源",
     scrapeMetadata: "刮削元数据",
@@ -306,7 +330,6 @@ const zhCN = {
     translatingMetadata: "翻译中...",
     editMetadata: "编辑",
     editingMetadata: "编辑元数据",
-    seriesIndex: "卷号",
   },
 
   // Recommendations
@@ -318,13 +341,10 @@ const zhCN = {
     tagMatch: "标签匹配",
     genreMatch: "类型匹配",
     sameAuthor: "同一作者",
-    seriesContinuation: "系列续集",
-    seriesInProgress: "继续阅读",
     highlyRated: "高评分",
     unread: "未读",
     similarTags: "相似标签",
     similarGenre: "相似类型",
-    sameSeries: "同一系列",
     sameCategory: "同一分类",
     semanticMatch: "AI 语义匹配",
     aiReasonLoading: "正在生成 AI 推荐理由...",
@@ -489,6 +509,8 @@ const zhCN = {
     sameFile: "文件内容完全相同",
     sameSize: "文件大小和页数相同",
     sameName: "标题相似",
+    partialHash: "部分哈希匹配",
+    fuzzyName: "模糊标题匹配",
     fileSize: "大小",
     pageCount: "页数",
     addedAt: "添加时间",
@@ -504,6 +526,10 @@ const zhCN = {
     confirmDeleteAllMsg: "将删除 {count} 个重复文件（每组保留选中的一个），此操作不可撤销。",
     deletedCount: "已删除 {count} 个文件",
     selectToKeep: "点击选择要保留的项",
+    confidence: "置信度",
+    details: "详情",
+    compareCover: "封面对比",
+    filterAll: "所有类型",
   },
 
   // 继续阅读
@@ -544,6 +570,10 @@ const zhCN = {
     genrePreference: "类型偏好",
     sessionsUnit: "次",
     comicsUnit: "本",
+    aiInsight: "AI 阅读洞察",
+    aiInsightGenerating: "正在生成洞察报告...",
+    aiInsightError: "生成失败",
+    aiInsightEmpty: "暂无足够数据生成洞察",
   },
 
   // 内容类型 Tab
@@ -577,25 +607,51 @@ const zhCN = {
     deleteGoal: "删除",
   },
 
-  // 系列
-  series: {
-    title: "系列",
-    viewMode: "系列视图",
-    volumeCount: "{count} 卷",
-    totalPages: "共 {count} 页",
-    volumes: "卷列表",
+  // 漫画分组
+  comicGroup: {
+    title: "漫画合并分组",
+    groups: "分组",
+    createGroup: "创建分组",
+    editGroup: "编辑分组",
+    deleteGroup: "删除分组",
+    groupName: "分组名称",
+    groupNamePlaceholder: "输入分组名称...",
+    addToGroup: "加入分组",
+    removeFromGroup: "从分组移除",
+    volumes: "卷",
+    totalPages: "总页数",
+    totalReadTime: "总阅读时长",
+    autoDetect: "智能检测",
+    autoDetecting: "正在检测...",
+    autoDetectDesc: "自动识别可合并的同系列漫画",
+    foundSuggestions: "发现 {count} 个可合并的系列",
+    noSuggestions: "未发现可合并的系列",
+    createAll: "全部创建",
+    createSelected: "创建选中",
+    created: "已创建 {count} 个分组",
+    confirmDelete: "确认删除分组",
+    confirmDeleteMsg: "确定要删除分组「{name}」吗？分组内的漫画不会被删除。",
+    emptyGroup: "此分组还没有漫画",
+    mergeSelected: "合并为分组",
+    viewGroup: "查看分组",
+    backToLibrary: "返回书库",
     continueReading: "继续阅读",
-    readFromStart: "从头开始",
-    noSeries: "暂无系列",
-    noSeriesHint: "系统会自动检测同名漫画的系列信息，也可在漫画详情中手动设置",
-    progress: "总进度",
-    author: "作者",
-    currentVolume: "当前卷",
+    volumeIndex: "第 {index} 卷",
+    dragToReorder: "拖拽排序",
+    noGroups: "还没有分组",
+    noGroupsHint: "可以选中多本漫画后合并为分组，或使用智能检测自动发现同系列漫画",
+    aiEnhanceDetect: "智能 + AI 检测",
+    aiDetecting: "AI 深度分析中...",
+    searchComicHint: "输入关键词搜索漫画",
+    searchGroupHint: "搜索分组...",
+    noMatchGroup: "无匹配分组",
+  },
+
+  // 系列导航
+  series: {
     nextVolume: "下一卷",
     prevVolume: "上一卷",
-    seriesComplete: "系列阅读完成",
-    volumeFinished: "本卷已读完，即将进入下一卷",
-    searchPlaceholder: "搜索系列名...",
+    volumes: "卷",
   },
 } satisfies Translations;
 
@@ -674,11 +730,30 @@ export interface Translations {
     tags: string;
     category: string;
     tagInputPlaceholder: string;
+    aiSuggestTags?: string;
+    aiSuggestTagsRunning?: string;
+    aiSuggestTagsDone?: string;
+    aiSuggestCategory?: string;
+    aiSuggestCategoryRunning?: string;
+    aiSuggestCategoryDone?: string;
     confirmDelete: string;
     confirmDeleteMsg: string;
   };
   comicCard: {
     detail: string;
+  };
+  contextMenu?: {
+    read: string;
+    detail: string;
+    favorite: string;
+    unfavorite: string;
+    addToGroup: string;
+    delete: string;
+    confirmDelete: string;
+    openGroup: string;
+    renameGroup: string;
+    deleteGroup: string;
+    renameSuccess: string;
   };
   comicDetail: {
     comicNotFound: string;
@@ -734,6 +809,10 @@ export interface Translations {
     aiCoverCharacters: string;
     aiCoverConfidence: string;
     aiVisionNotSupported: string;
+    aiCompleteMetadata?: string;
+    aiCompleteMetadataLoading?: string;
+    aiSuggestCategory?: string;
+    aiSuggestCategoryLoading?: string;
   };
   stats: {
     title: string;
@@ -856,7 +935,6 @@ export interface Translations {
     year: string;
     description: string;
     genre: string;
-    series: string;
     language: string;
     metadataSource: string;
     scrapeMetadata: string;
@@ -877,7 +955,6 @@ export interface Translations {
     translatingMetadata: string;
     editMetadata: string;
     editingMetadata: string;
-    seriesIndex: string;
   };
   recommend: {
     title: string;
@@ -887,13 +964,10 @@ export interface Translations {
     tagMatch: string;
     genreMatch: string;
     sameAuthor: string;
-    seriesContinuation: string;
-    seriesInProgress: string;
     highlyRated: string;
     unread: string;
     similarTags: string;
     similarGenre: string;
-    sameSeries: string;
     sameCategory: string;
     semanticMatch: string;
     aiReasonLoading: string;
@@ -1047,6 +1121,8 @@ export interface Translations {
     sameFile: string;
     sameSize: string;
     sameName: string;
+    partialHash: string;
+    fuzzyName: string;
     fileSize: string;
     pageCount: string;
     addedAt: string;
@@ -1062,6 +1138,10 @@ export interface Translations {
     confirmDeleteAllMsg: string;
     deletedCount: string;
     selectToKeep: string;
+    confidence: string;
+    details: string;
+    compareCover: string;
+    filterAll: string;
   };
   continueReading: {
     title: string;
@@ -1096,6 +1176,10 @@ export interface Translations {
     genrePreference: string;
     sessionsUnit: string;
     comicsUnit: string;
+    aiInsight?: string;
+    aiInsightGenerating?: string;
+    aiInsightError?: string;
+    aiInsightEmpty?: string;
   };
   contentTab: {
     all: string;
@@ -1122,23 +1206,47 @@ export interface Translations {
     editGoal: string;
     deleteGoal: string;
   };
-  series: {
+  comicGroup: {
     title: string;
-    viewMode: string;
-    volumeCount: string;
-    totalPages: string;
+    groups: string;
+    createGroup: string;
+    editGroup: string;
+    deleteGroup: string;
+    groupName: string;
+    groupNamePlaceholder: string;
+    addToGroup: string;
+    removeFromGroup: string;
     volumes: string;
+    totalPages: string;
+    totalReadTime: string;
+    autoDetect: string;
+    autoDetecting: string;
+    autoDetectDesc: string;
+    foundSuggestions: string;
+    noSuggestions: string;
+    createAll: string;
+    createSelected: string;
+    created: string;
+    confirmDelete: string;
+    confirmDeleteMsg: string;
+    emptyGroup: string;
+    mergeSelected: string;
+    viewGroup: string;
+    backToLibrary: string;
     continueReading: string;
-    readFromStart: string;
-    noSeries: string;
-    noSeriesHint: string;
-    progress: string;
-    author: string;
-    currentVolume: string;
+    volumeIndex: string;
+    dragToReorder: string;
+    noGroups: string;
+    noGroupsHint: string;
+    aiEnhanceDetect?: string;
+    aiDetecting?: string;
+    searchComicHint: string;
+    searchGroupHint: string;
+    noMatchGroup: string;
+  };
+  series: {
     nextVolume: string;
     prevVolume: string;
-    seriesComplete: string;
-    volumeFinished: string;
-    searchPlaceholder: string;
+    volumes: string;
   };
 }

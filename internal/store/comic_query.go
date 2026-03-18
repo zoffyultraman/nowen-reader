@@ -44,16 +44,17 @@ func ftsEscapeQuery(input string) string {
 
 // ComicListOptions 保存列表查询参数。
 type ComicListOptions struct {
-	Search        string
-	Tags          []string
-	FavoritesOnly bool
-	SortBy        string // "title" | "addedAt" | "lastReadAt" | "rating" | "custom"
-	SortOrder     string // "asc" | "desc"
-	Page          int
-	PageSize      int
-	Category      string
-	ContentType   string // "comic" | "novel" | "" (全部)
-	ReadingStatus string // "want" | "reading" | "finished" | "shelved" | "" (全部)
+	Search         string
+	Tags           []string
+	FavoritesOnly  bool
+	SortBy         string // "title" | "addedAt" | "lastReadAt" | "rating" | "custom"
+	SortOrder      string // "asc" | "desc"
+	Page           int
+	PageSize       int
+	Category       string
+	ContentType    string // "comic" | "novel" | "" (全部)
+	ReadingStatus  string // "want" | "reading" | "finished" | "shelved" | "" (全部)
+	ExcludeGrouped bool   // 是否排除已在分组中的漫画（用于分组视图）
 }
 
 // ComicListItem 是漫画在列表结果中的序列化表示。
@@ -77,8 +78,6 @@ type ComicListItem struct {
 	Year           *int                `json:"year"`
 	Description    string              `json:"description"`
 	Language       string              `json:"language"`
-	SeriesName     string              `json:"seriesName"`
-	SeriesIndex    *int                `json:"seriesIndex"`
 	Genre          string              `json:"genre"`
 	MetadataSource string              `json:"metadataSource"`
 	ReadingStatus  string              `json:"readingStatus"`
@@ -166,6 +165,11 @@ func GetAllComics(opts ComicListOptions) (*ComicListResult, error) {
 		args = append(args, opts.ReadingStatus)
 	}
 
+	// ExcludeGrouped: 排除已在分组中的漫画（JOIN确保不受孤儿记录影响）
+	if opts.ExcludeGrouped {
+		conditions = append(conditions, `c."id" NOT IN (SELECT gi."comicId" FROM "ComicGroupItem" gi INNER JOIN "ComicGroup" g ON g."id" = gi."groupId")`)
+	}
+
 	whereClause := ""
 	if len(conditions) > 0 {
 		whereClause = "WHERE " + strings.Join(conditions, " AND ")
@@ -226,7 +230,7 @@ func GetAllComics(opts ComicListOptions) (*ComicListResult, error) {
 		       c."addedAt", c."updatedAt", c."lastReadPage", c."lastReadAt",
 		       c."isFavorite", c."rating", c."sortOrder", c."totalReadTime",
 		       c."author", c."publisher", c."year", c."description",
-		       c."language", c."seriesName", c."seriesIndex", c."genre", c."metadataSource",
+		       c."language", c."genre", c."metadataSource",
 		       c."readingStatus", c."type"
 		FROM "Comic" c
 		%s %s %s
@@ -245,7 +249,6 @@ func GetAllComics(opts ComicListOptions) (*ComicListResult, error) {
 		var lastReadAt sql.NullTime
 		var rating sql.NullInt64
 		var year sql.NullInt64
-		var seriesIndex sql.NullInt64
 		var isFav int
 
 		if err := rows.Scan(
@@ -253,7 +256,7 @@ func GetAllComics(opts ComicListOptions) (*ComicListResult, error) {
 			&addedAt, &updatedAt, &c.LastReadPage, &lastReadAt,
 			&isFav, &rating, &c.SortOrder, &c.TotalReadTime,
 			&c.Author, &c.Publisher, &year, &c.Description,
-			&c.Language, &c.SeriesName, &seriesIndex, &c.Genre, &c.MetadataSource,
+			&c.Language, &c.Genre, &c.MetadataSource,
 			&c.ReadingStatus, &c.ComicType,
 		); err != nil {
 			return nil, fmt.Errorf("scan comic: %w", err)
@@ -273,10 +276,6 @@ func GetAllComics(opts ComicListOptions) (*ComicListResult, error) {
 		if year.Valid {
 			v := int(year.Int64)
 			c.Year = &v
-		}
-		if seriesIndex.Valid {
-			v := int(seriesIndex.Int64)
-			c.SeriesIndex = &v
 		}
 		c.CoverURL = fmt.Sprintf("/api/comics/%s/thumbnail", c.ID)
 
@@ -415,7 +414,7 @@ func GetComicByID(id string) (*ComicListItem, error) {
 		       c."addedAt", c."updatedAt", c."lastReadPage", c."lastReadAt",
 		       c."isFavorite", c."rating", c."sortOrder", c."totalReadTime",
 		       c."author", c."publisher", c."year", c."description",
-		       c."language", c."seriesName", c."seriesIndex", c."genre", c."metadataSource",
+		       c."language", c."genre", c."metadataSource",
 		       c."readingStatus", c."type"
 		FROM "Comic" c WHERE c."id" = ?
 	`
@@ -424,7 +423,6 @@ func GetComicByID(id string) (*ComicListItem, error) {
 	var lastReadAt sql.NullTime
 	var rating sql.NullInt64
 	var year sql.NullInt64
-	var seriesIndex sql.NullInt64
 	var isFav int
 
 	err := db.QueryRow(query, id).Scan(
@@ -432,7 +430,7 @@ func GetComicByID(id string) (*ComicListItem, error) {
 		&addedAt, &updatedAt, &c.LastReadPage, &lastReadAt,
 		&isFav, &rating, &c.SortOrder, &c.TotalReadTime,
 		&c.Author, &c.Publisher, &year, &c.Description,
-		&c.Language, &c.SeriesName, &seriesIndex, &c.Genre, &c.MetadataSource,
+		&c.Language, &c.Genre, &c.MetadataSource,
 		&c.ReadingStatus, &c.ComicType,
 	)
 	if err == sql.ErrNoRows {
@@ -456,10 +454,6 @@ func GetComicByID(id string) (*ComicListItem, error) {
 	if year.Valid {
 		v := int(year.Int64)
 		c.Year = &v
-	}
-	if seriesIndex.Valid {
-		v := int(seriesIndex.Int64)
-		c.SeriesIndex = &v
 	}
 	c.CoverURL = fmt.Sprintf("/api/comics/%s/thumbnail", c.ID)
 
@@ -510,7 +504,6 @@ type RecommendationComic struct {
 	Title         string
 	Author        string
 	Genre         string
-	SeriesName    string
 	Filename      string
 	PageCount     int
 	LastReadPage  int
@@ -525,7 +518,7 @@ type RecommendationComic struct {
 // GetAllComicsForRecommendation 返回所有漫画的推荐所需数据（分批加载标签/分类，避免 IN 参数超限）。
 func GetAllComicsForRecommendation() ([]RecommendationComic, error) {
 	rows, err := db.Query(`
-		SELECT "id", "title", "author", "genre", "seriesName",
+		SELECT "id", "title", "author", "genre",
 		       "filename", "pageCount", "lastReadPage", "lastReadAt", "isFavorite",
 		       "rating", "totalReadTime"
 		FROM "Comic"
@@ -543,7 +536,7 @@ func GetAllComicsForRecommendation() ([]RecommendationComic, error) {
 		var isFav int
 
 		if err := rows.Scan(
-			&c.ID, &c.Title, &c.Author, &c.Genre, &c.SeriesName,
+			&c.ID, &c.Title, &c.Author, &c.Genre,
 			&c.Filename, &c.PageCount, &c.LastReadPage, &lastReadAt, &isFav,
 			&rating, &c.TotalReadTime,
 		); err != nil {

@@ -21,8 +21,12 @@ import {
   ChevronDown,
   Trophy,
   FileText,
+  Sparkles,
+  Loader2,
+  RefreshCw,
 } from "lucide-react";
 import { useTranslation, useLocale } from "@/lib/i18n";
+import { useAIStatus } from "@/hooks/useAIStatus";
 
 interface EnhancedStats {
   totalReadTime: number;
@@ -76,6 +80,24 @@ interface YearlyReport {
   genreDistribution: { genre: string; count: number; readTime: number }[];
 }
 
+// 简单的 Markdown 渲染（支持 ##、**、*、- 列表、换行）
+function renderMarkdown(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/^## (.+)$/gm, "<h2>$1</h2>")
+    .replace(/^### (.+)$/gm, "<h3>$1</h3>")
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/\*(.+?)\*/g, "<em>$1</em>")
+    .replace(/^- (.+)$/gm, "<li>$1</li>")
+    .replace(/(<li>.*<\/li>\n?)+/g, (m) => `<ul>${m}</ul>`)
+    .replace(/\n{2,}/g, "</p><p>")
+    .replace(/\n/g, "<br/>")
+    .replace(/^/, "<p>")
+    .replace(/$/, "</p>");
+}
+
 export default function StatsPanel() {
   const [stats, setStats] = useState<EnhancedStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -98,6 +120,67 @@ export default function StatsPanel() {
 
   // 数据导出
   const [showExportMenu, setShowExportMenu] = useState(false);
+
+  // AI 洞察
+  const { configured: aiConfigured } = useAIStatus();
+  const [aiInsight, setAiInsight] = useState("");
+  const [aiInsightLoading, setAiInsightLoading] = useState(false);
+  const [aiInsightError, setAiInsightError] = useState("");
+
+  // AI 阅读目标推荐
+  const [aiGoalLoading, setAiGoalLoading] = useState(false);
+  const [aiGoalRec, setAiGoalRec] = useState<{
+    dailyMins: number;
+    dailyBooks: number;
+    weeklyMins: number;
+    weeklyBooks: number;
+    reasoning: string;
+    encouragement: string;
+  } | null>(null);
+
+  const generateInsight = async () => {
+    setAiInsightLoading(true);
+    setAiInsight("");
+    setAiInsightError("");
+    try {
+      const res = await fetch("/api/ai/reading-insight", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetLang: locale === "en" ? "en" : "zh" }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Unknown error");
+      }
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder();
+      if (!reader) throw new Error("No reader");
+      let fullText = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split("\n");
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          try {
+            const data = JSON.parse(line.slice(6));
+            if (data.error) throw new Error(data.error);
+            if (data.content) {
+              fullText += data.content;
+              setAiInsight(fullText);
+            }
+          } catch (e) {
+            // ignore parse errors for partial chunks
+          }
+        }
+      }
+    } catch (err: unknown) {
+      setAiInsightError(err instanceof Error ? err.message : "Unknown error");
+    } finally {
+      setAiInsightLoading(false);
+    }
+  };
 
   const fetchGoals = () => {
     fetch("/api/goals")
@@ -186,8 +269,106 @@ export default function StatsPanel() {
         <h2 className="mb-3 flex items-center gap-2 text-sm font-medium text-foreground">
           <Target className="h-4 w-4 text-accent" />
           {t.readingGoal?.title || "阅读目标"}
+          {aiConfigured && (
+            <button
+              onClick={async () => {
+                if (aiGoalLoading) return;
+                setAiGoalLoading(true);
+                setAiGoalRec(null);
+                try {
+                  const res = await fetch("/api/ai/recommend-goal", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ targetLang: locale === "en" ? "en" : "zh" }),
+                  });
+                  if (res.ok) {
+                    const data = await res.json();
+                    setAiGoalRec(data.recommendation || null);
+                  }
+                } catch {
+                  // ignore
+                } finally {
+                  setAiGoalLoading(false);
+                }
+              }}
+              disabled={aiGoalLoading}
+              className="ml-auto flex items-center gap-1 rounded-md bg-purple-500/10 px-2 py-0.5 text-[10px] font-medium text-purple-400 transition-colors hover:bg-purple-500/20 disabled:opacity-50"
+              title={locale === "en" ? "AI Recommend Goals" : "AI 推荐目标"}
+            >
+              {aiGoalLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+              {aiGoalLoading
+                ? (locale === "en" ? "Analyzing..." : "分析中...")
+                : (locale === "en" ? "AI Recommend" : "AI 推荐")}
+            </button>
+          )}
         </h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {/* AI 目标推荐卡片 */}
+          {aiGoalRec && (
+            <div className="col-span-full rounded-xl bg-purple-500/5 border border-purple-500/20 p-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="flex items-center gap-1.5 text-xs font-medium text-purple-400">
+                  <Sparkles className="h-3.5 w-3.5" />
+                  {locale === "en" ? "AI Recommendation" : "AI 推荐"}
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      // 应用日常目标
+                      if (aiGoalRec.dailyMins > 0) {
+                        fetch("/api/goals", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ goalType: "daily", targetMins: aiGoalRec.dailyMins, targetBooks: aiGoalRec.dailyBooks || 0 }),
+                        }).then(() => {
+                          // 应用周目标
+                          if (aiGoalRec.weeklyMins > 0) {
+                            return fetch("/api/goals", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ goalType: "weekly", targetMins: aiGoalRec.weeklyMins, targetBooks: aiGoalRec.weeklyBooks || 0 }),
+                            });
+                          }
+                        }).then(() => {
+                          fetchGoals();
+                          setAiGoalRec(null);
+                        });
+                      }
+                    }}
+                    className="rounded-md bg-purple-500/20 px-2.5 py-1 text-[10px] font-medium text-purple-400 hover:bg-purple-500/30 transition-colors"
+                  >
+                    {locale === "en" ? "Apply" : "应用"}
+                  </button>
+                  <button
+                    onClick={() => setAiGoalRec(null)}
+                    className="text-xs text-muted hover:text-foreground"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3 mb-2">
+                <div className="rounded-lg bg-background/50 p-2">
+                  <span className="text-[10px] text-muted">{locale === "en" ? "Daily" : "每日"}</span>
+                  <p className="text-sm font-medium text-foreground">
+                    {aiGoalRec.dailyMins} {locale === "en" ? "min" : "分钟"}
+                    {aiGoalRec.dailyBooks > 0 && ` / ${aiGoalRec.dailyBooks} ${locale === "en" ? "books" : "本"}`}
+                  </p>
+                </div>
+                <div className="rounded-lg bg-background/50 p-2">
+                  <span className="text-[10px] text-muted">{locale === "en" ? "Weekly" : "每周"}</span>
+                  <p className="text-sm font-medium text-foreground">
+                    {aiGoalRec.weeklyMins} {locale === "en" ? "min" : "分钟"}
+                    {aiGoalRec.weeklyBooks > 0 && ` / ${aiGoalRec.weeklyBooks} ${locale === "en" ? "books" : "本"}`}
+                  </p>
+                </div>
+              </div>
+              <p className="text-xs text-muted/80 leading-relaxed">{aiGoalRec.reasoning}</p>
+              {aiGoalRec.encouragement && (
+                <p className="mt-1 text-xs text-purple-400/70">💪 {aiGoalRec.encouragement}</p>
+              )}
+            </div>
+          )}
           {["daily", "weekly"].map((type) => {
             const g = goals.find((p) => p.goal.goalType === type);
             const isEditing = editingGoal === type;
@@ -408,6 +589,60 @@ export default function StatsPanel() {
           </p>
         </div>
       </div>
+
+      {/* AI 阅读洞察 */}
+      {aiConfigured && (
+        <div className="rounded-xl bg-card p-4 sm:p-6">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="flex items-center gap-2 text-sm font-medium text-foreground">
+              <Sparkles className="h-4 w-4 text-amber-400" />
+              {t.statsEnhanced?.aiInsight || "AI 阅读洞察"}
+            </h2>
+            <button
+              onClick={generateInsight}
+              disabled={aiInsightLoading}
+              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                aiInsightLoading
+                  ? "bg-accent/20 text-accent cursor-wait"
+                  : "bg-card text-muted hover:text-foreground hover:bg-background"
+              }`}
+            >
+              {aiInsightLoading ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  {t.statsEnhanced?.aiInsightGenerating || "正在生成洞察报告..."}
+                </>
+              ) : aiInsight ? (
+                <>
+                  <RefreshCw className="h-3.5 w-3.5" />
+                  {"重新生成"}
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-3.5 w-3.5" />
+                  {"生成洞察报告"}
+                </>
+              )}
+            </button>
+          </div>
+          {aiInsightError && (
+            <div className="rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">
+              {t.statsEnhanced?.aiInsightError || "生成失败"}: {aiInsightError}
+            </div>
+          )}
+          {aiInsight ? (
+            <div className="prose prose-sm prose-invert max-w-none text-sm text-foreground/90 leading-relaxed [&_h2]:text-base [&_h2]:font-semibold [&_h2]:mt-3 [&_h2]:mb-1 [&_h2]:text-foreground [&_p]:my-1 [&_ul]:my-1 [&_li]:my-0.5">
+              <div dangerouslySetInnerHTML={{ __html: renderMarkdown(aiInsight) }} />
+            </div>
+          ) : !aiInsightLoading && !aiInsightError ? (
+            <p className="text-xs text-muted py-4 text-center">
+              {stats.totalSessions > 0
+                ? "点击上方按钮，AI 将分析你的阅读数据并生成个性化洞察报告 ✨"
+                : (t.statsEnhanced?.aiInsightEmpty || "暂无足够数据生成洞察")}
+            </p>
+          ) : null}
+        </div>
+      )}
 
       {/* 数据导出 + Tab 切换 */}
       <div className="flex items-center gap-2">

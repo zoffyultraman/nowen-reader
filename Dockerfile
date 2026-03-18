@@ -6,7 +6,7 @@
 # ============================================================
 
 # --- Stage 1: Build frontend (optional, skip if no frontend/) ---
-FROM node:20-alpine AS frontend-builder
+FROM --platform=$BUILDPLATFORM node:20-alpine AS frontend-builder
 
 WORKDIR /frontend
 
@@ -73,7 +73,7 @@ RUN BUILD_TIME=${BUILD_TIME:-$(date -u +%Y-%m-%dT%H:%M:%SZ)} && \
 # ============================================================
 # Stage 3: Runtime (minimal image)
 # ============================================================
-FROM alpine:3.20
+FROM --platform=$TARGETPLATFORM alpine:3.20
 
 LABEL maintainer="NowenReader"
 LABEL description="NowenReader - Self-hosted comic management platform"

@@ -1,6 +1,9 @@
 package service
 
 import (
+	"crypto/md5"
+	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -295,11 +298,6 @@ func quickSync() (added, removed int) {
 		log.Printf("[quick-sync] Added %d, removed %d", len(toAdd), len(toRemove))
 	}
 
-	// 对新增的漫画自动检测系列信息
-	if len(toAdd) > 0 {
-		go autoDetectSeries(toAdd)
-	}
-
 	return len(toAdd), len(toRemove)
 }
 
@@ -372,6 +370,81 @@ func fullSync() {
 
 	if processed > 0 {
 		log.Printf("[full-sync] Processed %d/%d archives (workers: %d)", processed, len(comics), numWorkers)
+	}
+}
+
+// ============================================================
+// MD5 Sync: 为缺少 MD5 哈希的漫画计算文件 MD5
+// ============================================================
+
+func md5Sync() {
+	comics, err := store.GetComicsNeedingMD5(getFullSyncBatchSize())
+	if err != nil || len(comics) == 0 {
+		return
+	}
+
+	allDirs := config.GetAllComicsDirs()
+
+	const numWorkers = 4
+	type workItem struct {
+		ID       string
+		Filename string
+		Path     string
+	}
+
+	jobs := make(chan workItem, len(comics))
+	var wg sync.WaitGroup
+	var processed int64
+	var mu sync.Mutex
+
+	for w := 0; w < numWorkers; w++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for item := range jobs {
+				f, err := os.Open(item.Path)
+				if err != nil {
+					log.Printf("[md5-sync] Failed to open %s: %v", item.Filename, err)
+					continue
+				}
+				h := md5.New()
+				if _, err := io.Copy(h, f); err != nil {
+					f.Close()
+					log.Printf("[md5-sync] Failed to hash %s: %v", item.Filename, err)
+					continue
+				}
+				f.Close()
+				hash := fmt.Sprintf("%x", h.Sum(nil))
+				if err := store.UpdateComicMD5Hash(item.ID, hash); err != nil {
+					log.Printf("[md5-sync] Failed to update %s: %v", item.Filename, err)
+				} else {
+					mu.Lock()
+					processed++
+					mu.Unlock()
+				}
+			}
+		}()
+	}
+
+	for _, c := range comics {
+		var foundPath string
+		for _, dir := range allDirs {
+			candidate := filepath.Join(dir, c.Filename)
+			if _, err := os.Stat(candidate); err == nil {
+				foundPath = candidate
+				break
+			}
+		}
+		if foundPath == "" {
+			continue
+		}
+		jobs <- workItem{ID: c.ID, Filename: c.Filename, Path: foundPath}
+	}
+	close(jobs)
+	wg.Wait()
+
+	if processed > 0 {
+		log.Printf("[md5-sync] Computed MD5 for %d/%d files (workers: %d)", processed, len(comics), numWorkers)
 	}
 }
 
@@ -564,35 +637,11 @@ func StartBackgroundSync() {
 		defer ticker.Stop()
 		for range ticker.C {
 			fullSync()
+			md5Sync() // 在 full sync 之后计算 MD5
 		}
 	}()
 
 	log.Println("[bg-sync] Background sync scheduler started (fsnotify + polling fallback)")
-}
-
-// autoDetectSeries 对新增的漫画自动检测系列信息（在后台运行）。
-func autoDetectSeries(comics []struct {
-	ID       string
-	Filename string
-	Title    string
-	FileSize int64
-}) {
-	updated := 0
-	for _, c := range comics {
-		info := DetectSeries(c.Filename)
-		if info != nil {
-			fields := map[string]interface{}{
-				"seriesName":  info.SeriesName,
-				"seriesIndex": info.SeriesIndex,
-			}
-			if err := store.UpdateComicFields(c.ID, fields); err == nil {
-				updated++
-			}
-		}
-	}
-	if updated > 0 {
-		log.Printf("[series-detect] Auto-detected series info for %d/%d comics", updated, len(comics))
-	}
 }
 
 // ============================================================

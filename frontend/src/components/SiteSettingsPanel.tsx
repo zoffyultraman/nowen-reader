@@ -876,7 +876,7 @@ export function SiteSettingsPanel() {
           {siteT?.batchTranslateMetadata || "Batch Translate Metadata"}
         </div>
         <p className="text-[11px] text-muted">
-          {siteT?.batchTranslateMetadataDesc || "Translate all comic metadata (title, description, genre, series) to the current language"}
+            {siteT?.batchTranslateMetadataDesc || "Translate all comic metadata (title, description, genre) to the current language"}
         </p>
 
         {!translateRunning && !translateDone && (
