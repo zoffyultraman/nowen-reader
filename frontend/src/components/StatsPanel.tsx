@@ -122,7 +122,7 @@ export default function StatsPanel() {
   const [showExportMenu, setShowExportMenu] = useState(false);
 
   // AI 洞察
-  const { configured: aiConfigured } = useAIStatus();
+  const { aiConfigured } = useAIStatus();
   const [aiInsight, setAiInsight] = useState("");
   const [aiInsightLoading, setAiInsightLoading] = useState(false);
   const [aiInsightError, setAiInsightError] = useState("");

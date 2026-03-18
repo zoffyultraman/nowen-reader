@@ -176,6 +176,9 @@ const en: Translations = {
     aiCompleteMetadataLoading: "Completing...",
     aiSuggestCategory: "AI Category",
     aiSuggestCategoryLoading: "Analyzing...",
+    cancel: "Cancel",
+    confirm: "Confirm",
+    deleteSuccess: "Deleted",
   },
 
   // Stats Page
@@ -647,6 +650,7 @@ const en: Translations = {
     searchComicHint: "Type to search comics",
     searchGroupHint: "Search groups...",
     noMatchGroup: "No matching groups",
+    deleteSuccess: "Group deleted",
   },
 
   // Series navigation

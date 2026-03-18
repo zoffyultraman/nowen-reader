@@ -174,6 +174,9 @@ const zhCN = {
     aiCompleteMetadataLoading: "补全中...",
     aiSuggestCategory: "AI 分类",
     aiSuggestCategoryLoading: "分析中...",
+    cancel: "取消",
+    confirm: "确认",
+    deleteSuccess: "已删除",
   },
 
   // Stats Page
@@ -645,6 +648,7 @@ const zhCN = {
     searchComicHint: "输入关键词搜索漫画",
     searchGroupHint: "搜索分组...",
     noMatchGroup: "无匹配分组",
+    deleteSuccess: "分组已删除",
   },
 
   // 系列导航
@@ -813,6 +817,9 @@ export interface Translations {
     aiCompleteMetadataLoading?: string;
     aiSuggestCategory?: string;
     aiSuggestCategoryLoading?: string;
+    cancel?: string;
+    confirm?: string;
+    deleteSuccess?: string;
   };
   stats: {
     title: string;
@@ -1243,6 +1250,7 @@ export interface Translations {
     searchComicHint: string;
     searchGroupHint: string;
     noMatchGroup: string;
+    deleteSuccess?: string;
   };
   series: {
     nextVolume: string;

@@ -21,7 +21,7 @@ interface PageTranslateOverlayProps {
   comicId: string;
   pageIndex: number;
   locale: string;
-  readerTheme?: "day" | "night";
+  readerTheme?: "day" | "night" | string;
 }
 
 const TYPE_LABELS: Record<string, { zh: string; en: string; color: string }> = {

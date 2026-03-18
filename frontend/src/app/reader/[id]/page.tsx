@@ -29,6 +29,16 @@ import AIChatPanel from "@/components/reader/AIChatPanel";
 import PageTranslateOverlay from "@/components/reader/PageTranslateOverlay";
 import { useAIStatus } from "@/hooks/useAIStatus";
 import { useReaderOptions } from "@/hooks/useReaderOptions";
+import { fetchGroupedComicMap, fetchGroupDetail } from "@/api/groups";
+
+// 跨卷导航信息
+interface SeriesVolumeInfo {
+  comicId: string;
+  title: string;
+  pageCount: number;
+  lastReadPage: number;
+  seriesIndex?: number;
+}
 
 export default function ReaderPage() {
   const params = useParams();
@@ -128,17 +138,25 @@ export default function ReaderPage() {
       setIsFavorite(comicDetail.isFavorite);
       setRating(comicDetail.rating || 0);
 
-      // 加载系列卷信息
-      if (comicDetail.seriesName) {
-        setSeriesName(comicDetail.seriesName);
-        fetchSeriesDetail(comicDetail.seriesName)
-          .then((detail) => {
-            if (detail?.volumes) {
-              setSeriesVolumes(detail.volumes);
+      // 加载分组跨卷导航信息
+      fetchGroupedComicMap().then((gmap) => {
+        const groupIds = gmap[comicId];
+        if (groupIds && groupIds.length > 0) {
+          // 取第一个分组
+          fetchGroupDetail(groupIds[0]).then((detail) => {
+            if (detail && detail.comics.length > 1) {
+              setSeriesName(detail.name);
+              setSeriesVolumes(detail.comics.map((c, idx) => ({
+                comicId: c.id,
+                title: c.title,
+                pageCount: c.pageCount,
+                lastReadPage: c.lastReadPage,
+                seriesIndex: idx + 1,
+              })));
             }
-          })
-          .catch(() => {});
-      }
+          }).catch(() => {});
+        }
+      }).catch(() => {});
     }
   }, [comicDetail, useRealData, pages.length, readerOpts.progressTracking]);
 

@@ -18,7 +18,7 @@ interface AIChatPanelProps {
   /** 当前页/章节标识（变化时提示"上下文已更新"） */
   contextLabel?: string;
   /** 阅读主题 */
-  readerTheme?: "day" | "night";
+  readerTheme?: "day" | "night" | string;
 }
 
 export default function AIChatPanel({

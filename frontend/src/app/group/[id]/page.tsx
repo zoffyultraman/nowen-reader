@@ -74,7 +74,7 @@ export default function GroupDetailPage() {
   const [addSearchResults, setAddSearchResults] = useState<{id: string; title: string; coverUrl: string}[]>([]);
   const [addSearchLoading, setAddSearchLoading] = useState(false);
   const [removeConfirmId, setRemoveConfirmId] = useState<string | null>(null);
-  const addSearchTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const addSearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // 触摸拖拽状态
   const [touchDragId, setTouchDragId] = useState<string | null>(null);

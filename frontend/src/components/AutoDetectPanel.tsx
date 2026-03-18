@@ -33,7 +33,7 @@ export default function AutoDetectPanel({
   onCreated,
 }: AutoDetectPanelProps) {
   const t = useTranslation();
-  const locale = useLocale();
+  const { locale } = useLocale();
   const { aiConfigured } = useAIStatus();
   const [loading, setLoading] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
