@@ -30,9 +30,10 @@ export default function MobileBottomNav() {
   // 在阅读器页面、漫画详情页以及未登录时不显示底部导航
   const isReaderPage = pathname?.startsWith("/reader/") || pathname?.startsWith("/novel/");
   const isComicDetailPage = pathname?.startsWith("/comic/");
-  if (!isMobile || isReaderPage || isComicDetailPage || !user) return null;
 
   const currentTab = searchParams.get("tab");
+
+  const shouldHide = !isMobile || isReaderPage || isComicDetailPage || !user;
 
   const navItems = [
     {
@@ -81,6 +82,8 @@ export default function MobileBottomNav() {
     window.addEventListener("resize", updateIndicator);
     return () => window.removeEventListener("resize", updateIndicator);
   }, [updateIndicator]);
+
+  if (shouldHide) return null;
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border/50 bg-background/95 backdrop-blur-lg sm:hidden safe-bottom">
