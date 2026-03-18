@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
+import { useLocation } from "react-router-dom";
 import { BookMarked, Settings, BarChart3 } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth-context";
@@ -12,8 +12,9 @@ import { useAuth } from "@/lib/auth-context";
  * 仅在屏幕宽度 < 640px 时显示
  */
 export default function MobileBottomNav() {
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
+  const location = useLocation();
+  const pathname = location.pathname;
+  const searchParams = new URLSearchParams(location.search);
   const t = useTranslation();
   const { user } = useAuth();
   const [isMobile, setIsMobile] = useState(false);
