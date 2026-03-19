@@ -14,9 +14,9 @@ func CreateUser(user *model.User) error {
 	user.UpdatedAt = now
 
 	_, err := db.Exec(
-		`INSERT INTO "User" ("id", "username", "password", "nickname", "role", "createdAt", "updatedAt")
-		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		user.ID, user.Username, user.Password, user.Nickname, user.Role, now, now,
+		`INSERT INTO "User" ("id", "username", "password", "nickname", "role", "aiEnabled", "createdAt", "updatedAt")
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		user.ID, user.Username, user.Password, user.Nickname, user.Role, user.AiEnabled, now, now,
 	)
 	return err
 }
@@ -25,10 +25,10 @@ func CreateUser(user *model.User) error {
 func GetUserByUsername(username string) (*model.User, error) {
 	user := &model.User{}
 	err := db.QueryRow(
-		`SELECT "id", "username", "password", "nickname", "role", "createdAt", "updatedAt"
+		`SELECT "id", "username", "password", "nickname", "role", "aiEnabled", "createdAt", "updatedAt"
 		 FROM "User" WHERE "username" = ?`,
 		username,
-	).Scan(&user.ID, &user.Username, &user.Password, &user.Nickname, &user.Role, &user.CreatedAt, &user.UpdatedAt)
+	).Scan(&user.ID, &user.Username, &user.Password, &user.Nickname, &user.Role, &user.AiEnabled, &user.CreatedAt, &user.UpdatedAt)
 
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -40,10 +40,10 @@ func GetUserByUsername(username string) (*model.User, error) {
 func GetUserByID(id string) (*model.User, error) {
 	user := &model.User{}
 	err := db.QueryRow(
-		`SELECT "id", "username", "password", "nickname", "role", "createdAt", "updatedAt"
+		`SELECT "id", "username", "password", "nickname", "role", "aiEnabled", "createdAt", "updatedAt"
 		 FROM "User" WHERE "id" = ?`,
 		id,
-	).Scan(&user.ID, &user.Username, &user.Password, &user.Nickname, &user.Role, &user.CreatedAt, &user.UpdatedAt)
+	).Scan(&user.ID, &user.Username, &user.Password, &user.Nickname, &user.Role, &user.AiEnabled, &user.CreatedAt, &user.UpdatedAt)
 
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -61,7 +61,7 @@ func CountUsers() (int, error) {
 // ListUsers returns all users (without password), ordered by creation time.
 func ListUsers() ([]model.AuthUser, error) {
 	rows, err := db.Query(
-		`SELECT "id", "username", "nickname", "role"
+		`SELECT "id", "username", "nickname", "role", "aiEnabled"
 		 FROM "User" ORDER BY "createdAt" ASC`,
 	)
 	if err != nil {
@@ -72,7 +72,7 @@ func ListUsers() ([]model.AuthUser, error) {
 	var users []model.AuthUser
 	for rows.Next() {
 		var u model.AuthUser
-		if err := rows.Scan(&u.ID, &u.Username, &u.Nickname, &u.Role); err != nil {
+		if err := rows.Scan(&u.ID, &u.Username, &u.Nickname, &u.Role, &u.AiEnabled); err != nil {
 			return nil, err
 		}
 		users = append(users, u)
@@ -104,6 +104,24 @@ func DeleteUser(userID string) error {
 	return err
 }
 
+// UpdateUserRole 更新用户角色（admin 或 user）。
+func UpdateUserRole(userID, role string) error {
+	_, err := db.Exec(
+		`UPDATE "User" SET "role" = ?, "updatedAt" = ? WHERE "id" = ?`,
+		role, time.Now(), userID,
+	)
+	return err
+}
+
+// UpdateUserAiEnabled 更新用户的 AI 使用权限。
+func UpdateUserAiEnabled(userID string, aiEnabled bool) error {
+	_, err := db.Exec(
+		`UPDATE "User" SET "aiEnabled" = ?, "updatedAt" = ? WHERE "id" = ?`,
+		aiEnabled, time.Now(), userID,
+	)
+	return err
+}
+
 // ============================================================
 // Session operations
 // ============================================================
@@ -126,14 +144,14 @@ func GetSessionWithUser(token string) (*model.UserSession, *model.User, error) {
 
 	err := db.QueryRow(
 		`SELECT s."id", s."userId", s."expiresAt", s."createdAt",
-		        u."id", u."username", u."password", u."nickname", u."role", u."createdAt", u."updatedAt"
+		        u."id", u."username", u."password", u."nickname", u."role", u."aiEnabled", u."createdAt", u."updatedAt"
 		 FROM "UserSession" s
 		 JOIN "User" u ON u."id" = s."userId"
 		 WHERE s."id" = ?`,
 		token,
 	).Scan(
 		&session.ID, &session.UserID, &session.ExpiresAt, &session.CreatedAt,
-		&user.ID, &user.Username, &user.Password, &user.Nickname, &user.Role, &user.CreatedAt, &user.UpdatedAt,
+		&user.ID, &user.Username, &user.Password, &user.Nickname, &user.Role, &user.AiEnabled, &user.CreatedAt, &user.UpdatedAt,
 	)
 
 	if err == sql.ErrNoRows {

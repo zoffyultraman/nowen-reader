@@ -89,6 +89,7 @@ func createTables() error {
 			"password"  TEXT NOT NULL,
 			"nickname"  TEXT NOT NULL DEFAULT '',
 			"role"      TEXT NOT NULL DEFAULT 'user',
+			"aiEnabled" BOOLEAN NOT NULL DEFAULT 0,
 			"createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			"updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 		)`,
@@ -209,6 +210,7 @@ func createTables() error {
 		`CREATE TABLE IF NOT EXISTS "ReadingSession" (
 			"id"        INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
 			"comicId"   TEXT NOT NULL,
+			"userId"    TEXT NOT NULL DEFAULT '',
 			"startedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			"endedAt"   DATETIME,
 			"duration"  INTEGER NOT NULL DEFAULT 0,
@@ -219,6 +221,7 @@ func createTables() error {
 		)`,
 		`CREATE INDEX IF NOT EXISTS "ReadingSession_comicId_idx" ON "ReadingSession"("comicId")`,
 		`CREATE INDEX IF NOT EXISTS "ReadingSession_startedAt_idx" ON "ReadingSession"("startedAt")`,
+		`CREATE INDEX IF NOT EXISTS "ReadingSession_userId_idx" ON "ReadingSession"("userId")`,
 
 		// ============================================================
 		// ReadingGoal (阅读目标)
@@ -226,12 +229,13 @@ func createTables() error {
 		`CREATE TABLE IF NOT EXISTS "ReadingGoal" (
 			"id"          INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
 			"goalType"    TEXT NOT NULL,
+			"userId"      TEXT NOT NULL DEFAULT '',
 			"targetMins"  INTEGER NOT NULL DEFAULT 0,
 			"targetBooks" INTEGER NOT NULL DEFAULT 0,
 			"createdAt"   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			"updatedAt"   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 		)`,
-		`CREATE UNIQUE INDEX IF NOT EXISTS "ReadingGoal_goalType_key" ON "ReadingGoal"("goalType")`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS "ReadingGoal_userId_goalType_key" ON "ReadingGoal"("userId", "goalType")`,
 
 		// ============================================================
 		// ComicGroup (自定义合并分组)
@@ -239,12 +243,14 @@ func createTables() error {
 		`CREATE TABLE IF NOT EXISTS "ComicGroup" (
 			"id"        INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
 			"name"      TEXT NOT NULL,
+			"userId"    TEXT NOT NULL DEFAULT '',
 			"coverUrl"  TEXT NOT NULL DEFAULT '',
 			"sortOrder" INTEGER NOT NULL DEFAULT 0,
 			"createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			"updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 		)`,
 		`CREATE INDEX IF NOT EXISTS "ComicGroup_name_idx" ON "ComicGroup"("name")`,
+		`CREATE INDEX IF NOT EXISTS "ComicGroup_userId_idx" ON "ComicGroup"("userId")`,
 
 		// ============================================================
 		// ComicGroupItem (分组内漫画关联)
@@ -260,6 +266,29 @@ func createTables() error {
 				REFERENCES "Comic" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 		)`,
 		`CREATE INDEX IF NOT EXISTS "ComicGroupItem_comicId_idx" ON "ComicGroupItem"("comicId")`,
+
+		// ============================================================
+		// UserComicState (用户个人漫画状态)
+		// ============================================================
+		`CREATE TABLE IF NOT EXISTS "UserComicState" (
+			"userId"        TEXT NOT NULL,
+			"comicId"       TEXT NOT NULL,
+			"lastReadPage"  INTEGER NOT NULL DEFAULT 0,
+			"lastReadAt"    DATETIME,
+			"isFavorite"    BOOLEAN NOT NULL DEFAULT 0,
+			"rating"        INTEGER,
+			"totalReadTime" INTEGER NOT NULL DEFAULT 0,
+			"readingStatus" TEXT NOT NULL DEFAULT '',
+			PRIMARY KEY ("userId", "comicId"),
+			CONSTRAINT "UCS_userId_fkey" FOREIGN KEY ("userId")
+				REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+			CONSTRAINT "UCS_comicId_fkey" FOREIGN KEY ("comicId")
+				REFERENCES "Comic" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+		)`,
+		`CREATE INDEX IF NOT EXISTS "UCS_comicId_idx" ON "UserComicState"("comicId")`,
+		`CREATE INDEX IF NOT EXISTS "UCS_userId_fav_idx" ON "UserComicState"("userId", "isFavorite")`,
+		`CREATE INDEX IF NOT EXISTS "UCS_userId_status_idx" ON "UserComicState"("userId", "readingStatus")`,
+		`CREATE INDEX IF NOT EXISTS "UCS_userId_lastReadAt_idx" ON "UserComicState"("userId", "lastReadAt" DESC)`,
 
 		// ============================================================
 		// FTS5 全文搜索虚拟表

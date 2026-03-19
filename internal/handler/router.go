@@ -38,6 +38,7 @@ func SetupRoutes(r *gin.Engine) {
 	usersGroup.Use(middleware.AdminRequired())
 	{
 		usersGroup.GET("", auth.ListUsers)
+		usersGroup.POST("", auth.CreateUserByAdmin)
 		usersGroup.PUT("", auth.UpdateUser)
 		usersGroup.DELETE("", auth.DeleteUserHandler)
 	}
@@ -79,7 +80,13 @@ func SetupRoutes(r *gin.Engine) {
 	{
 		comicsWrite.POST("/batch", comic.BatchOperation)
 		comicsWrite.PUT("/reorder", comic.Reorder)
-		comicsWrite.POST("/cleanup", comic.CleanupInvalid)
+	}
+
+	// Comics admin ops (require admin)
+	comicsAdmin := api.Group("/comics")
+	comicsAdmin.Use(middleware.AdminRequired())
+	{
+		comicsAdmin.POST("/cleanup", comic.CleanupInvalid)
 	}
 
 	// Single comic read operations (no auth)
@@ -95,7 +102,6 @@ func SetupRoutes(r *gin.Engine) {
 		comicByIDWrite.PUT("/favorite", comic.ToggleFavorite)
 		comicByIDWrite.PUT("/rating", comic.UpdateRating)
 		comicByIDWrite.PUT("/progress", comic.UpdateProgress)
-		comicByIDWrite.DELETE("/delete", comic.DeleteComic)
 
 		// Tags per comic
 		comicByIDWrite.POST("/tags", comic.AddTags)
@@ -111,6 +117,13 @@ func SetupRoutes(r *gin.Engine) {
 
 		// 阅读状态管理
 		comicByIDWrite.PUT("/reading-status", comic.SetReadingStatus)
+	}
+
+	// 单本漫画管理员操作（删除等危险操作需要管理员权限）
+	comicByIDAdmin := api.Group("/comics/:id")
+	comicByIDAdmin.Use(middleware.AdminRequired())
+	{
+		comicByIDAdmin.DELETE("/delete", comic.DeleteComic)
 	}
 
 	// ============================================================
@@ -140,22 +153,22 @@ func SetupRoutes(r *gin.Engine) {
 	api.GET("/stats/files", stats.GetFileStats)
 
 	// ============================================================
-	// Upload (Phase 2) — requires auth
+	// Upload (Phase 2) — requires admin
 	// ============================================================
 	upload := NewUploadHandler()
 	uploadGroup := api.Group("")
-	uploadGroup.Use(middleware.AuthRequired())
+	uploadGroup.Use(middleware.AdminRequired())
 	{
 		uploadGroup.POST("/upload", upload.Upload)
 	}
 
 	// ============================================================
-	// Site Settings (Phase 2) — write requires auth
+	// Site Settings (Phase 2) — read public, write requires admin
 	// ============================================================
 	settings := NewSettingsHandler()
 	api.GET("/site-settings", settings.GetSettings)
 	settingsWrite := api.Group("")
-	settingsWrite.Use(middleware.AuthRequired())
+	settingsWrite.Use(middleware.AdminRequired())
 	{
 		settingsWrite.PUT("/site-settings", settings.UpdateSettings)
 	}
@@ -171,10 +184,10 @@ func SetupRoutes(r *gin.Engine) {
 	}
 
 	// ============================================================
-	// Sync trigger (Phase 2) — requires auth
+	// Sync trigger (Phase 2) — requires admin
 	// ============================================================
 	syncTrigger := api.Group("")
-	syncTrigger.Use(middleware.AuthRequired())
+	syncTrigger.Use(middleware.AdminRequired())
 	{
 		syncTrigger.POST("/sync", comic.TriggerSync)
 	}
@@ -201,21 +214,21 @@ func SetupRoutes(r *gin.Engine) {
 	api.GET("/comics/:id/epub-resource/*resourcePath", img.GetEpubResource)
 
 	// ============================================================
-	// Cache management (Phase 3) — requires auth
+	// Cache management (Phase 3) — requires admin
 	// ============================================================
 	cache := NewCacheHandler()
 	cacheGroup := api.Group("")
-	cacheGroup.Use(middleware.AuthRequired())
+	cacheGroup.Use(middleware.AdminRequired())
 	{
 		cacheGroup.POST("/cache", cache.ClearCache)
 	}
 
 	// ============================================================
-	// Thumbnail management (Phase 3) — requires auth
+	// Thumbnail management (Phase 3) — requires admin
 	// ============================================================
 	thumb := NewThumbnailHandler()
 	thumbGroup := api.Group("")
-	thumbGroup.Use(middleware.AuthRequired())
+	thumbGroup.Use(middleware.AdminRequired())
 	{
 		thumbGroup.POST("/thumbnails/manage", thumb.ManageThumbnails)
 	}
@@ -259,66 +272,73 @@ func SetupRoutes(r *gin.Engine) {
 
 	// AI services
 	ai := NewAIHandler()
-	aiGroup := api.Group("/ai")
+
+	// AI 状态查询（所有登录用户可查看）
+	aiStatus := api.Group("/ai")
+	aiStatus.Use(middleware.AuthRequired())
 	{
-		aiGroup.GET("/status", ai.Status)
-		aiGroup.GET("/settings", ai.GetSettings)
-		aiGroup.PUT("/settings", ai.UpdateSettings)
-		aiGroup.GET("/models", ai.Models)
-		aiGroup.GET("/usage", ai.GetUsageStats)
-		aiGroup.DELETE("/usage", ai.ResetUsageStats)
-		aiGroup.POST("/test", ai.TestConnection)
+		aiStatus.GET("/status", ai.Status)
+		aiStatus.GET("/usage", ai.GetUsageStats)
 	}
 
-	// AI per-comic features (Phase 1)
-	comicByIDWrite.POST("/ai-summary", ai.GenerateSummary)
-	comicByIDWrite.POST("/ai-parse-filename", ai.ParseFilename)
-	comicByIDWrite.POST("/ai-suggest-tags", ai.SuggestTags)
-	// Phase 2
-	comicByIDWrite.POST("/ai-analyze-cover", ai.AnalyzeCover)
-	// Phase 6
-	comicByIDWrite.POST("/ai-complete-metadata", ai.CompleteMetadata)
-	// Phase 7
-	comicByIDWrite.POST("/ai-chapter-recap", ai.ChapterRecap)
+	// AI 配置管理（仅管理员）
+	aiAdmin := api.Group("/ai")
+	aiAdmin.Use(middleware.AdminRequired())
+	{
+		aiAdmin.GET("/settings", ai.GetSettings)
+		aiAdmin.PUT("/settings", ai.UpdateSettings)
+		aiAdmin.GET("/models", ai.Models)
+		aiAdmin.DELETE("/usage", ai.ResetUsageStats)
+		aiAdmin.POST("/test", ai.TestConnection)
+		// AI prompt templates (Phase 2) — 管理员管理
+		aiAdmin.GET("/prompts", ai.GetPromptTemplates)
+		aiAdmin.PUT("/prompts", ai.UpdatePromptTemplates)
+		aiAdmin.DELETE("/prompts", ai.ResetPromptTemplates)
+	}
 
-	// AI prompt templates (Phase 2)
-	aiGroup.GET("/prompts", ai.GetPromptTemplates)
-	aiGroup.PUT("/prompts", ai.UpdatePromptTemplates)
-	aiGroup.DELETE("/prompts", ai.ResetPromptTemplates)
+	// AI 使用功能（需要 AI 权限）
+	aiUse := api.Group("/ai")
+	aiUse.Use(middleware.AIRequired())
+	{
+		// AI Chat (Phase 3)
+		aiUse.POST("/chat", ai.Chat)
+		// AI semantic search (Phase 4)
+		aiUse.POST("/semantic-search", ai.SemanticSearch)
+		// AI reading insight (Phase 5)
+		aiUse.POST("/reading-insight", ai.GenerateReadingInsight)
+		// AI batch suggest tags (Phase 5)
+		aiUse.POST("/batch-suggest-tags", ai.BatchSuggestTags)
+		// AI enhanced group detection (Phase 6)
+		aiUse.POST("/enhance-group-detect", ai.EnhanceGroupDetect)
+		// AI suggest category (Phase 6)
+		aiUse.POST("/suggest-category", ai.SuggestCategory)
+		// AI batch suggest category (Phase 6)
+		aiUse.POST("/batch-suggest-category", ai.BatchSuggestCategory)
+		// AI verify duplicates (Phase 7)
+		aiUse.POST("/verify-duplicates", ai.VerifyDuplicates)
+		// AI recommend goal (Phase 7)
+		aiUse.POST("/recommend-goal", ai.RecommendGoal)
+	}
 
-	// AI Chat (Phase 3)
-	aiGroup.POST("/chat", ai.Chat)
-
-	// AI semantic search (Phase 4)
-	aiGroup.POST("/semantic-search", ai.SemanticSearch)
-
-	// AI reading insight (Phase 5)
-	aiGroup.POST("/reading-insight", ai.GenerateReadingInsight)
-
-	// AI batch suggest tags (Phase 5)
-	aiGroup.POST("/batch-suggest-tags", ai.BatchSuggestTags)
-
-	// AI enhanced group detection (Phase 6)
-	aiGroup.POST("/enhance-group-detect", ai.EnhanceGroupDetect)
-
-	// AI suggest category (Phase 6)
-	aiGroup.POST("/suggest-category", ai.SuggestCategory)
-
-	// AI batch suggest category (Phase 6)
-	aiGroup.POST("/batch-suggest-category", ai.BatchSuggestCategory)
-
-	// AI verify duplicates (Phase 7)
-	aiGroup.POST("/verify-duplicates", ai.VerifyDuplicates)
-
-	// AI recommend goal (Phase 7)
-	aiGroup.POST("/recommend-goal", ai.RecommendGoal)
-
-	// AI chapter summary (Phase 3)
-	comicByIDWrite.POST("/ai-chapter-summary", ai.ChapterSummary)
-	comicByIDWrite.POST("/ai-chapter-summaries", ai.BatchChapterSummaries)
-
-	// AI page translation (Phase 4)
-	comicByIDWrite.POST("/ai-translate-page", ai.TranslatePage)
+	// AI per-comic features (Phase 1) — 需要 AI 权限
+	comicByIDAI := api.Group("/comics/:id")
+	comicByIDAI.Use(middleware.AIRequired())
+	{
+		comicByIDAI.POST("/ai-summary", ai.GenerateSummary)
+		comicByIDAI.POST("/ai-parse-filename", ai.ParseFilename)
+		comicByIDAI.POST("/ai-suggest-tags", ai.SuggestTags)
+		// Phase 2
+		comicByIDAI.POST("/ai-analyze-cover", ai.AnalyzeCover)
+		// Phase 6
+		comicByIDAI.POST("/ai-complete-metadata", ai.CompleteMetadata)
+		// Phase 7
+		comicByIDAI.POST("/ai-chapter-recap", ai.ChapterRecap)
+		// AI chapter summary (Phase 3)
+		comicByIDAI.POST("/ai-chapter-summary", ai.ChapterSummary)
+		comicByIDAI.POST("/ai-chapter-summaries", ai.BatchChapterSummaries)
+		// AI page translation (Phase 4)
+		comicByIDAI.POST("/ai-translate-page", ai.TranslatePage)
+	}
 
 	// OPDS protocol
 	opds := NewOPDSHandler()
@@ -336,7 +356,13 @@ func SetupRoutes(r *gin.Engine) {
 	rec := NewRecommendationHandler()
 	api.GET("/recommendations", rec.GetRecommendations)
 	api.GET("/recommendations/similar/:id", rec.GetSimilar)
-	api.POST("/recommendations/ai-reasons", ai.GenerateRecommendationReasons)
+
+	// AI recommendation reasons (需要 AI 权限)
+	aiRecGroup := api.Group("")
+	aiRecGroup.Use(middleware.AIRequired())
+	{
+		aiRecGroup.POST("/recommendations/ai-reasons", ai.GenerateRecommendationReasons)
+	}
 
 	// Tag translation
 	tagTranslate := NewTagTranslateHandler()

@@ -134,6 +134,73 @@ var Migrations = []Migration{
 			`CREATE INDEX IF NOT EXISTS "Comic_md5Hash_idx" ON "Comic"("md5Hash");`,
 		}, "\n"),
 	},
+	{
+		Version:     12,
+		Description: "Add multi-user data isolation: UserComicState table + userId columns",
+		SQL: strings.Join([]string{
+			// 创建用户漫画状态表
+			`CREATE TABLE IF NOT EXISTS "UserComicState" (
+				"userId"        TEXT NOT NULL,
+				"comicId"       TEXT NOT NULL,
+				"lastReadPage"  INTEGER NOT NULL DEFAULT 0,
+				"lastReadAt"    DATETIME,
+				"isFavorite"    BOOLEAN NOT NULL DEFAULT 0,
+				"rating"        INTEGER,
+				"totalReadTime" INTEGER NOT NULL DEFAULT 0,
+				"readingStatus" TEXT NOT NULL DEFAULT '',
+				PRIMARY KEY ("userId", "comicId"),
+				CONSTRAINT "UCS_userId_fkey" FOREIGN KEY ("userId")
+					REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+				CONSTRAINT "UCS_comicId_fkey" FOREIGN KEY ("comicId")
+					REFERENCES "Comic" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+			);`,
+			`CREATE INDEX IF NOT EXISTS "UCS_comicId_idx" ON "UserComicState"("comicId");`,
+			`CREATE INDEX IF NOT EXISTS "UCS_userId_fav_idx" ON "UserComicState"("userId", "isFavorite");`,
+			`CREATE INDEX IF NOT EXISTS "UCS_userId_status_idx" ON "UserComicState"("userId", "readingStatus");`,
+			`CREATE INDEX IF NOT EXISTS "UCS_userId_lastReadAt_idx" ON "UserComicState"("userId", "lastReadAt" DESC);`,
+
+			// 为 ReadingSession 添加 userId 列
+			`ALTER TABLE "ReadingSession" ADD COLUMN "userId" TEXT NOT NULL DEFAULT '';`,
+			`CREATE INDEX IF NOT EXISTS "ReadingSession_userId_idx" ON "ReadingSession"("userId");`,
+
+			// 为 ReadingGoal 添加 userId 列
+			`ALTER TABLE "ReadingGoal" ADD COLUMN "userId" TEXT NOT NULL DEFAULT '';`,
+
+			// 为 ComicGroup 添加 userId 列
+			`ALTER TABLE "ComicGroup" ADD COLUMN "userId" TEXT NOT NULL DEFAULT '';`,
+			`CREATE INDEX IF NOT EXISTS "ComicGroup_userId_idx" ON "ComicGroup"("userId");`,
+
+			// 数据迁移：将现有数据归属到第一个管理员用户
+			// 1. 将 Comic 表中的个人状态迁移到 UserComicState
+			`INSERT OR IGNORE INTO "UserComicState" ("userId", "comicId", "lastReadPage", "lastReadAt", "isFavorite", "rating", "totalReadTime", "readingStatus")
+			 SELECT u."id", c."id", c."lastReadPage", c."lastReadAt", c."isFavorite", c."rating", c."totalReadTime", COALESCE(c."readingStatus", '')
+			 FROM "Comic" c, (SELECT "id" FROM "User" WHERE "role" = 'admin' ORDER BY "createdAt" ASC LIMIT 1) u
+			 WHERE c."lastReadPage" > 0 OR c."isFavorite" = 1 OR c."rating" IS NOT NULL OR c."totalReadTime" > 0;`,
+
+			// 2. 将 ReadingSession 的 userId 更新为第一个管理员
+			`UPDATE "ReadingSession" SET "userId" = (SELECT "id" FROM "User" WHERE "role" = 'admin' ORDER BY "createdAt" ASC LIMIT 1) WHERE "userId" = '';`,
+
+			// 3. 将 ReadingGoal 的 userId 更新为第一个管理员
+			`UPDATE "ReadingGoal" SET "userId" = (SELECT "id" FROM "User" WHERE "role" = 'admin' ORDER BY "createdAt" ASC LIMIT 1) WHERE "userId" = '';`,
+
+			// 4. 将 ComicGroup 的 userId 更新为第一个管理员
+			`UPDATE "ComicGroup" SET "userId" = (SELECT "id" FROM "User" WHERE "role" = 'admin' ORDER BY "createdAt" ASC LIMIT 1) WHERE "userId" = '';`,
+
+			// 更新 ReadingGoal 的唯一约束（加上 userId 维度）
+			// SQLite 不支持 DROP INDEX + 重建唯一约束，所以用新索引
+			`CREATE UNIQUE INDEX IF NOT EXISTS "ReadingGoal_userId_goalType_key" ON "ReadingGoal"("userId", "goalType");`,
+		}, "\n"),
+	},
+	{
+		Version:     13,
+		Description: "Add aiEnabled field to User for per-user AI access control",
+		SQL: strings.Join([]string{
+			// 为 User 表添加 aiEnabled 字段，默认禁用
+			`ALTER TABLE "User" ADD COLUMN "aiEnabled" BOOLEAN NOT NULL DEFAULT 0;`,
+			// 管理员默认启用 AI
+			`UPDATE "User" SET "aiEnabled" = 1 WHERE "role" = 'admin';`,
+		}, "\n"),
+	},
 }
 
 // ensureMigrationsTable creates the migrations tracking table.

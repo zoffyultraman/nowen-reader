@@ -11,15 +11,16 @@ import (
 
 // SiteConfig represents the site-config.json file structure.
 type SiteConfig struct {
-	SiteName        string         `json:"siteName,omitempty"`
-	ComicsDir       string         `json:"comicsDir,omitempty"`
-	ExtraComicsDirs []string       `json:"extraComicsDirs,omitempty"`
-	ThumbnailWidth  int            `json:"thumbnailWidth,omitempty"`
-	ThumbnailHeight int            `json:"thumbnailHeight,omitempty"`
-	PageSize        int            `json:"pageSize,omitempty"`
-	Language        string         `json:"language,omitempty"`
-	Theme           string         `json:"theme,omitempty"`
-	ScannerConfig   *ScannerConfig `json:"scannerConfig,omitempty"`
+	SiteName         string         `json:"siteName,omitempty"`
+	ComicsDir        string         `json:"comicsDir,omitempty"`
+	ExtraComicsDirs  []string       `json:"extraComicsDirs,omitempty"`
+	ThumbnailWidth   int            `json:"thumbnailWidth,omitempty"`
+	ThumbnailHeight  int            `json:"thumbnailHeight,omitempty"`
+	PageSize         int            `json:"pageSize,omitempty"`
+	Language         string         `json:"language,omitempty"`
+	Theme            string         `json:"theme,omitempty"`
+	ScannerConfig    *ScannerConfig `json:"scannerConfig,omitempty"`
+	RegistrationMode string         `json:"registrationMode,omitempty"` // "open" | "invite" | "closed"，默认 "open"
 }
 
 // ScannerConfig 保存可配置化的扫描参数。
@@ -185,6 +186,15 @@ func GetSiteName() string {
 		return n
 	}
 	return "NowenReader"
+}
+
+// GetRegistrationMode 返回注册策略。
+// "open"（默认，开放注册）| "invite"（仅管理员邀请）| "closed"（关闭注册）
+func GetRegistrationMode() string {
+	if m := loadSiteConfig().RegistrationMode; m != "" {
+		return m
+	}
+	return "open"
 }
 
 // DatabaseURL returns the SQLite database path.

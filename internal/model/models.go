@@ -12,16 +12,18 @@ type User struct {
 	Password  string    `json:"-"` // never expose in JSON
 	Nickname  string    `json:"nickname"`
 	Role      string    `json:"role"` // "admin" | "user"
+	AiEnabled bool      `json:"aiEnabled"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 // AuthUser is the safe user representation returned to clients.
 type AuthUser struct {
-	ID       string `json:"id"`
-	Username string `json:"username"`
-	Nickname string `json:"nickname"`
-	Role     string `json:"role"`
+	ID        string `json:"id"`
+	Username  string `json:"username"`
+	Nickname  string `json:"nickname"`
+	Role      string `json:"role"`
+	AiEnabled bool   `json:"aiEnabled"`
 }
 
 type UserSession struct {
@@ -109,12 +111,30 @@ type ComicCategory struct {
 }
 
 // ============================================================
+// User-specific Comic State (用户个人漫画状态)
+// ============================================================
+
+// UserComicState 保存每个用户对每部漫画的个人状态。
+// Comic 表中仍保留 lastReadPage/isFavorite 等字段作为全局默认值（单用户兼容）。
+type UserComicState struct {
+	UserID        string     `json:"userId"`
+	ComicID       string     `json:"comicId"`
+	LastReadPage  int        `json:"lastReadPage"`
+	LastReadAt    *time.Time `json:"lastReadAt"`
+	IsFavorite    bool       `json:"isFavorite"`
+	Rating        *int       `json:"rating"`
+	TotalReadTime int        `json:"totalReadTime"`
+	ReadingStatus string     `json:"readingStatus"`
+}
+
+// ============================================================
 // Reading Sessions
 // ============================================================
 
 type ReadingSession struct {
 	ID        int        `json:"id"`
 	ComicID   string     `json:"comicId"`
+	UserID    string     `json:"userId"`
 	StartedAt time.Time  `json:"startedAt"`
 	EndedAt   *time.Time `json:"endedAt"`
 	Duration  int        `json:"duration"` // seconds
@@ -129,6 +149,7 @@ type ReadingSession struct {
 type ComicGroup struct {
 	ID        int       `json:"id"`
 	Name      string    `json:"name"`
+	UserID    string    `json:"userId"`
 	CoverURL  string    `json:"coverUrl"`
 	SortOrder int       `json:"sortOrder"`
 	CreatedAt time.Time `json:"createdAt"`

@@ -50,6 +50,24 @@ func AdminRequired() gin.HandlerFunc {
 	}
 }
 
+// AIRequired is a middleware that requires the user to have AI access enabled.
+// Admin users always have AI access. Non-admin users need explicit aiEnabled flag.
+func AIRequired() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		user := GetCurrentUser(c)
+		if user == nil {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+			return
+		}
+		if user.Role != "admin" && !user.AiEnabled {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "AI access not enabled for your account"})
+			return
+		}
+		c.Set(ContextKeyUser, user)
+		c.Next()
+	}
+}
+
 // GetCurrentUser extracts and validates the session from the request cookie.
 // Returns nil if no valid session found.
 func GetCurrentUser(c *gin.Context) *model.AuthUser {
@@ -87,10 +105,11 @@ func GetCurrentUser(c *gin.Context) *model.AuthUser {
 	}
 
 	authUser := &model.AuthUser{
-		ID:       user.ID,
-		Username: user.Username,
-		Nickname: user.Nickname,
-		Role:     user.Role,
+		ID:        user.ID,
+		Username:  user.Username,
+		Nickname:  user.Nickname,
+		Role:      user.Role,
+		AiEnabled: user.AiEnabled,
 	}
 	return authUser
 }

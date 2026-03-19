@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 
+	"github.com/nowen-reader/nowen-reader/internal/config"
 	"github.com/nowen-reader/nowen-reader/internal/middleware"
 	"github.com/nowen-reader/nowen-reader/internal/model"
 	"github.com/nowen-reader/nowen-reader/internal/store"
@@ -46,6 +47,25 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
+	// 检查注册策略（第一个用户始终允许注册）
+	userCount, err := store.CountUsers()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
+	}
+	if userCount > 0 {
+		mode := config.GetRegistrationMode()
+		if mode == "closed" {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Registration is closed"})
+			return
+		}
+		if mode == "invite" {
+			// 仅管理员可以通过管理界面创建用户，普通注册被禁止
+			c.JSON(http.StatusForbidden, gin.H{"error": "Registration requires an invitation from admin"})
+			return
+		}
+	}
+
 	// Check if username already exists
 	existing, err := store.GetUserByUsername(req.Username)
 	if err != nil {
@@ -65,11 +85,6 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	}
 
 	// First user is admin
-	userCount, err := store.CountUsers()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
-		return
-	}
 	role := "user"
 	if userCount == 0 {
 		role = "admin"
@@ -81,11 +96,12 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	}
 
 	user := &model.User{
-		ID:       uuid.New().String(),
-		Username: req.Username,
-		Password: string(hashedPassword),
-		Nickname: nickname,
-		Role:     role,
+		ID:        uuid.New().String(),
+		Username:  req.Username,
+		Password:  string(hashedPassword),
+		Nickname:  nickname,
+		Role:      role,
+		AiEnabled: role == "admin", // 管理员默认启用 AI
 	}
 
 	if err := store.CreateUser(user); err != nil {
@@ -109,10 +125,11 @@ func (h *AuthHandler) Register(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"user": model.AuthUser{
-			ID:       user.ID,
-			Username: user.Username,
-			Nickname: user.Nickname,
-			Role:     user.Role,
+			ID:        user.ID,
+			Username:  user.Username,
+			Nickname:  user.Nickname,
+			Role:      user.Role,
+			AiEnabled: user.AiEnabled,
 		},
 	})
 }
@@ -165,10 +182,11 @@ func (h *AuthHandler) Login(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"user": model.AuthUser{
-			ID:       user.ID,
-			Username: user.Username,
-			Nickname: user.Nickname,
-			Role:     user.Role,
+			ID:        user.ID,
+			Username:  user.Username,
+			Nickname:  user.Nickname,
+			Role:      user.Role,
+			AiEnabled: user.AiEnabled,
 		},
 	})
 }
@@ -201,8 +219,9 @@ func (h *AuthHandler) Me(c *gin.Context) {
 
 	user := middleware.GetCurrentUser(c)
 	c.JSON(http.StatusOK, gin.H{
-		"user":       user,
-		"needsSetup": false,
+		"user":             user,
+		"needsSetup":       false,
+		"registrationMode": config.GetRegistrationMode(),
 	})
 }
 
@@ -237,6 +256,8 @@ func (h *AuthHandler) UpdateUser(c *gin.Context) {
 		OldPassword string `json:"oldPassword"`
 		NewPassword string `json:"newPassword"`
 		Nickname    string `json:"nickname"`
+		Role        string `json:"role"`
+		AiEnabled   bool   `json:"aiEnabled"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
@@ -296,6 +317,49 @@ func (h *AuthHandler) UpdateUser(c *gin.Context) {
 
 		c.JSON(http.StatusOK, gin.H{"success": true})
 
+	case "updateRole":
+		if currentUser.Role != "admin" {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Unauthorized"})
+			return
+		}
+		if req.UserID == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "userId is required"})
+			return
+		}
+		if req.UserID == currentUser.ID {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Cannot change your own role"})
+			return
+		}
+		newRole := req.Role
+		if newRole != "admin" && newRole != "user" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid role, must be 'admin' or 'user'"})
+			return
+		}
+		if err := store.UpdateUserRole(req.UserID, newRole); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update role"})
+			return
+		}
+		// 管理员自动启用 AI
+		if newRole == "admin" {
+			_ = store.UpdateUserAiEnabled(req.UserID, true)
+		}
+		c.JSON(http.StatusOK, gin.H{"success": true})
+
+	case "updateAiEnabled":
+		if currentUser.Role != "admin" {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Unauthorized"})
+			return
+		}
+		if req.UserID == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "userId is required"})
+			return
+		}
+		if err := store.UpdateUserAiEnabled(req.UserID, req.AiEnabled); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update AI access"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"success": true})
+
 	default:
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid action"})
 	}
@@ -328,4 +392,89 @@ func (h *AuthHandler) DeleteUserHandler(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"success": true})
+}
+
+// CreateUserByAdmin handles POST /api/auth/users (admin only)
+// 管理员直接创建用户（用于邀请模式或关闭注册模式下添加用户）
+func (h *AuthHandler) CreateUserByAdmin(c *gin.Context) {
+	currentUser := middleware.GetCurrentUser(c)
+	if currentUser == nil || currentUser.Role != "admin" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	var req struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+		Nickname string `json:"nickname"`
+		Role     string `json:"role"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
+		return
+	}
+
+	if req.Username == "" || req.Password == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Username and password are required"})
+		return
+	}
+	if len(req.Username) < 3 || len(req.Username) > 32 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Username must be 3-32 characters"})
+		return
+	}
+	if len(req.Password) < 6 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Password must be at least 6 characters"})
+		return
+	}
+
+	existing, err := store.GetUserByUsername(req.Username)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
+	}
+	if existing != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Username already exists"})
+		return
+	}
+
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), 10)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash password"})
+		return
+	}
+
+	role := "user"
+	if req.Role == "admin" || req.Role == "user" {
+		role = req.Role
+	}
+
+	nickname := req.Nickname
+	if nickname == "" {
+		nickname = req.Username
+	}
+
+	user := &model.User{
+		ID:        uuid.New().String(),
+		Username:  req.Username,
+		Password:  string(hashedPassword),
+		Nickname:  nickname,
+		Role:      role,
+		AiEnabled: role == "admin",
+	}
+
+	if err := store.CreateUser(user); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to create user"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"user": model.AuthUser{
+			ID:        user.ID,
+			Username:  user.Username,
+			Nickname:  user.Nickname,
+			Role:      user.Role,
+			AiEnabled: user.AiEnabled,
+		},
+	})
 }
