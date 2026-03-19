@@ -531,7 +531,7 @@ export default function ReaderPage() {
           currentPage={currentPage}
           onPageChange={handlePageChange}
           onTapCenter={handleTapCenter}
-          direction={direction}
+          direction={direction === "ttb" ? "ltr" : direction}
           useRealData={useRealData}
           readerTheme={readerTheme}
           fitMode={readerOpts.fitMode}
@@ -545,7 +545,7 @@ export default function ReaderPage() {
           currentPage={currentPage}
           onPageChange={handlePageChange}
           onTapCenter={handleTapCenter}
-          direction={direction}
+          direction={direction === "ttb" ? "ltr" : direction}
           useRealData={useRealData}
           readerTheme={readerTheme}
           fitMode={readerOpts.fitMode}
