@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:cached_network_image/cached_network_image.dart';
-
 import '../../data/api/api_client.dart';
+import '../../widgets/authenticated_image.dart';
+import '../../widgets/continue_reading.dart';
 import '../../data/models/comic.dart';
 import '../../data/providers/auth_provider.dart';
 import '../../data/providers/comic_provider.dart';
@@ -105,7 +105,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         ],
       ),
       body: RefreshIndicator(
-        onRefresh: () => ref.read(comicListProvider.notifier).loadComics(),
+        onRefresh: () async {
+          await ref.read(comicListProvider.notifier).loadComics();
+        },
         child: state.comics.isEmpty && state.isLoading
             ? const Center(child: CircularProgressIndicator())
             : state.comics.isEmpty
@@ -124,12 +126,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       ],
                     ),
                   )
-                : _buildGrid(context, state, authState),
+                : _buildContent(context, state, authState),
       ),
     );
   }
 
-  Widget _buildGrid(
+  Widget _buildContent(
       BuildContext context, ComicListState state, AuthState authState) {
     final serverUrl = authState.serverUrl;
     // 根据屏幕宽度决定列数
@@ -142,34 +144,48 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ? 3
                 : 2;
 
-    return GridView.builder(
+    return CustomScrollView(
       controller: _scrollController,
-      padding: const EdgeInsets.all(8),
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: crossAxisCount,
-        childAspectRatio: 0.65,
-        crossAxisSpacing: 8,
-        mainAxisSpacing: 8,
-      ),
-      itemCount: state.comics.length + (state.hasMore ? 1 : 0),
-      itemBuilder: (context, index) {
-        if (index >= state.comics.length) {
-          return const Center(
-            child: Padding(
-              padding: EdgeInsets.all(16),
-              child: CircularProgressIndicator(),
+      slivers: [
+        // 继续阅读横条
+        const SliverToBoxAdapter(
+          child: ContinueReading(),
+        ),
+        // 漫画网格
+        SliverPadding(
+          padding: const EdgeInsets.all(8),
+          sliver: SliverGrid(
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: crossAxisCount,
+              childAspectRatio: 0.65,
+              crossAxisSpacing: 8,
+              mainAxisSpacing: 8,
             ),
-          );
-        }
-        return _ComicCard(
-          comic: state.comics[index],
-          serverUrl: serverUrl,
-          onTap: () => context.push('/comic/${state.comics[index].id}'),
-          onFavoriteToggle: () => ref
-              .read(comicListProvider.notifier)
-              .toggleFavorite(state.comics[index].id),
-        );
-      },
+            delegate: SliverChildBuilderDelegate(
+              (context, index) {
+                if (index >= state.comics.length) {
+                  return const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(16),
+                      child: CircularProgressIndicator(),
+                    ),
+                  );
+                }
+                return _ComicCard(
+                  comic: state.comics[index],
+                  serverUrl: serverUrl,
+                  onTap: () =>
+                      context.push('/comic/${state.comics[index].id}'),
+                  onFavoriteToggle: () => ref
+                      .read(comicListProvider.notifier)
+                      .toggleFavorite(state.comics[index].id),
+                );
+              },
+              childCount: state.comics.length + (state.hasMore ? 1 : 0),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -205,16 +221,16 @@ class _ComicCard extends StatelessWidget {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  CachedNetworkImage(
+                  AuthenticatedImage(
                     imageUrl: thumbUrl,
                     fit: BoxFit.cover,
-                    placeholder: (_, __) => Container(
+                    placeholder: Container(
                       color: cs.surfaceContainerHighest,
                       child: const Center(
                         child: Icon(Icons.image_outlined, size: 32),
                       ),
                     ),
-                    errorWidget: (_, __, ___) => Container(
+                    errorWidget: Container(
                       color: cs.surfaceContainerHighest,
                       child: Center(
                         child: Icon(Icons.broken_image_outlined,

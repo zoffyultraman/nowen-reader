@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:cached_network_image/cached_network_image.dart';
-
 import '../../data/api/api_client.dart';
+import '../../widgets/authenticated_image.dart';
 import '../../data/api/comic_api.dart';
 import '../../data/models/comic.dart';
 import '../../data/providers/auth_provider.dart';
@@ -117,10 +116,10 @@ class _ComicDetailScreenState extends ConsumerState<ComicDetailScreen> {
               background: Stack(
                 fit: StackFit.expand,
                 children: [
-                  CachedNetworkImage(
+                  AuthenticatedImage(
                     imageUrl: thumbUrl,
                     fit: BoxFit.cover,
-                    errorWidget: (_, __, ___) => Container(
+                    errorWidget: Container(
                       color: cs.surfaceContainerHighest,
                     ),
                   ),

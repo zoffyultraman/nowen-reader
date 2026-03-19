@@ -1,4 +1,4 @@
-package com.example.nowen_reader
+package com.nowen.reader
 
 import io.flutter.embedding.android.FlutterActivity
 

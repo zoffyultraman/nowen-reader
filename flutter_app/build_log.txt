@@ -1,7 +1,0 @@
-Downloading android-arm-profile/windows-x64 tools...             1,762ms
-Downloading android-arm-release/windows-x64 tools...               363ms
-Downloading android-arm64-profile/windows-x64 tools...             370ms
-Downloading android-arm64-release/windows-x64 tools...             361ms
-Downloading android-x64-profile/windows-x64 tools...             1,703ms
-Downloading android-x64-release/windows-x64 tools...               538ms
-Running Gradle task 'assembleRelease'...                        
