@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../data/providers/auth_provider.dart';
 import '../../data/api/api_client.dart';
+import '../metadata/metadata_screen.dart';
 
 /// 设置页面
 class SettingsScreen extends ConsumerWidget {
@@ -67,6 +68,23 @@ class SettingsScreen extends ConsumerWidget {
             leading: const Icon(Icons.code_outlined),
             title: const Text('NowenReader'),
             subtitle: const Text('漫画/小说阅读器'),
+          ),
+
+          const Divider(),
+          _buildSectionTitle(context, '数据管理'),
+
+          // 批量刮削元数据
+          ListTile(
+            leading: const Icon(Icons.auto_fix_high),
+            title: const Text('批量刮削元数据'),
+            subtitle: const Text('从在线数据源自动获取元数据'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () {
+              showDialog(
+                context: context,
+                builder: (_) => const BatchMetadataDialog(),
+              );
+            },
           ),
 
           const Divider(),

@@ -6,7 +6,7 @@ import '../../widgets/authenticated_image.dart';
 import '../../data/api/comic_api.dart';
 import '../../data/models/comic.dart';
 import '../../data/providers/auth_provider.dart';
-import '../../data/providers/comic_provider.dart';
+import '../reader/novel_reader_screen.dart';
 
 /// 漫画详情页
 class ComicDetailScreen extends ConsumerStatefulWidget {
@@ -179,11 +179,22 @@ class _ComicDetailScreenState extends ConsumerState<ComicDetailScreen> {
                     Expanded(
                       child: FilledButton.icon(
                         onPressed: () {
-                          context.push(
-                            '/reader/${comic.id}?page=${comic.lastReadPage}',
-                          );
+                          if (comic.isNovel) {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => NovelReaderScreen(
+                                  comicId: comic.id,
+                                  initialChapter: comic.lastReadPage,
+                                ),
+                              ),
+                            );
+                          } else {
+                            context.push(
+                              '/reader/${comic.id}?page=${comic.lastReadPage}',
+                            );
+                          }
                         },
-                        icon: const Icon(Icons.auto_stories),
+                        icon: Icon(comic.isNovel ? Icons.menu_book : Icons.auto_stories),
                         label: Text(comic.lastReadPage > 0
                             ? '继续阅读 (${comic.lastReadPage + 1}/${comic.pageCount})'
                             : '开始阅读'),
@@ -229,6 +240,25 @@ class _ComicDetailScreenState extends ConsumerState<ComicDetailScreen> {
 
                 // 元数据信息
                 _buildInfoSection(context, comic),
+                const SizedBox(height: 12),
+
+                // 元数据刮削入口
+                OutlinedButton.icon(
+                  onPressed: () {
+                    context.push('/metadata/${comic.id}').then((_) {
+                      _loadDetail(); // 返回后刷新
+                    });
+                  },
+                  icon: const Icon(Icons.auto_fix_high, size: 18),
+                  label: Text(
+                    comic.metadataSource != null && comic.metadataSource!.isNotEmpty
+                        ? '重新刮削元数据'
+                        : '刮削元数据',
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(double.infinity, 42),
+                  ),
+                ),
 
                 // 标签
                 if (comic.tags.isNotEmpty) ...[

@@ -268,6 +268,11 @@ func SetupRoutes(r *gin.Engine) {
 		metadataGroup.POST("/novel-scan", meta.NovelScan)
 		metadataGroup.POST("/batch", meta.Batch)
 		metadataGroup.POST("/translate-batch", meta.TranslateBatch)
+		metadataGroup.GET("/stats", meta.Stats)
+		metadataGroup.POST("/ai-batch", meta.AIBatch)
+		metadataGroup.GET("/library", meta.Library)
+		metadataGroup.POST("/batch-selected", meta.BatchSelected)
+		metadataGroup.POST("/clear", meta.ClearMetadata)
 	}
 
 	// AI services

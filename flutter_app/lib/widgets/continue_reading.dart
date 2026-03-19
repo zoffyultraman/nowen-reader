@@ -7,6 +7,7 @@ import '../data/api/comic_api.dart';
 import '../data/models/comic.dart';
 import '../data/providers/auth_provider.dart';
 import 'authenticated_image.dart';
+import '../features/reader/novel_reader_screen.dart';
 
 /// 继续阅读横条 — 显示最近阅读的漫画，带阅读进度
 /// 类似 Netflix "继续观看" 的体验
@@ -139,9 +140,20 @@ class _ContinueReadingState extends ConsumerState<ContinueReading> {
 
                 return GestureDetector(
                   onTap: () {
-                    context.push(
-                      '/reader/${comic.id}?page=${comic.lastReadPage}',
-                    );
+                    if (comic.isNovel) {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => NovelReaderScreen(
+                            comicId: comic.id,
+                            initialChapter: comic.lastReadPage,
+                          ),
+                        ),
+                      );
+                    } else {
+                      context.push(
+                        '/reader/${comic.id}?page=${comic.lastReadPage}',
+                      );
+                    }
                   },
                   child: SizedBox(
                     width: 120,

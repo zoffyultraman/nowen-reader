@@ -234,7 +234,7 @@ func (h *GroupHandler) BatchCreate(c *gin.Context) {
 		return
 	}
 
-	created, err := store.BatchCreateGroups(body.Groups)
+	created, err := store.BatchCreateGroups(body.Groups, getUserID(c))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "批量创建分组失败"})
 		return

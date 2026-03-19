@@ -55,6 +55,7 @@ type ComicListOptions struct {
 	ContentType    string // "comic" | "novel" | "" (全部)
 	ReadingStatus  string // "want" | "reading" | "finished" | "shelved" | "" (全部)
 	ExcludeGrouped bool   // 是否排除已在分组中的漫画（用于分组视图）
+	MetaFilter     string // "all" | "with" | "missing" — 按元数据状态过滤
 }
 
 // ComicListItem 是漫画在列表结果中的序列化表示。
@@ -168,6 +169,13 @@ func GetAllComics(opts ComicListOptions) (*ComicListResult, error) {
 	// ExcludeGrouped: 排除已在分组中的漫画（JOIN确保不受孤儿记录影响）
 	if opts.ExcludeGrouped {
 		conditions = append(conditions, `c."id" NOT IN (SELECT gi."comicId" FROM "ComicGroupItem" gi INNER JOIN "ComicGroup" g ON g."id" = gi."groupId")`)
+	}
+
+	// MetaFilter: 按元数据状态过滤
+	if opts.MetaFilter == "with" {
+		conditions = append(conditions, `c."metadataSource" != '' AND c."metadataSource" IS NOT NULL`)
+	} else if opts.MetaFilter == "missing" {
+		conditions = append(conditions, `(c."metadataSource" = '' OR c."metadataSource" IS NULL)`)
 	}
 
 	whereClause := ""

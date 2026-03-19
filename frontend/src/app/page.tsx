@@ -259,12 +259,19 @@ export default function Home() {
   const [removingIds, setRemovingIds] = useState<Set<string>>(new Set());
   const [removingGroupIds, setRemovingGroupIds] = useState<Set<number>>(new Set());
 
-  // Pagination — 从 URL 初始化页码
+  // Pagination — 从 URL 初始化页码，URL 没有则从 sessionStorage 恢复（解决从阅读页返回时页码丢失的问题）
   const [currentPage, setCurrentPage] = useState(() => {
     if (typeof window !== "undefined") {
+      // 优先从 URL 查询参数读取
       const p = new URLSearchParams(window.location.search).get("page");
       if (p) {
         const n = parseInt(p, 10);
+        if (n > 0) return n;
+      }
+      // URL 没有 page 参数时，尝试从 sessionStorage 恢复
+      const saved = sessionStorage.getItem("homePage");
+      if (saved) {
+        const n = parseInt(saved, 10);
         if (n > 0) return n;
       }
     }
@@ -300,13 +307,15 @@ export default function Home() {
     loadGroups();
   }, [loadGroups]);
 
-  // 分页变化时同步 URL
+  // 分页变化时同步 URL 并持久化到 sessionStorage（确保从其他页面返回时可恢复）
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (currentPage > 1) {
       params.set("page", String(currentPage));
+      sessionStorage.setItem("homePage", String(currentPage));
     } else {
       params.delete("page");
+      sessionStorage.removeItem("homePage");
     }
     const newUrl = params.toString() ? `?${params.toString()}` : window.location.pathname;
     window.history.replaceState(null, "", newUrl);
@@ -343,8 +352,14 @@ export default function Home() {
   const activePage = showGroupView ? groupPage : currentPage;
   const setActivePage = showGroupView ? setGroupPage : setCurrentPage;
 
-  // Reset to page 1 when filters change
+  // Reset to page 1 when filters change（通过对比上一次的筛选条件key，避免首次挂载时误触发）
+  const filterKeyRef = useRef(
+    JSON.stringify([debouncedSearch, selectedTags, favoritesOnly, selectedCategory, sortBy, sortOrder, contentType])
+  );
   useEffect(() => {
+    const newKey = JSON.stringify([debouncedSearch, selectedTags, favoritesOnly, selectedCategory, sortBy, sortOrder, contentType]);
+    if (filterKeyRef.current === newKey) return; // 值没变，不重置
+    filterKeyRef.current = newKey;
     setCurrentPage(1);
     setGroupPage(1);
   }, [debouncedSearch, selectedTags, favoritesOnly, selectedCategory, sortBy, sortOrder, contentType]);

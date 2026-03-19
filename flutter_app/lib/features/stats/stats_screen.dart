@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../data/models/comic.dart';
 import '../../data/providers/comic_provider.dart';
@@ -11,7 +12,6 @@ class StatsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final statsAsync = ref.watch(statsProvider);
-    final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
       appBar: AppBar(title: const Text('阅读统计')),
@@ -31,6 +31,13 @@ class StatsScreen extends ConsumerWidget {
               Text('每日阅读', style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 12),
               _buildDailyChart(context, stats),
+              const SizedBox(height: 24),
+
+              // 最近阅读记录
+              Text('最近阅读记录',
+                  style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 12),
+              _buildRecentSessions(context, stats),
             ],
           ),
         ),
@@ -74,12 +81,12 @@ class StatsScreen extends ConsumerWidget {
   }
 
   Widget _buildDailyChart(BuildContext context, ReadingStats stats) {
-    if (stats.dailyStats.isEmpty) {
+    if (stats.safeDailyStats.isEmpty) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(32),
           child: Text(
-            '暂无阅读记录',
+            '暂无每日统计数据',
             style: TextStyle(
                 color: Theme.of(context).colorScheme.onSurfaceVariant),
           ),
@@ -88,22 +95,29 @@ class StatsScreen extends ConsumerWidget {
     }
 
     // 最近14天数据
-    final recent = stats.dailyStats.take(14).toList().reversed.toList();
-    final maxDuration =
-        recent.fold<int>(0, (max, d) => d.duration > max ? d.duration : max);
+    final recent = stats.safeDailyStats.take(14).toList().reversed.toList();
+    // 优先用 duration 作为柱状图高度，如果全为0则用 sessions
+    final allDurationZero = recent.every((d) => d.duration == 0);
+    final maxVal = allDurationZero
+        ? recent.fold<int>(0, (max, d) => d.sessions > max ? d.sessions : max)
+        : recent.fold<int>(
+            0, (max, d) => d.duration > max ? d.duration : max);
 
     return SizedBox(
       height: 150,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: recent.map((d) {
-          final ratio = maxDuration > 0 ? d.duration / maxDuration : 0.0;
+          final ratio = maxVal > 0 ? (allDurationZero ? d.sessions / maxVal : d.duration / maxVal) : 0.0;
           final cs = Theme.of(context).colorScheme;
+          final tooltipMsg = allDurationZero
+              ? '${d.date}\n${d.sessions} 次阅读'
+              : '${d.date}\n${_formatDuration(d.duration)}';
           return Expanded(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 2),
               child: Tooltip(
-                message: '${d.date}\n${_formatDuration(d.duration)}',
+                message: tooltipMsg,
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
@@ -121,7 +135,9 @@ class StatsScreen extends ConsumerWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      d.date.substring(d.date.length - 2),
+                      d.date.length >= 2
+                          ? d.date.substring(d.date.length - 2)
+                          : d.date,
                       style: TextStyle(
                           fontSize: 10, color: cs.onSurfaceVariant),
                     ),
@@ -135,12 +151,101 @@ class StatsScreen extends ConsumerWidget {
     );
   }
 
+  Widget _buildRecentSessions(BuildContext context, ReadingStats stats) {
+    if (stats.safeRecentSessions.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Text(
+            '暂无阅读记录',
+            style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant),
+          ),
+        ),
+      );
+    }
+
+    // 只显示最近10条
+    final sessions = stats.safeRecentSessions.take(10).toList();
+    return Column(
+      children: sessions.map((s) {
+        return _RecentSessionTile(session: s);
+      }).toList(),
+    );
+  }
+
   static String _formatDuration(int seconds) {
     if (seconds < 60) return '${seconds}s';
     if (seconds < 3600) return '${seconds ~/ 60}m';
     final h = seconds ~/ 3600;
     final m = (seconds % 3600) ~/ 60;
     return '${h}h ${m}m';
+  }
+}
+
+/// 最近阅读记录条目
+class _RecentSessionTile extends StatelessWidget {
+  final RecentSession session;
+
+  const _RecentSessionTile({required this.session});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    // 解析时间
+    String timeStr = '';
+    try {
+      final dt = DateTime.parse(session.startedAt).toLocal();
+      final now = DateTime.now();
+      final diff = now.difference(dt);
+      if (diff.inMinutes < 60) {
+        timeStr = '${diff.inMinutes}分钟前';
+      } else if (diff.inHours < 24) {
+        timeStr = '${diff.inHours}小时前';
+      } else if (diff.inDays < 7) {
+        timeStr = '${diff.inDays}天前';
+      } else {
+        timeStr =
+            '${dt.month}/${dt.day} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+      }
+    } catch (_) {
+      timeStr = session.startedAt;
+    }
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: ListTile(
+        leading: CircleAvatar(
+          backgroundColor: cs.primaryContainer,
+          child: Icon(Icons.auto_stories, color: cs.primary, size: 20),
+        ),
+        title: Text(
+          session.comicTitle,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        subtitle: Text(
+          '第${session.startPage + 1}-${session.endPage + 1}页 · ${_formatDuration(session.duration)}',
+          style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+        ),
+        trailing: Text(
+          timeStr,
+          style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+        ),
+        onTap: () {
+          context.push('/comic/${session.comicId}');
+        },
+      ),
+    );
+  }
+
+  static String _formatDuration(int seconds) {
+    if (seconds <= 0) return '未记录';
+    if (seconds < 60) return '${seconds}秒';
+    if (seconds < 3600) return '${seconds ~/ 60}分钟';
+    final h = seconds ~/ 3600;
+    final m = (seconds % 3600) ~/ 60;
+    return '${h}小时${m}分钟';
   }
 }
 

@@ -9,12 +9,15 @@ import {
   Sun,
   Moon,
   Brain,
+  Database,
 } from "lucide-react";
+import Link from "next/link";
 import { useTranslation } from "@/lib/i18n";
 import { useTheme } from "@/lib/theme-context";
 import { useAuth } from "@/lib/auth-context";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import { UserMenu } from "@/components/UserMenu";
+import { useScraperStore } from "@/hooks/useScraperStore";
 
 interface NavbarProps {
   searchQuery: string;
@@ -38,6 +41,9 @@ export default function Navbar({
   const { theme, toggleTheme } = useTheme();
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const scraperT = (t as any).scraper || {};
+  const { batchRunning } = useScraperStore();
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 border-b border-border/50 bg-background/70 backdrop-blur-xl backdrop-saturate-150">
@@ -110,6 +116,27 @@ export default function Navbar({
             )}
             <span className="hidden sm:inline">{uploading ? t.navbar.uploading : t.navbar.upload}</span>
           </button>
+          )}
+
+          {/* Metadata Scraper — 仅管理员可见 */}
+          {isAdmin && (
+            <Link
+              href="/scraper"
+              className={`relative hidden sm:flex h-9 w-9 items-center justify-center rounded-xl border transition-colors duration-200 ${
+                batchRunning
+                  ? "border-purple-500/50 text-purple-500 bg-purple-500/5"
+                  : "border-border/60 text-muted hover:border-purple-500/40 hover:text-purple-500 hover:bg-purple-500/5"
+              }`}
+              title={scraperT.navEntry || "元数据刮削"}
+            >
+              <Database className={`h-4 w-4 ${batchRunning ? "animate-pulse" : ""}`} />
+              {batchRunning && (
+                <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-purple-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-purple-500" />
+                </span>
+              )}
+            </Link>
           )}
 
           {/* Theme Toggle */}

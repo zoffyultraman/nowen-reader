@@ -20,10 +20,11 @@ func StartReadingSession(comicID string, startPage int, userID ...string) (int64
 	if len(userID) > 0 {
 		uid = userID[0]
 	}
+	now := time.Now().UTC().Format(time.RFC3339)
 	res, err := db.Exec(`
 		INSERT INTO "ReadingSession" ("comicId", "userId", "startPage", "startedAt")
 		VALUES (?, ?, ?, ?)
-	`, comicID, uid, startPage, time.Now().UTC())
+	`, comicID, uid, startPage, now)
 	if err != nil {
 		return 0, err
 	}
@@ -40,10 +41,11 @@ func EndReadingSession(sessionID int, endPage int, duration int, userID ...strin
 	}
 
 	// Update session
+	now := time.Now().UTC().Format(time.RFC3339)
 	_, err = db.Exec(`
 		UPDATE "ReadingSession" SET "endedAt" = ?, "endPage" = ?, "duration" = ?
 		WHERE "id" = ?
-	`, time.Now().UTC(), endPage, duration, sessionID)
+	`, now, endPage, duration, sessionID)
 	if err != nil {
 		return err
 	}

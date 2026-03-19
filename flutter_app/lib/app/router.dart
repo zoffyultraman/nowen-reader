@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -7,12 +6,14 @@ import '../features/auth/login_screen.dart';
 import '../features/detail/comic_detail_screen.dart';
 import '../features/home/home_screen.dart';
 import '../features/reader/comic_reader_screen.dart';
+import '../features/reader/novel_reader_screen.dart';
 import '../features/search/search_screen.dart';
 import '../features/settings/settings_screen.dart';
 import '../features/server/server_config_screen.dart';
 import '../features/shell/app_shell.dart';
 import '../features/stats/stats_screen.dart';
 import '../features/groups/group_detail_screen.dart';
+import '../features/metadata/metadata_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authProvider);
@@ -48,7 +49,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/login',
         builder: (_, __) => const LoginScreen(),
       ),
-      // 阅读器（全屏，无 Shell）
+      // 漫画阅读器（全屏，无 Shell）
       GoRoute(
         path: '/reader/:id',
         builder: (_, state) {
@@ -56,6 +57,16 @@ final routerProvider = Provider<GoRouter>((ref) {
           final pageStr = state.uri.queryParameters['page'];
           final initialPage = pageStr != null ? int.tryParse(pageStr) ?? 0 : 0;
           return ComicReaderScreen(comicId: comicId, initialPage: initialPage);
+        },
+      ),
+      // 小说阅读器（全屏，无 Shell）
+      GoRoute(
+        path: '/novel/:id',
+        builder: (_, state) {
+          final comicId = state.pathParameters['id']!;
+          final chapterStr = state.uri.queryParameters['chapter'];
+          final initialChapter = chapterStr != null ? int.tryParse(chapterStr) ?? 0 : 0;
+          return NovelReaderScreen(comicId: comicId, initialChapter: initialChapter);
         },
       ),
       // 主壳（带底部导航栏）
@@ -89,6 +100,11 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/group/:id',
         builder: (_, state) => GroupDetailScreen(groupId: int.parse(state.pathParameters['id']!)),
+      ),
+      // 元数据刮削
+      GoRoute(
+        path: '/metadata/:id',
+        builder: (_, state) => MetadataScreen(comicId: state.pathParameters['id']!),
       ),
     ],
   );

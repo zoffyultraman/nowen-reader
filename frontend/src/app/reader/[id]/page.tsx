@@ -628,7 +628,7 @@ export default function ReaderPage() {
         direction={direction}
         isFullscreen={isFullscreen}
         readerTheme={readerTheme}
-        onBack={() => router.push("/")}
+        onBack={() => router.back()}
         onPageChange={handlePageChange}
         onModeChange={handleModeChange}
         onDirectionChange={handleDirectionChange}

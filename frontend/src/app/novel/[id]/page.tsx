@@ -407,7 +407,7 @@ export default function NovelReaderPage() {
         totalChapters={totalChapters}
         isFullscreen={isFullscreen}
         readerTheme={readerTheme}
-        onBack={() => router.push("/")}
+        onBack={() => router.back()}
         onChapterChange={handlePageChange}
         onToggleFullscreen={toggleFullscreen}
         onThemeChange={setReaderTheme}

@@ -736,6 +736,79 @@ autoDetect: "智能分组",
     prevVolume: "上一卷",
     volumes: "卷",
   },
+
+  // 元数据刮削页面
+  scraper: {
+    title: "元数据刮削",
+    subtitle: "自动获取封面、简介、标签等信息",
+    statsTotal: "总计",
+    statsWithMeta: "已获取",
+    statsMissing: "缺失",
+    completionRate: "元数据完成度",
+    operationTitle: "刮削操作",
+    modeLabel: "刮削模式",
+    modeStandard: "标准刮削",
+    modeStandardDesc: "从 AniList、Bangumi 等在线源搜索并匹配元数据",
+    modeAI: "AI 智能刮削",
+    modeAIDesc: "AI 解析文件名 → 在线搜索 → AI 补全，多级回退",
+    scopeLabel: "刮削范围",
+    scopeMissing: "仅缺失",
+    scopeAll: "全部重刮",
+    startBtn: "开始刮削",
+    stopBtn: "停止刮削",
+    refreshStats: "刷新统计",
+    progressTitle: "刮削进度",
+    progressDone: "刮削完成",
+    progressRemaining: "剩余",
+    stepParse: "AI 解析文件名...",
+    stepSearch: "在线搜索元数据...",
+    stepApply: "应用元数据...",
+    stepAIComplete: "AI 智能补全...",
+    stepProcessing: "处理中...",
+    resultSuccess: "成功",
+    resultFailed: "失败",
+    resultTotal: "总数",
+    resultListTitle: "处理结果",
+    emptyTitle: "开始为你的书库获取元数据",
+    emptyDesc: "选择刮削模式和范围后，点击「开始刮削」自动从在线数据源获取封面、简介、标签等信息。AI 模式可智能解析文件名提高匹配率。",
+    navEntry: "元数据刮削",
+    updateTitleLabel: "同时更新书名",
+    updateTitleDesc: "开启后会用元数据源中的标题替换当前书名（如文件名等）",
+    tabScrape: "刮削",
+    tabLibrary: "书库管理",
+    libSearchPlaceholder: "搜索书名、文件名...",
+    libFilterLabel: "筛选",
+    libFilterAll: "全部",
+    libFilterMissing: "缺失元数据",
+    libFilterWith: "已有元数据",
+    libTypeAll: "全部类型",
+    libTypeComic: "漫画",
+    libTypeNovel: "小说",
+    libSelectAll: "全选当页",
+    libDeselectAll: "取消全选",
+    libSelected: "已选",
+    libItems: "项",
+    libScrapeSelected: "刮削选中",
+    libClearMeta: "清除元数据",
+    libCancel: "取消",
+    libEmpty: "没有找到匹配的内容",
+    libNoMeta: "缺失",
+    libTotalItems: "共",
+    detailTitle: "书籍详情",
+    detailNoMeta: "缺失元数据",
+    detailSearchTitle: "精准刮削",
+    detailSearchDesc: "搜索在线数据源，选择最匹配的结果应用到此书",
+    modeStandardShort: "在线源搜索匹配",
+    modeAIShort: "AI解析+搜索+补全",
+    rightPanelHint: "点击左侧书籍查看详情",
+    rightPanelDesc: "选择一本书查看元数据详情并进行精准刮削，或使用上方批量操作对全库/选中项统一刮削",
+    paginationPerPage: "每页",
+    paginationUnit: "条",
+    paginationFirst: "首页",
+    paginationLast: "末页",
+    paginationGoto: "跳至",
+    paginationPage: "页",
+  },
 } satisfies Translations;
 
 export default zhCN;
@@ -1413,5 +1486,76 @@ export interface Translations {
     nextVolume: string;
     prevVolume: string;
     volumes: string;
+  };
+  scraper?: {
+    title: string;
+    subtitle: string;
+    statsTotal: string;
+    statsWithMeta: string;
+    statsMissing: string;
+    completionRate: string;
+    operationTitle: string;
+    modeLabel: string;
+    modeStandard: string;
+    modeStandardDesc: string;
+    modeAI: string;
+    modeAIDesc: string;
+    scopeLabel: string;
+    scopeMissing: string;
+    scopeAll: string;
+    startBtn: string;
+    stopBtn: string;
+    refreshStats: string;
+    progressTitle: string;
+    progressDone: string;
+    progressRemaining: string;
+    stepParse: string;
+    stepSearch: string;
+    stepApply: string;
+    stepAIComplete: string;
+    stepProcessing: string;
+    resultSuccess: string;
+    resultFailed: string;
+    resultTotal: string;
+    resultListTitle: string;
+    emptyTitle: string;
+    emptyDesc: string;
+    navEntry: string;
+    updateTitleLabel: string;
+    updateTitleDesc: string;
+    tabScrape: string;
+    tabLibrary: string;
+    libSearchPlaceholder: string;
+    libFilterLabel: string;
+    libFilterAll: string;
+    libFilterMissing: string;
+    libFilterWith: string;
+    libTypeAll: string;
+    libTypeComic: string;
+    libTypeNovel: string;
+    libSelectAll: string;
+    libDeselectAll: string;
+    libSelected: string;
+    libItems: string;
+    libScrapeSelected: string;
+    libClearMeta: string;
+    libCancel: string;
+    libEmpty: string;
+    libNoMeta: string;
+    libTotalItems: string;
+    detailTitle: string;
+    detailNoMeta: string;
+    detailSearchTitle: string;
+    detailSearchDesc: string;
+    modeStandardShort: string;
+    modeAIShort: string;
+    rightPanelHint: string;
+    rightPanelDesc: string;
+    paginationPerPage: string;
+    paginationUnit: string;
+    paginationFirst: string;
+    paginationLast: string;
+    paginationGoto: string;
+    paginationPage: string;
   };
 }

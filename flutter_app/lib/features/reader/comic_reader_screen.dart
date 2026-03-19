@@ -10,6 +10,7 @@ import '../../data/api/comic_api.dart';
 import '../../data/providers/auth_provider.dart';
 import '../../widgets/authenticated_image.dart';
 import '../../widgets/reader_settings_panel.dart';
+import 'novel_reader_screen.dart';
 
 /// 漫画阅读器
 class ComicReaderScreen extends ConsumerStatefulWidget {
@@ -35,6 +36,10 @@ class _ComicReaderScreenState extends ConsumerState<ComicReaderScreen> {
   bool _loading = true;
   int? _sessionId;
   DateTime? _sessionStart;
+  bool _sessionEnded = false;
+
+  // 提前缓存 API 引用，避免 dispose 后 ref 不可用
+  late final ComicApi _api;
 
   // 设置
   ReaderSettings _settings = const ReaderSettings();
@@ -48,6 +53,8 @@ class _ComicReaderScreenState extends ConsumerState<ComicReaderScreen> {
     super.initState();
     _currentPage = widget.initialPage;
     _pageController = PageController(initialPage: _currentPage);
+    // 提前缓存 API 引用
+    _api = ref.read(comicApiProvider);
     // 全屏沉浸模式
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     _loadSettings();
@@ -59,12 +66,19 @@ class _ComicReaderScreenState extends ConsumerState<ComicReaderScreen> {
     _autoPageTimer?.cancel();
     // 恢复系统UI
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-    // 保存进度 & 结束会话
-    _saveProgress();
-    _endSession();
+    // 使用缓存的 _api 引用保存进度和结束会话（fire-and-forget）
+    _saveProgressDirect();
+    _endSessionDirect();
     _pageController.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  /// 拦截返回操作，确保 session 正确结束后再退出
+  Future<void> _onWillPop() async {
+    await _saveProgress();
+    await _endSession();
+    if (mounted) Navigator.of(context).pop();
   }
 
   Future<void> _loadSettings() async {
@@ -74,9 +88,27 @@ class _ComicReaderScreenState extends ConsumerState<ComicReaderScreen> {
 
   Future<void> _loadPages() async {
     try {
-      final api = ref.read(comicApiProvider);
-      final data = await api.getPages(widget.comicId);
+      final data = await _api.getPages(widget.comicId);
       if (!mounted) return;
+
+      // 如果是小说类型，自动跳转到小说阅读器
+      final isNovel = data['isNovel'] == true;
+      if (isNovel) {
+        // 恢复系统UI后跳转（使用 Navigator 直接跳转，绕过 GoRouter）
+        SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+        if (mounted) {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(
+              builder: (_) => NovelReaderScreen(
+                comicId: widget.comicId,
+                initialChapter: widget.initialPage,
+              ),
+            ),
+          );
+        }
+        return;
+      }
+
       setState(() {
         _totalPages = data['totalPages'] ?? 0;
         _loading = false;
@@ -89,26 +121,37 @@ class _ComicReaderScreenState extends ConsumerState<ComicReaderScreen> {
 
   Future<void> _startSession() async {
     try {
-      final api = ref.read(comicApiProvider);
-      _sessionId = await api.startSession(widget.comicId, _currentPage);
+      _sessionId = await _api.startSession(widget.comicId, _currentPage);
       _sessionStart = DateTime.now();
     } catch (_) {}
   }
 
   Future<void> _endSession() async {
-    if (_sessionId == null || _sessionStart == null) return;
+    if (_sessionId == null || _sessionStart == null || _sessionEnded) return;
+    _sessionEnded = true;
     final duration = DateTime.now().difference(_sessionStart!).inSeconds;
     try {
-      final api = ref.read(comicApiProvider);
-      await api.endSession(_sessionId!, _currentPage, duration);
+      await _api.endSession(_sessionId!, _currentPage, duration);
     } catch (_) {}
+  }
+
+  /// dispose 中使用的 fire-and-forget 版本（防止 dispose 后 ref 不可用）
+  void _endSessionDirect() {
+    if (_sessionId == null || _sessionStart == null || _sessionEnded) return;
+    _sessionEnded = true;
+    final duration = DateTime.now().difference(_sessionStart!).inSeconds;
+    _api.endSession(_sessionId!, _currentPage, duration).catchError((_) {});
   }
 
   Future<void> _saveProgress() async {
     try {
-      final api = ref.read(comicApiProvider);
-      await api.updateProgress(widget.comicId, _currentPage);
+      await _api.updateProgress(widget.comicId, _currentPage);
     } catch (_) {}
+  }
+
+  /// dispose 中使用的 fire-and-forget 版本
+  void _saveProgressDirect() {
+    _api.updateProgress(widget.comicId, _currentPage).catchError((_) {});
   }
 
   void _onPageChanged(int page) {
@@ -191,24 +234,31 @@ class _ComicReaderScreenState extends ConsumerState<ComicReaderScreen> {
       );
     }
 
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: Stack(
-        children: [
-          // 主体 — 根据阅读模式切换
-          GestureDetector(
-            onTap: _toggleOverlay,
-            child: _settings.mode == ComicReadingMode.webtoon
-                ? _buildWebtoonView(serverUrl)
-                : _buildPageView(serverUrl),
-          ),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop) return;
+        await _onWillPop();
+      },
+      child: Scaffold(
+        backgroundColor: Colors.black,
+        body: Stack(
+          children: [
+            // 主体 — 根据阅读模式切换
+            GestureDetector(
+              onTap: _toggleOverlay,
+              child: _settings.mode == ComicReadingMode.webtoon
+                  ? _buildWebtoonView(serverUrl)
+                  : _buildPageView(serverUrl),
+            ),
 
-          // 顶部 & 底部覆盖层
-          if (_showOverlay) ...[
-            _buildTopOverlay(),
-            _buildBottomOverlay(),
+            // 顶部 & 底部覆盖层
+            if (_showOverlay) ...[
+              _buildTopOverlay(),
+              _buildBottomOverlay(),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
@@ -317,7 +367,7 @@ class _ComicReaderScreenState extends ConsumerState<ComicReaderScreen> {
               // 返回按钮
               IconButton(
                 icon: const Icon(Icons.arrow_back, color: Colors.white),
-                onPressed: () => Navigator.of(context).pop(),
+                onPressed: _onWillPop,
               ),
               // 页码
               Expanded(

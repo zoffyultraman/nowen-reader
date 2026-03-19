@@ -673,7 +673,7 @@ func isAlphaNumeric(s string) bool {
 
 // BatchCreateGroups 批量创建分组并添加漫画（用于自动检测后一键创建）。
 // 如果已存在同名分组，则将漫画添加到现有分组而不是创建新分组。
-func BatchCreateGroups(groups []AutoDetectGroup) (int, error) {
+func BatchCreateGroups(groups []AutoDetectGroup, userID ...string) (int, error) {
 	// 预加载所有已有分组名 → ID 的映射
 	existingGroups, err := GetAllGroups()
 	if err != nil {
@@ -695,7 +695,7 @@ func BatchCreateGroups(groups []AutoDetectGroup) (int, error) {
 			created++
 			continue
 		}
-		id, err := CreateGroup(g.Name)
+		id, err := CreateGroup(g.Name, userID...)
 		if err != nil {
 			continue
 		}
