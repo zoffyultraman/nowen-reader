@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { useTranslation } from "@/lib/i18n";
-import { User, LogOut, Settings, Shield } from "lucide-react";
+import { User, LogOut, Settings, Shield, KeyRound } from "lucide-react";
 
 export function UserMenu() {
   const { user, logout } = useAuth();
@@ -53,6 +53,16 @@ export function UserMenu() {
           </div>
 
           <div className="py-1">
+            <button
+              onClick={() => {
+                setOpen(false);
+                router.push("/settings?tab=account");
+              }}
+              className="w-full px-3 py-2 text-left text-sm text-muted hover:bg-card-hover hover:text-foreground flex items-center gap-2"
+            >
+              <KeyRound className="w-4 h-4" />
+              修改密码
+            </button>
             <button
               onClick={() => {
                 setOpen(false);

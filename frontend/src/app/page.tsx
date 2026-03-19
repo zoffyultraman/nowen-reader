@@ -34,6 +34,7 @@ import { useAIStatus } from "@/hooks/useAIStatus";
 import type { ComicGroup } from "@/hooks/useComicTypes";
 import { fetchGroups, fetchGroupedComicMap, createGroup, updateGroup, deleteGroup } from "@/api/groups";
 import { toggleComicFavorite, deleteComicById } from "@/api/comics";
+import { useAuth } from "@/lib/auth-context";
 
 const DEFAULT_PAGE_SIZE = 24;
 
@@ -79,6 +80,8 @@ export default function Home() {
   const { locale: rawLocale } = useLocale();
   const locale = rawLocale === "zh-CN" ? "zh" : "en";
   const toast = useToast();
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
   // 会话筛选条件保持（sessionStorage）
   const [searchQuery, setSearchQuery] = useState(() => {
     if (typeof window !== "undefined") {
@@ -1372,6 +1375,7 @@ accept=".zip,.cbz,.cbr,.rar,.7z,.cb7,.pdf,.txt,.epub,.mobi,.azw3,.html,.htm"
           aiTagsLoading={aiTagsLoading}
           onAISuggestCategory={aiConfigured ? handleAIBatchSuggestCategory : undefined}
           aiCategoryLoading={aiCategoryLoading}
+          isAdmin={isAdmin}
         />
       )}
 
@@ -1505,6 +1509,7 @@ accept=".zip,.cbz,.cbr,.rar,.7z,.cb7,.pdf,.txt,.epub,.mobi,.azw3,.html,.htm"
           comicId={contextMenu.comic.id}
           comicTitle={contextMenu.comic.title}
           isFavorite={contextMenu.comic.isFavorite}
+          isAdmin={isAdmin}
           onClose={() => setContextMenu(null)}
           onRead={(id) => {
             const c = sortedComics.find((c) => c.id === id);

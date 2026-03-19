@@ -19,6 +19,7 @@ import {
   ApiCategory,
 } from "@/hooks/useComics";
 import type { ComicMetadataUpdate } from "@/hooks/useComics";
+import { useAuth } from "@/lib/auth-context";
 import {
   ArrowLeft,
   Heart,
@@ -72,6 +73,7 @@ export default function ComicDetailPage() {
   const comicId = params.id as string;
   const t = useTranslation();
   const { locale } = useLocale();
+  const { user } = useAuth();
 
   function formatDuration(seconds: number) {
     if (seconds < 60) return t.duration.seconds.replace("{n}", String(seconds));
@@ -735,6 +737,7 @@ export default function ComicDetailPage() {
             </Link>
 
             {/* Delete */}
+            {user?.role === "admin" && (
             <button
               onClick={() => setShowDeleteConfirm(true)}
               className="flex w-full items-center justify-center gap-2 rounded-xl border border-red-500/30 py-2.5 text-sm text-red-400 transition-all hover:bg-red-500/10 btn-press"
@@ -742,6 +745,7 @@ export default function ComicDetailPage() {
               <Trash2 className="h-4 w-4" />
               {t.comicDetail.deleteComic}
             </button>
+            )}
           </div>
 
           {/* Info */}

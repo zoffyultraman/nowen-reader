@@ -19,8 +19,11 @@ import {
   FileText,
   Monitor,
   HardDrive,
+  Users,
+  UserCog,
 } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
+import { useAuth } from "@/lib/auth-context";
 import dynamic from "next/dynamic";
 
 /* ── 懒加载面板 ── */
@@ -58,10 +61,22 @@ const FileStatsPanel = dynamic(
   { loading: LoadingSkeleton }
 );
 
+const UserManagementPanel = dynamic(
+  () => import("@/components/UserManagementPanel").then((mod) => mod.UserManagementPanel),
+  { loading: LoadingSkeleton }
+);
+
+const AccountPanel = dynamic(
+  () => import("@/components/AccountPanel").then((mod) => mod.AccountPanel),
+  { loading: LoadingSkeleton }
+);
+
 /* ── 类型 ── */
 type SettingsTab =
+  | "account"
   | "site"
   | "ai"
+  | "users"
   | "stats"
   | "file-stats"
   | "logs"
@@ -84,10 +99,12 @@ export default function SettingsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const t = useTranslation();
-  const validTabs: SettingsTab[] = ["site", "ai", "stats", "file-stats", "logs", "about"];
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
+  const validTabs: SettingsTab[] = ["account", ...(isAdmin ? ["site" as const, "ai" as const, "users" as const] : []), "stats", "file-stats", "logs", "about"];
   const tabFromUrl = searchParams.get("tab") as SettingsTab | null;
   const [activeTab, setActiveTab] = useState<SettingsTab>(
-    tabFromUrl && validTabs.includes(tabFromUrl) ? tabFromUrl : "site"
+    tabFromUrl && validTabs.includes(tabFromUrl) ? tabFromUrl : "account"
   );
   const mobileTabsRef = useRef<HTMLDivElement>(null);
   const [canScrollRight, setCanScrollRight] = useState(false);
@@ -123,8 +140,12 @@ export default function SettingsPage() {
     {
       title: t.settings?.groupGeneral || "通用",
       tabs: [
-        { id: "site", label: t.siteSettings?.tab || "站点设置", icon: <Globe className="h-[18px] w-[18px]" />, desc: "名称、目录、缓存" },
-        { id: "ai", label: t.ai?.title || "AI 功能", icon: <Brain className="h-[18px] w-[18px]" />, desc: "智能识别与推荐" },
+        { id: "account", label: "我的账户", icon: <UserCog className="h-[18px] w-[18px]" />, desc: "密码、昵称" },
+        ...(isAdmin ? [
+          { id: "site" as const, label: t.siteSettings?.tab || "站点设置", icon: <Globe className="h-[18px] w-[18px]" />, desc: "名称、目录、缓存" },
+          { id: "ai" as const, label: t.ai?.title || "AI 功能", icon: <Brain className="h-[18px] w-[18px]" />, desc: "智能识别与推荐" },
+          { id: "users" as const, label: "用户管理", icon: <Users className="h-[18px] w-[18px]" />, desc: "账号、角色、注册策略" },
+        ] : []),
       ],
     },
     {
@@ -254,8 +275,10 @@ export default function SettingsPage() {
         {/* ── Content Area ── */}
         <main className="flex-1 min-h-[calc(100vh-4rem)] min-w-0">
           <div className={`p-4 sm:p-8 ${isFullWidthTab ? "" : "max-w-3xl"}`}>
+            {activeTab === "account" && <AccountPanel />}
             {activeTab === "site" && <SiteSettingsPanel />}
             {activeTab === "ai" && <AISettingsPanel />}
+            {activeTab === "users" && <UserManagementPanel />}
             {activeTab === "stats" && <StatsPanel />}
             {activeTab === "file-stats" && <FileStatsPanel />}
             {activeTab === "logs" && <LogsPanel />}

@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { X, Info, Brain, Globe, Github, ExternalLink } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
+import { useAuth } from "@/lib/auth-context";
 import dynamic from "next/dynamic";
 
 const LoadingSkeleton = () => (
@@ -28,7 +29,9 @@ type SettingsTab = "site" | "ai" | "about";
 
 export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const t = useTranslation();
-  const [activeTab, setActiveTab] = useState<SettingsTab>("site");
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
+  const [activeTab, setActiveTab] = useState<SettingsTab>(isAdmin ? "site" : "about");
   const tabsRef = useRef<HTMLDivElement>(null);
   const [canScrollRight, setCanScrollRight] = useState(false);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
@@ -61,8 +64,10 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
   if (!open) return null;
 
   const tabs: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
-    { id: "site", label: t.siteSettings?.tab || "站点", icon: <Globe className="h-4 w-4" /> },
-    { id: "ai", label: t.ai?.title || "AI", icon: <Brain className="h-4 w-4" /> },
+    ...(isAdmin ? [
+      { id: "site" as const, label: t.siteSettings?.tab || "站点", icon: <Globe className="h-4 w-4" /> },
+      { id: "ai" as const, label: t.ai?.title || "AI", icon: <Brain className="h-4 w-4" /> },
+    ] : []),
     { id: "about", label: t.settings?.about || "About", icon: <Info className="h-4 w-4" /> },
   ];
 

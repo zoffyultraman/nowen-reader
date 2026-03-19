@@ -128,8 +128,9 @@ function SetupPage() {
 }
 
 function LoginPage() {
-  const { login, register } = useAuth();
+  const { login, register, registrationMode } = useAuth();
   const t = useTranslation();
+  const canRegister = registrationMode === "open";
   const [isRegister, setIsRegister] = useState(false);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -235,17 +236,27 @@ function LoginPage() {
         </form>
 
         <div className="text-center mt-4">
-          <button
-            onClick={() => {
-              setIsRegister(!isRegister);
-              setError("");
-            }}
-            className="text-sm text-accent hover:underline"
-          >
-            {isRegister
-              ? (t.auth?.hasAccount || "Already have an account? Sign in")
-              : (t.auth?.noAccount || "Don't have an account? Register")}
-          </button>
+          {canRegister ? (
+            <button
+              onClick={() => {
+                setIsRegister(!isRegister);
+                setError("");
+              }}
+              className="text-sm text-accent hover:underline"
+            >
+              {isRegister
+                ? (t.auth?.hasAccount || "Already have an account? Sign in")
+                : (t.auth?.noAccount || "Don't have an account? Register")}
+            </button>
+          ) : (
+            !isRegister && (
+              <p className="text-xs text-muted/60">
+                {registrationMode === "invite"
+                  ? "请联系管理员获取账号"
+                  : "注册已关闭"}
+              </p>
+            )
+          )}
         </div>
       </div>
     </div>

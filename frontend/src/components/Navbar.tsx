@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
 import { useTheme } from "@/lib/theme-context";
+import { useAuth } from "@/lib/auth-context";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import { UserMenu } from "@/components/UserMenu";
 
@@ -35,6 +36,8 @@ export default function Navbar({
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const t = useTranslation();
   const { theme, toggleTheme } = useTheme();
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 border-b border-border/50 bg-background/70 backdrop-blur-xl backdrop-saturate-150">
@@ -93,7 +96,8 @@ export default function Navbar({
 
         {/* Right Actions */}
         <div className="flex items-center gap-1 sm:gap-2 shrink-0">
-          {/* Upload */}
+          {/* Upload — 仅管理员可见 */}
+          {isAdmin && (
           <button
             onClick={onUpload}
             disabled={uploading}
@@ -106,6 +110,7 @@ export default function Navbar({
             )}
             <span className="hidden sm:inline">{uploading ? t.navbar.uploading : t.navbar.upload}</span>
           </button>
+          )}
 
           {/* Theme Toggle */}
           <button

@@ -31,6 +31,7 @@ interface BatchToolbarProps {
   aiTagsLoading?: boolean;
   onAISuggestCategory?: () => void;
   aiCategoryLoading?: boolean;
+  isAdmin?: boolean;
 }
 
 export default function BatchToolbar({
@@ -47,6 +48,7 @@ export default function BatchToolbar({
   aiTagsLoading,
   onAISuggestCategory,
   aiCategoryLoading,
+  isAdmin = true,
 }: BatchToolbarProps) {
   const [showTagInput, setShowTagInput] = useState(false);
   const [tagInput, setTagInput] = useState("");
@@ -192,6 +194,7 @@ export default function BatchToolbar({
             )}
 
             {/* Delete */}
+            {isAdmin && (
             <button
               onClick={() => setShowDeleteConfirm(true)}
               className="flex h-8 items-center gap-1.5 rounded-lg bg-card px-3 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/20 btn-press"
@@ -200,6 +203,7 @@ export default function BatchToolbar({
               <Trash2 className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">{t.common.delete}</span>
             </button>
+            )}
 
             {/* Cancel */}
             <button

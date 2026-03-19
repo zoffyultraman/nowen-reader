@@ -7,12 +7,14 @@ interface AuthUser {
   username: string;
   nickname: string;
   role: string;
+  aiEnabled: boolean;
 }
 
 interface AuthContextType {
   user: AuthUser | null;
   loading: boolean;
   needsSetup: boolean;
+  registrationMode: string;
   login: (username: string, password: string) => Promise<void>;
   register: (username: string, password: string, nickname?: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -25,6 +27,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [needsSetup, setNeedsSetup] = useState(false);
+  const [registrationMode, setRegistrationMode] = useState("open");
 
   const refreshUser = useCallback(async () => {
     try {
@@ -42,6 +45,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const data = await res.json();
       setUser(data.user || null);
       setNeedsSetup(data.needsSetup || false);
+      if (data.registrationMode) setRegistrationMode(data.registrationMode);
     } catch {
       // 网络错误，不清空 user（可能只是暂时连接问题）
       console.warn("[Auth] Failed to reach /api/auth/me — keeping current state");
@@ -84,7 +88,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, needsSetup, login, register, logout, refreshUser }}>
+    <AuthContext.Provider value={{ user, loading, needsSetup, registrationMode, login, register, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );
