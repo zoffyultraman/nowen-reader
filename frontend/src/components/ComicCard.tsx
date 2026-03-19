@@ -241,25 +241,27 @@ const ComicCard = memo(function ComicCard({
                 {comic.author && (
                   <p className="mt-0.5 truncate text-[11px] text-muted/60 sm:hidden">{comic.author}</p>
                 )}
-                <div className="mt-1 flex items-center gap-2">
+                <div className="mt-1 flex items-center gap-2 overflow-hidden">
                   {comic.rating && comic.rating > 0 && (
-                    <div className="flex items-center gap-0.5">
+                    <div className="flex-shrink-0 flex items-center gap-0.5">
                       <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
                       <span className="text-[10px] text-amber-400">{comic.rating}</span>
                     </div>
                   )}
-                  <div className="flex flex-wrap items-center gap-1">
+                  <div className="flex items-center gap-1 overflow-hidden">
                     {(comic.tags || []).slice(0, 2).map((tag) => (
-                      <TagChip key={tag} tag={tag} tagObj={tagMap.get(tag)} />
+                      <span key={tag} className="flex-shrink-0">
+                        <TagChip tag={tag} tagObj={tagMap.get(tag)} />
+                      </span>
                     ))}
                     {(comic.tags || []).length > 2 && (
-                      <span className="inline-flex items-center rounded-md bg-muted/10 px-1.5 py-0.5 text-[10px] leading-normal text-muted sm:hidden">
+                      <span className="flex-shrink-0 inline-flex items-center rounded-md bg-muted/10 px-1.5 py-0.5 text-[10px] leading-normal text-muted sm:hidden">
                         +{(comic.tags || []).length - 2}
                       </span>
                     )}
                     {/* 桌面端多显示一个标签 */}
                     {(comic.tags || []).length > 2 && (
-                      <span className="hidden sm:inline-block">
+                      <span className="flex-shrink-0 hidden sm:inline-block">
                         <TagChip tag={(comic.tags || [])[2]} tagObj={tagMap.get((comic.tags || [])[2])} />
                       </span>
                     )}
