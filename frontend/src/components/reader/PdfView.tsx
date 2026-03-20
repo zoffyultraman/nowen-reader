@@ -41,6 +41,13 @@ export default function PdfView({
     return ua.includes("micromessenger") || ua.includes("wechat");
   }, []);
 
+  // 检测受限浏览器（夸克、UC、百度等低版本内核）
+  const isRestrictedBrowser = useCallback(() => {
+    if (typeof navigator === "undefined") return false;
+    const ua = navigator.userAgent.toLowerCase();
+    return ua.includes("quark") || ua.includes("ucbrowser") || ua.includes("baiduboxapp");
+  }, []);
+
   // 触摸手势状态
   const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
   const pinchStartDistRef = useRef<number | null>(null);
@@ -58,6 +65,89 @@ export default function PdfView({
       setError(null);
 
       try {
+        // ============================================================
+        // Polyfill: Uint8Array.prototype.toHex / fromHex / setFromHex
+        // pdfjs-dist 5.x 使用了 ES2024 的 Uint8Array hex 方法，
+        // 夸克浏览器、UC 浏览器等低版本 Chromium 内核不支持，需要 polyfill
+        // ============================================================
+        if (typeof Uint8Array.prototype.toHex !== "function") {
+          Uint8Array.prototype.toHex = function () {
+            const hex: string[] = [];
+            for (let i = 0; i < this.length; i++) {
+              hex.push(this[i].toString(16).padStart(2, "0"));
+            }
+            return hex.join("");
+          };
+        }
+
+        if (typeof Uint8Array.fromHex !== "function") {
+          Uint8Array.fromHex = function (hexString: string) {
+            if (hexString.length % 2 !== 0) {
+              throw new SyntaxError("Invalid hex string");
+            }
+            const bytes = new Uint8Array(hexString.length / 2);
+            for (let i = 0; i < hexString.length; i += 2) {
+              const byte = parseInt(hexString.substring(i, i + 2), 16);
+              if (isNaN(byte)) {
+                throw new SyntaxError("Invalid hex string");
+              }
+              bytes[i / 2] = byte;
+            }
+            return bytes;
+          };
+        }
+
+        if (typeof Uint8Array.prototype.setFromHex !== "function") {
+          Uint8Array.prototype.setFromHex = function (hexString: string) {
+            if (hexString.length % 2 !== 0) {
+              throw new SyntaxError("Invalid hex string");
+            }
+            const byteLength = hexString.length / 2;
+            const written = Math.min(byteLength, this.length);
+            for (let i = 0; i < written; i++) {
+              const byte = parseInt(hexString.substring(i * 2, i * 2 + 2), 16);
+              if (isNaN(byte)) {
+                throw new SyntaxError("Invalid hex string");
+              }
+              this[i] = byte;
+            }
+            return { read: written * 2, written };
+          };
+        }
+
+        // Polyfill: Uint8Array Base64 方法（部分低版本浏览器同样缺失）
+        if (typeof Uint8Array.prototype.toBase64 !== "function") {
+          Uint8Array.prototype.toBase64 = function () {
+            let binary = "";
+            for (let i = 0; i < this.length; i++) {
+              binary += String.fromCharCode(this[i]);
+            }
+            return btoa(binary);
+          };
+        }
+
+        if (typeof Uint8Array.fromBase64 !== "function") {
+          Uint8Array.fromBase64 = function (base64String: string) {
+            const binary = atob(base64String);
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) {
+              bytes[i] = binary.charCodeAt(i);
+            }
+            return bytes;
+          };
+        }
+
+        if (typeof Uint8Array.prototype.setFromBase64 !== "function") {
+          Uint8Array.prototype.setFromBase64 = function (base64String: string) {
+            const binary = atob(base64String);
+            const written = Math.min(binary.length, this.length);
+            for (let i = 0; i < written; i++) {
+              this[i] = binary.charCodeAt(i);
+            }
+            return { read: Math.ceil((written * 4) / 3), written };
+          };
+        }
+
         // 动态导入 pdfjs-dist
         const pdfjsLib = await import("pdfjs-dist");
 
@@ -89,11 +179,12 @@ export default function PdfView({
           pdfjsLib.GlobalWorkerOptions.workerSrc = "";
         }
 
+        const restricted = isWeChatBrowser() || isRestrictedBrowser();
         const loadingTask = pdfjsLib.getDocument({
           url: `/api/comics/${comicId}/pdf`,
           // 部分 WebView 不支持 Range 请求，允许禁用
-          disableRange: isWeChatBrowser(),
-          disableStream: isWeChatBrowser(),
+          disableRange: restricted,
+          disableStream: restricted,
         });
         const doc = await loadingTask.promise;
 
@@ -108,7 +199,13 @@ export default function PdfView({
       } catch (err) {
         if (!cancelled) {
           console.error("[PdfView] Failed to load PDF:", err);
-          setError(err instanceof Error ? err.message : "PDF 加载失败");
+          const errMsg = err instanceof Error ? err.message : String(err);
+          // 针对低版本浏览器提供更友好的错误提示
+          if (errMsg.includes("toHex") || errMsg.includes("is not a function")) {
+            setError("当前浏览器版本过低，PDF 渲染引擎不兼容。建议使用 Chrome 133+、Safari 18.2+ 或其他现代浏览器访问。");
+          } else {
+            setError(errMsg || "PDF 加载失败");
+          }
           setLoading(false);
         }
       }
