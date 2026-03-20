@@ -8,6 +8,7 @@ import { I18nProvider } from "@/lib/i18n";
 import { AuthProvider } from "@/lib/auth-context";
 import { AuthGuard } from "@/components/AuthGuard";
 import { PWARegister } from "@/app/pwa-register";
+import { useAuth } from "@/lib/auth-context";
 
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -29,6 +30,15 @@ import GroupDetail from "@/app/group/[id]/page";
 import Scraper from "@/app/scraper/page";
 import Collections from "@/app/collections/page";
 
+/** 管理员路由守卫 —— 非管理员用户重定向到首页 */
+function AdminRoute({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+  if (user && user.role !== "admin") {
+    return <Home />;
+  }
+  return <>{children}</>;
+}
+
 /** 路由过渡动画包装器 —— 每次 pathname 变化时触发 fade-in */
 function AnimatedRoutes() {
   const location = useLocation();
@@ -40,12 +50,12 @@ function AnimatedRoutes() {
         <Route path="/reader/:id" element={<Reader />} />
         <Route path="/novel/:id" element={<NovelReader />} />
         <Route path="/recommendations" element={<Recommendations />} />
-        <Route path="/stats" element={<Stats />} />
-        <Route path="/logs" element={<Logs />} />
+        <Route path="/stats" element={<AdminRoute><Stats /></AdminRoute>} />
+        <Route path="/logs" element={<AdminRoute><Logs /></AdminRoute>} />
         <Route path="/settings" element={<Settings />} />
-        <Route path="/scraper" element={<Scraper />} />
+        <Route path="/scraper" element={<AdminRoute><Scraper /></AdminRoute>} />
         <Route path="/group/:id" element={<GroupDetail />} />
-        <Route path="/collections" element={<Collections />} />
+        <Route path="/collections" element={<AdminRoute><Collections /></AdminRoute>} />
       </Routes>
     </div>
   );

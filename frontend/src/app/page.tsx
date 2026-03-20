@@ -898,7 +898,8 @@ accept=".zip,.cbz,.cbr,.rar,.7z,.cb7,.pdf,.txt,.epub,.mobi,.azw3,.html,.htm"
 
 
 
-                {/* Batch Mode Toggle */}
+                {/* Batch Mode Toggle — 仅管理员可见 */}
+                {isAdmin && (
                 <button
                   onClick={() => {
                     if (batchMode) exitBatchMode();
@@ -914,6 +915,7 @@ accept=".zip,.cbz,.cbr,.rar,.7z,.cb7,.pdf,.txt,.epub,.mobi,.azw3,.html,.htm"
                   <CheckSquare className="h-3.5 w-3.5" />
                   <span className="hidden sm:inline">{batchMode ? t.navbar.exitBatch : t.navbar.batch}</span>
                 </button>
+                )}
 
                 {/* Select All (only in batch mode) */}
                 {batchMode && (
@@ -1342,7 +1344,8 @@ accept=".zip,.cbz,.cbr,.rar,.7z,.cb7,.pdf,.txt,.epub,.mobi,.azw3,.html,.htm"
               </span>
             </div>
             <div className="flex items-center gap-1.5 sm:gap-2">
-              {/* 批量删除分组 */}
+              {/* 批量删除分组 — 仅管理员可见 */}
+              {isAdmin && (
               <button
                 onClick={handleBatchDeleteGroups}
                 className="flex h-8 items-center gap-1.5 rounded-lg bg-card px-3 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/20"
@@ -1350,6 +1353,7 @@ accept=".zip,.cbz,.cbr,.rar,.7z,.cb7,.pdf,.txt,.epub,.mobi,.azw3,.html,.htm"
                 <Trash2 className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">{t.contextMenu?.deleteGroup || "删除分组"}</span>
               </button>
+              )}
               {/* 仅当没选漫画时显示取消按钮（漫画操作栏有自己的取消按钮） */}
               {selectedIds.size === 0 && (
                 <button
@@ -1439,6 +1443,7 @@ accept=".zip,.cbz,.cbr,.rar,.7z,.cb7,.pdf,.txt,.epub,.mobi,.azw3,.html,.htm"
               }
             }, 400);
           }}
+          isAdmin={isAdmin}
         />
       )}
 

@@ -112,11 +112,13 @@ export default function ComicContextMenu({
       icon: isFavorite
         ? <HeartOff className="h-3.5 w-3.5" />
         : <Heart className="h-3.5 w-3.5" />,
+      hidden: !isAdmin,
     },
     {
       key: "addToGroup",
       label: t.contextMenu?.addToGroup || "加入分组",
       icon: <FolderInput className="h-3.5 w-3.5" />,
+      hidden: !isAdmin,
     },
     {
       key: "delete",

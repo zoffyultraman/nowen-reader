@@ -18,6 +18,8 @@ interface GroupContextMenuProps {
   onOpen: (id: number) => void;
   onRename: (id: number, currentName: string) => void;
   onDelete: (id: number) => void;
+  /** 是否为管理员，非管理员隐藏重命名和删除 */
+  isAdmin?: boolean;
 }
 
 export default function GroupContextMenu({
@@ -29,6 +31,7 @@ export default function GroupContextMenu({
   onOpen,
   onRename,
   onDelete,
+  isAdmin = true,
 }: GroupContextMenuProps) {
   const t = useTranslation();
   const menuRef = useRef<HTMLDivElement>(null);
@@ -79,19 +82,21 @@ export default function GroupContextMenu({
       label: t.contextMenu?.openGroup || "打开分组",
       icon: <FolderOpen className="h-3.5 w-3.5" />,
     },
-    {
+    // 重命名 — 仅管理员可见
+    ...(isAdmin ? [{
       key: "rename",
       label: t.contextMenu?.renameGroup || "重命名",
       icon: <Pencil className="h-3.5 w-3.5" />,
-    },
-    {
+    }] : []),
+    // 删除分组 — 仅管理员可见
+    ...(isAdmin ? [{
       key: "delete",
       label: confirmDelete
         ? (t.contextMenu?.confirmDelete || "确认删除？")
         : (t.contextMenu?.deleteGroup || "删除分组"),
       icon: <Trash2 className="h-3.5 w-3.5" />,
       danger: true,
-    },
+    }] : []),
   ];
 
   const handleAction = (key: string) => {

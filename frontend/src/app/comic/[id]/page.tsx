@@ -77,6 +77,7 @@ export default function ComicDetailPage() {
   const t = useTranslation();
   const { locale } = useLocale();
   const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
 
   function formatDuration(seconds: number) {
     if (seconds < 60) return t.duration.seconds.replace("{n}", String(seconds));
@@ -815,6 +816,8 @@ export default function ComicDetailPage() {
               <div className="flex-1 min-w-0">
                 {editingTitle ? (
                   <div className="flex items-center gap-2">
+                    {isAdmin ? (
+                    <>
                     <input
                       type="text"
                       value={titleInput}
@@ -839,10 +842,15 @@ export default function ComicDetailPage() {
                     >
                       <X className="h-4 w-4" />
                     </button>
+                    </>
+                    ) : (
+                      <h2 className="text-xl sm:text-2xl font-bold text-foreground break-words line-clamp-2">{comic.title}</h2>
+                    )}
                   </div>
                 ) : (
                   <div className="group/title flex items-center gap-2 min-w-0">
                   <h2 className="text-xl sm:text-2xl font-bold text-foreground break-words line-clamp-2">{comic.title}</h2>
+                    {isAdmin && (
                     <button
                       onClick={startEditTitle}
                       className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md text-muted/40 opacity-100 sm:opacity-0 transition-all hover:text-foreground sm:group-hover/title:opacity-100"
@@ -850,10 +858,13 @@ export default function ComicDetailPage() {
                     >
                       <Pencil className="h-3.5 w-3.5" />
                     </button>
+                    )}
                   </div>
                 )}
                 <p className="mt-1 text-sm text-muted truncate">{comic.filename}</p>
               </div>
+              {/* Favorite — 仅管理员可操作 */}
+              {isAdmin && (
               <button
                 onClick={handleToggleFavorite}
                 className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg transition-all ${
@@ -864,9 +875,11 @@ export default function ComicDetailPage() {
               >
                 <Heart className={`h-5 w-5 ${comic.isFavorite ? "fill-rose-500" : ""}`} />
               </button>
+              )}
             </div>
 
-            {/* Rating */}
+            {/* Rating — 仅管理员可操作 */}
+            {isAdmin && (
             <div>
               <h3 className="mb-2 text-xs font-medium uppercase tracking-wider text-muted">{t.comicDetail.rating}</h3>
               <div className="flex gap-1">
@@ -887,6 +900,7 @@ export default function ComicDetailPage() {
                 ))}
               </div>
             </div>
+            )}
 
             {/* Meta Info Grid */}
             <div className="grid grid-cols-2 gap-2.5 sm:gap-4 sm:grid-cols-3">
@@ -1046,7 +1060,8 @@ export default function ComicDetailPage() {
               );
             })}
 
-            {/* Tags */}
+            {/* Tags — 仅管理员可编辑 */}
+            {isAdmin && (
             <div>
               <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted">{t.comicDetail.tagsLabel}</h3>
               <div className="mb-3 flex flex-wrap gap-2">
@@ -1148,8 +1163,10 @@ export default function ComicDetailPage() {
                 </div>
               )}
             </div>
+            )}
 
-            {/* Categories */}
+            {/* Categories — 仅管理员可编辑 */}
+            {isAdmin && (
             <div>
               <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted">
                 {t.categoryFilter?.label || "分类"}
@@ -1206,6 +1223,7 @@ export default function ComicDetailPage() {
                 </button>
               )}
             </div>
+            )}
 
 
             {/* Metadata Info */}
@@ -1214,7 +1232,7 @@ export default function ComicDetailPage() {
                 <h3 className="text-xs font-medium uppercase tracking-wider text-muted">
                   {t.metadata?.metadataSource || "Metadata"}
                 </h3>
-                {!editingMetadata && (
+                {!editingMetadata && isAdmin && (
                   <>
                     <button
                       onClick={startEditMetadata}

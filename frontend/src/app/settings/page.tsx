@@ -101,7 +101,7 @@ export default function SettingsPage() {
   const t = useTranslation();
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
-  const validTabs: SettingsTab[] = ["account", ...(isAdmin ? ["site" as const, "ai" as const, "users" as const] : []), "stats", "file-stats", "logs", "about"];
+  const validTabs: SettingsTab[] = ["account", ...(isAdmin ? ["site" as const, "ai" as const, "users" as const, "stats" as const, "file-stats" as const, "logs" as const] : []), "about"];
   const tabFromUrl = searchParams.get("tab") as SettingsTab | null;
   const [activeTab, setActiveTab] = useState<SettingsTab>(
     tabFromUrl && validTabs.includes(tabFromUrl) ? tabFromUrl : "account"
@@ -151,9 +151,11 @@ export default function SettingsPage() {
     {
       title: t.settings?.groupData || "数据",
       tabs: [
-        { id: "stats", label: t.stats?.title || "阅读统计", icon: <BarChart3 className="h-[18px] w-[18px]" />, desc: "时长、趋势、目标" },
-        { id: "file-stats", label: "文件统计", icon: <HardDrive className="h-[18px] w-[18px]" />, desc: "格式、大小、分布" },
-        { id: "logs", label: tAny.errorLogs?.title || "错误日志", icon: <AlertTriangle className="h-[18px] w-[18px]" />, desc: "接口异常记录" },
+        ...(isAdmin ? [
+          { id: "stats" as const, label: t.stats?.title || "阅读统计", icon: <BarChart3 className="h-[18px] w-[18px]" />, desc: "时长、趋势、目标" },
+          { id: "file-stats" as const, label: "文件统计", icon: <HardDrive className="h-[18px] w-[18px]" />, desc: "格式、大小、分布" },
+          { id: "logs" as const, label: tAny.errorLogs?.title || "错误日志", icon: <AlertTriangle className="h-[18px] w-[18px]" />, desc: "接口异常记录" },
+        ] : []),
         { id: "about", label: t.settings?.about || "关于", icon: <Info className="h-[18px] w-[18px]" />, desc: t.settings?.aboutDesc || "版本与项目信息" },
       ],
     },

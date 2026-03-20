@@ -119,7 +119,8 @@ export default function Navbar({
           </button>
           )}
 
-          {/* Collections — 合集管理 */}
+          {/* Collections — 合集管理（仅管理员可见） */}
+          {isAdmin && (
           <Link
             href="/collections"
             className="hidden sm:flex h-9 w-9 items-center justify-center rounded-xl border border-border/60 text-muted transition-colors duration-200 hover:border-accent/40 hover:text-accent hover:bg-accent/5"
@@ -127,6 +128,7 @@ export default function Navbar({
           >
             <Layers className="h-4 w-4" />
           </Link>
+          )}
 
           {/* Metadata Scraper — 仅管理员可见 */}
           {isAdmin && (

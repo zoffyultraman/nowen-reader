@@ -74,9 +74,9 @@ func SetupRoutes(r *gin.Engine) {
 	api.GET("/comics", comic.ListComics)
 	api.GET("/comics/duplicates", comic.DetectDuplicates)
 
-	// Comics write ops (require auth)
+	// Comics write ops (require admin — 非管理员只读)
 	comicsWrite := api.Group("/comics")
-	comicsWrite.Use(middleware.AuthRequired())
+	comicsWrite.Use(middleware.AdminRequired())
 	{
 		comicsWrite.POST("/batch", comic.BatchOperation)
 		comicsWrite.PUT("/reorder", comic.Reorder)
@@ -95,13 +95,12 @@ func SetupRoutes(r *gin.Engine) {
 		comicByID.GET("", comic.GetComic)
 	}
 
-	// Single comic write operations (require auth)
+	// Single comic write operations (require admin — 非管理员只读)
 	comicByIDWrite := api.Group("/comics/:id")
-	comicByIDWrite.Use(middleware.AuthRequired())
+	comicByIDWrite.Use(middleware.AdminRequired())
 	{
 		comicByIDWrite.PUT("/favorite", comic.ToggleFavorite)
 		comicByIDWrite.PUT("/rating", comic.UpdateRating)
-		comicByIDWrite.PUT("/progress", comic.UpdateProgress)
 
 		// Tags per comic
 		comicByIDWrite.POST("/tags", comic.AddTags)
@@ -114,9 +113,14 @@ func SetupRoutes(r *gin.Engine) {
 
 		// Metadata editing
 		comicByIDWrite.PUT("/metadata", comic.UpdateMetadata)
+	}
 
-		// 阅读状态管理
-		comicByIDWrite.PUT("/reading-status", comic.SetReadingStatus)
+	// 阅读进度和状态（所有登录用户可用，非管理员也需要保存阅读进度）
+	comicByIDAuth := api.Group("/comics/:id")
+	comicByIDAuth.Use(middleware.AuthRequired())
+	{
+		comicByIDAuth.PUT("/progress", comic.UpdateProgress)
+		comicByIDAuth.PUT("/reading-status", comic.SetReadingStatus)
 	}
 
 	// 单本漫画管理员操作（删除等危险操作需要管理员权限）
@@ -138,20 +142,30 @@ func SetupRoutes(r *gin.Engine) {
 	// ============================================================
 	cat := NewCategoryHandler()
 	api.GET("/categories", cat.ListCategories)
-	api.POST("/categories", cat.InitCategories)
+
+	catAdmin := api.Group("")
+	catAdmin.Use(middleware.AdminRequired())
+	{
+		catAdmin.POST("/categories", cat.InitCategories)
+	}
 
 	// ============================================================
 	// Reading Stats (Phase 2)
 	// ============================================================
+	// 阅读统计会话（所有登录用户可用，非管理员也需要记录阅读时长）
 	stats := NewStatsHandler()
 	api.GET("/stats", stats.GetStats)
 	api.GET("/stats/yearly", stats.GetYearlyReport)
-	api.POST("/stats/session", stats.StartSession)
-	api.PUT("/stats/session", stats.EndSession)
-	api.POST("/stats/session/end", stats.EndSession) // sendBeacon 兜底（sendBeacon 只支持 POST）
 	api.GET("/stats/enhanced", stats.GetEnhancedStats)
 	api.GET("/stats/files", stats.GetFileStats)
 
+	statsAuth := api.Group("/stats")
+	statsAuth.Use(middleware.AuthRequired())
+	{
+		statsAuth.POST("/session", stats.StartSession)
+		statsAuth.PUT("/session", stats.EndSession)
+		statsAuth.POST("/session/end", stats.EndSession) // sendBeacon 兆底（sendBeacon 只支持 POST）
+	}
 	// ============================================================
 	// Upload (Phase 2) — requires admin
 	// ============================================================
@@ -174,11 +188,11 @@ func SetupRoutes(r *gin.Engine) {
 	}
 
 	// ============================================================
-	// Directory Browser (文件夹浏览) — requires auth
+	// Directory Browser (文件夹浏览) — requires admin
 	// ============================================================
 	browse := NewBrowseHandler()
 	browseGroup := api.Group("")
-	browseGroup.Use(middleware.AuthRequired())
+	browseGroup.Use(middleware.AdminRequired())
 	{
 		browseGroup.GET("/browse-dirs", browse.BrowseDirs)
 	}
@@ -243,7 +257,7 @@ func SetupRoutes(r *gin.Engine) {
 	goal := NewGoalHandler()
 	api.GET("/goals", goal.GetGoalProgress)
 	goalWrite := api.Group("")
-	goalWrite.Use(middleware.AuthRequired())
+	goalWrite.Use(middleware.AdminRequired())
 	{
 		goalWrite.POST("/goals", goal.SetGoal)
 		goalWrite.DELETE("/goals", goal.DeleteGoal)
@@ -261,9 +275,10 @@ func SetupRoutes(r *gin.Engine) {
 	// Phase 4: Metadata, AI, OPDS, WebDAV, Recommendations, etc.
 	// ============================================================
 
-	// Metadata scraping
+	// Metadata scraping — requires admin
 	meta := NewMetadataHandler()
 	metadataGroup := api.Group("/metadata")
+	metadataGroup.Use(middleware.AdminRequired())
 	{
 		metadataGroup.GET("/search", meta.Search)
 		metadataGroup.POST("/search", meta.Search)
@@ -376,9 +391,13 @@ func SetupRoutes(r *gin.Engine) {
 		aiRecGroup.POST("/recommendations/ai-reasons", ai.GenerateRecommendationReasons)
 	}
 
-	// Tag translation
+	// Tag translation — requires admin
 	tagTranslate := NewTagTranslateHandler()
-	api.POST("/tags/translate", tagTranslate.TranslateTags)
+	tagTranslateAdmin := api.Group("")
+	tagTranslateAdmin.Use(middleware.AdminRequired())
+	{
+		tagTranslateAdmin.POST("/tags/translate", tagTranslate.TranslateTags)
+	}
 
 	// Per-comic metadata translation (requires auth)
 	comicByIDWrite.POST("/translate-metadata", tagTranslate.TranslateMetadata)
@@ -392,7 +411,7 @@ func SetupRoutes(r *gin.Engine) {
 	api.GET("/translate/cache/stats", tagTranslate.GetCacheStats)
 
 	translateWrite := api.Group("/translate")
-	translateWrite.Use(middleware.AuthRequired())
+	translateWrite.Use(middleware.AdminRequired())
 	{
 		translateWrite.PUT("/config", tagTranslate.UpdateTranslateConfig)
 		translateWrite.DELETE("/cache", tagTranslate.ClearCache)
@@ -408,7 +427,7 @@ func SetupRoutes(r *gin.Engine) {
 	api.GET("/groups/:id", group.GetGroup)
 
 	groupWrite := api.Group("/groups")
-	groupWrite.Use(middleware.AuthRequired())
+	groupWrite.Use(middleware.AdminRequired())
 	{
 		groupWrite.POST("", group.CreateGroup)
 		groupWrite.PUT("/:id", group.UpdateGroup)

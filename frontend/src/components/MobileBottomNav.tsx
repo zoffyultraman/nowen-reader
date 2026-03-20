@@ -10,6 +10,7 @@ import { useAuth } from "@/lib/auth-context";
 /**
  * 移动端底部导航栏
  * 仅在屏幕宽度 < 640px 时显示
+ * 非管理员仅显示书库和设置
  */
 export default function MobileBottomNav() {
   const location = useLocation();
@@ -17,6 +18,7 @@ export default function MobileBottomNav() {
   const searchParams = new URLSearchParams(location.search);
   const t = useTranslation();
   const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
   const [isMobile, setIsMobile] = useState(false);
   const navRef = useRef<HTMLDivElement>(null);
   const [indicatorStyle, setIndicatorStyle] = useState<{ left: number; width: number }>({ left: 0, width: 0 });
@@ -43,18 +45,20 @@ export default function MobileBottomNav() {
       label: t.mobileNav?.library || "书库",
       active: pathname === "/",
     },
-    {
+    // 合集——仅管理员可见
+    ...(isAdmin ? [{
       href: "/collections",
       icon: Layers,
       label: (t as any).collections?.navTitle || "合集",
       active: pathname === "/collections",
-    },
-    {
+    }] : []),
+    // 统计——仅管理员可见
+    ...(isAdmin ? [{
       href: "/settings?tab=stats",
       icon: BarChart3,
       label: t.mobileNav?.stats || "统计",
       active: pathname === "/settings" && currentTab === "stats",
-    },
+    }] : []),
     {
       href: "/settings",
       icon: Settings,

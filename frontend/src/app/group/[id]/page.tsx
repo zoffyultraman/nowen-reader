@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
 import { useToast } from "@/components/Toast";
+import { useAuth } from "@/lib/auth-context";
 import {
   fetchGroupDetail,
   updateGroup,
@@ -59,6 +60,8 @@ export default function GroupDetailPage() {
   const router = useRouter();
   const t = useTranslation();
   const toast = useToast();
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
 
   const groupId = Number(params?.id);
 
@@ -343,7 +346,7 @@ export default function GroupDetailPage() {
             </div>
           )}
 
-          {!editMode && (
+          {!editMode && isAdmin && (
             <div className="flex items-center gap-1">
               <button
                 onClick={() => setShowAddComics(true)}
@@ -457,27 +460,29 @@ export default function GroupDetailPage() {
                       ? "opacity-60 scale-[0.98]"
                       : "hover:bg-card-hover"
                   }`}
-                  draggable
-                  onDragStart={(e) => {
+                  draggable={isAdmin}
+                  onDragStart={isAdmin ? (e) => {
                     e.dataTransfer.effectAllowed = "move";
                     setDragId(comic.id);
-                  }}
-                  onDragOver={(e) => {
+                  } : undefined}
+                  onDragOver={isAdmin ? (e) => {
                     e.preventDefault();
                     setDragOverId(comic.id);
-                  }}
-                  onDrop={(e) => {
+                  } : undefined}
+                  onDrop={isAdmin ? (e) => {
                     e.preventDefault();
                     handleDragEnd();
-                  }}
-                  onTouchStart={(e) => handleTouchStart(comic.id, e)}
-                  onTouchMove={handleTouchMove}
-                  onTouchEnd={handleTouchEnd}
+                  } : undefined}
+                  onTouchStart={isAdmin ? (e) => handleTouchStart(comic.id, e) : undefined}
+                  onTouchMove={isAdmin ? handleTouchMove : undefined}
+                  onTouchEnd={isAdmin ? handleTouchEnd : undefined}
                 >
-                  {/* 拖拽手柄 */}
+                  {/* 拖拽手柄 — 仅管理员可见 */}
+                  {isAdmin && (
                   <div className="flex-shrink-0 cursor-grab text-muted/30 hover:text-muted active:cursor-grabbing">
                     <GripVertical className="h-4 w-4" />
                   </div>
+                  )}
 
                   {/* 卷号 */}
                   <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-accent/10 text-xs font-bold text-accent">
@@ -538,7 +543,8 @@ export default function GroupDetailPage() {
                     <BookOpen className="h-4 w-4" />
                   </Link>
 
-                  {/* 移除按钮（需二次确认） */}
+                  {/* 移除按钮（需二次确认）— 仅管理员可见 */}
+                  {isAdmin && (
                   <button
                     onClick={() => handleRemoveComic(comic.id)}
                     onMouseLeave={() => {
@@ -557,6 +563,7 @@ export default function GroupDetailPage() {
                       <X className="h-4 w-4" />
                     )}
                   </button>
+                  )}
                 </div>
               );
             })}

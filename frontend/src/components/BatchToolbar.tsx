@@ -69,7 +69,8 @@ export default function BatchToolbar({
           </div>
 
           <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-            {/* Favorite */}
+            {/* Favorite — 仅管理员 */}
+            {isAdmin && (
             <button
               onClick={onFavorite}
               className="flex h-8 items-center gap-1.5 rounded-lg bg-card px-3 text-xs font-medium text-rose-400 transition-colors hover:bg-rose-500/20 btn-press"
@@ -78,8 +79,10 @@ export default function BatchToolbar({
               <Heart className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">{t.batch.favorite}</span>
             </button>
+            )}
 
-            {/* Unfavorite */}
+            {/* Unfavorite — 仅管理员 */}
+            {isAdmin && (
             <button
               onClick={onUnfavorite}
               className="flex h-8 items-center gap-1.5 rounded-lg bg-card px-3 text-xs font-medium text-muted transition-colors hover:bg-card-hover btn-press"
@@ -87,8 +90,10 @@ export default function BatchToolbar({
               <HeartOff className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">{t.batch.unfavorite}</span>
             </button>
+            )}
 
-            {/* Add Tags */}
+            {/* Add Tags — 仅管理员 */}
+            {isAdmin && (
             <button
               onClick={() => setShowTagInput(!showTagInput)}
               className={`flex h-8 items-center gap-1.5 rounded-lg px-3 text-xs font-medium transition-colors ${
@@ -101,9 +106,10 @@ export default function BatchToolbar({
               <Tag className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">{t.batch.tags}</span>
             </button>
+            )}
 
-            {/* AI Suggest Tags */}
-            {onAISuggestTags && (
+            {/* AI Suggest Tags — 仅管理员 */}
+            {isAdmin && onAISuggestTags && (
               <button
                 onClick={onAISuggestTags}
                 disabled={aiTagsLoading}
@@ -127,8 +133,8 @@ export default function BatchToolbar({
               </button>
             )}
 
-            {/* AI Suggest Category */}
-            {onAISuggestCategory && (
+            {/* AI Suggest Category — 仅管理员 */}
+            {isAdmin && onAISuggestCategory && (
               <button
                 onClick={onAISuggestCategory}
                 disabled={aiCategoryLoading}
@@ -153,8 +159,8 @@ export default function BatchToolbar({
             )}
 
 
-            {/* Set Category */}
-            {onSetCategory && (
+            {/* Set Category — 仅管理员 */}
+            {isAdmin && onSetCategory && (
               <button
                 onClick={() => setShowCategoryPicker(!showCategoryPicker)}
                 className={`flex h-8 items-center gap-1.5 rounded-lg px-3 text-xs font-medium transition-colors ${
@@ -169,8 +175,8 @@ export default function BatchToolbar({
               </button>
             )}
 
-            {/* Merge to Group */}
-            {onMergeGroup && (
+            {/* Merge to Group — 仅管理员 */}
+            {isAdmin && onMergeGroup && (
               <button
                 onClick={onMergeGroup}
                 className="flex h-8 items-center gap-1.5 rounded-lg bg-card px-3 text-xs font-medium text-accent transition-colors hover:bg-accent/20"
@@ -181,8 +187,8 @@ export default function BatchToolbar({
               </button>
             )}
 
-            {/* Add to Existing Group */}
-            {onAddToGroup && (
+            {/* Add to Existing Group — 仅管理员 */}
+            {isAdmin && onAddToGroup && (
               <button
                 onClick={onAddToGroup}
                 className="flex h-8 items-center gap-1.5 rounded-lg bg-card px-3 text-xs font-medium text-muted transition-colors hover:bg-card-hover hover:text-foreground"
