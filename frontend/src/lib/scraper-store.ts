@@ -375,6 +375,25 @@ export async function startBatch() {
       signal: abort.signal,
     });
 
+    // 处理非SSE错误响应（如AI未配置返回400）
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({ error: "Request failed" }));
+      state.batchDone = { type: "complete", success: 0, failed: 0, total: 0 };
+      // 添加一条失败的completedItem以显示错误信息
+      state.completedItems = [{
+        type: "progress",
+        current: 0,
+        total: 0,
+        comicId: "",
+        filename: "",
+        status: "failed",
+        message: errData.error || `HTTP ${res.status}`,
+        id: `error-${Date.now()}`,
+      } as CompletedItem];
+      notify();
+      return;
+    }
+
     const reader = res.body?.getReader();
     if (!reader) return;
     const decoder = new TextDecoder();
@@ -599,8 +618,8 @@ export async function saveBatchRename() {
   }
 }
 
-export async function aiRename(prompt: string) {
-  if (state.aiRenameLoading || state.batchEditNames.size === 0) return;
+export async function aiRename(prompt: string): Promise<string | null> {
+  if (state.aiRenameLoading || state.batchEditNames.size === 0) return null;
 
   state.aiRenameLoading = true;
   notify();
@@ -619,21 +638,24 @@ export async function aiRename(prompt: string) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ items, prompt, lang }),
     });
-    if (res.ok) {
-      const data = await res.json();
-      if (data.results) {
-        const next = new Map(state.batchEditNames);
-        for (const r of data.results) {
-          const entry = next.get(r.comicId);
-          if (entry && r.newTitle) {
-            next.set(r.comicId, { ...entry, newTitle: r.newTitle });
-          }
-        }
-        state.batchEditNames = next;
-      }
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({ error: "Request failed" }));
+      return errData.error || `HTTP ${res.status}`;
     }
-  } catch {
-    // ignore
+    const data = await res.json();
+    if (data.results) {
+      const next = new Map(state.batchEditNames);
+      for (const r of data.results) {
+        const entry = next.get(r.comicId);
+        if (entry && r.newTitle) {
+          next.set(r.comicId, { ...entry, newTitle: r.newTitle });
+        }
+      }
+      state.batchEditNames = next;
+    }
+    return null;
+  } catch (err) {
+    return (err as Error).message || "Unknown error";
   } finally {
     state.aiRenameLoading = false;
     notify();
@@ -740,7 +762,7 @@ export async function startBatchSelected() {
             notify();
           } else if (data.type === "progress") {
             state.currentProgress = data;
-            if (data.status === "success" || data.status === "failed" || data.status === "skipped") {
+            if (data.status === "success" || data.status === "failed" || data.status === "skipped" || data.status === "warning") {
               state.completedItems = [
                 ...state.completedItems,
                 { ...data, id: `${data.comicId}-${Date.now()}` },

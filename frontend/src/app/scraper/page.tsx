@@ -57,6 +57,7 @@ import {
 } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth-context";
+import { useAIStatus } from "@/hooks/useAIStatus";
 import { useScraperStore } from "@/hooks/useScraperStore";
 import { MetadataSearch } from "@/components/MetadataSearch";
 import { updateComicMetadata, removeComicTag } from "@/api/comics";
@@ -850,6 +851,7 @@ function BatchEditPanel({
   saving,
   results,
   aiLoading,
+  aiConfigured,
   onExit,
 }: {
   entries: Map<string, BatchEditNameEntry>;
@@ -857,6 +859,7 @@ function BatchEditPanel({
   saving: boolean;
   results: { comicId: string; status: string; newTitle?: string; message?: string }[] | null;
   aiLoading: boolean;
+  aiConfigured: boolean;
   onExit: () => void;
 }) {
   const [aiPrompt, setAiPrompt] = useState("");
@@ -890,7 +893,8 @@ function BatchEditPanel({
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {/* AI 智能命名区域 */}
+        {/* AI 智能命名区域 - 仅在AI已配置时显示 */}
+        {aiConfigured ? (
         <div className="rounded-xl border border-purple-500/30 bg-purple-500/5 p-3 space-y-2.5">
           <div className="flex items-center gap-2">
             <Wand2 className="h-4 w-4 text-purple-500" />
@@ -908,8 +912,13 @@ function BatchEditPanel({
             rows={2}
           />
           <button
-            onClick={() => {
-              if (aiPrompt.trim()) aiRename(aiPrompt.trim());
+            onClick={async () => {
+              if (aiPrompt.trim()) {
+                const err = await aiRename(aiPrompt.trim());
+                if (err) {
+                  alert(err);
+                }
+              }
             }}
             disabled={aiLoading || !aiPrompt.trim() || saving}
             className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-gradient-to-r from-violet-500 to-purple-600 px-3 py-1.5 text-xs font-medium text-white transition-all shadow-sm disabled:opacity-50 hover:shadow-md"
@@ -921,6 +930,17 @@ function BatchEditPanel({
             )}
           </button>
         </div>
+        ) : (
+        <div className="rounded-xl border border-border/30 bg-muted/5 p-3 space-y-1.5">
+          <div className="flex items-center gap-2">
+            <Wand2 className="h-4 w-4 text-muted" />
+            <h4 className="text-xs font-semibold text-muted">{scraperT.aiRenameTitle || "AI 智能命名"}</h4>
+          </div>
+          <p className="text-[11px] text-muted leading-relaxed">
+            {scraperT.aiNotConfiguredHint || "请先在设置中配置AI服务"}
+          </p>
+        </div>
+        )}
 
         {/* 一键应用同一名称 */}
         <div className="rounded-xl border border-border/40 bg-card p-3 space-y-2">
@@ -1965,6 +1985,7 @@ export default function ScraperPage() {
   } = useScraperStore();
 
   const isAdmin = user?.role === "admin";
+  const { aiConfigured } = useAIStatus();
   const [detailRefreshKey, setDetailRefreshKey] = useState(0);
 
   // 首次挂载加载
@@ -2509,6 +2530,7 @@ export default function ScraperPage() {
               saving={batchEditSaving}
               results={batchEditResults}
               aiLoading={aiRenameLoading}
+              aiConfigured={aiConfigured}
               onExit={exitBatchEditMode}
             />
           ) : focusedItem ? (
@@ -2550,18 +2572,23 @@ export default function ScraperPage() {
                       </div>
                     </button>
                     <button
-                      disabled={batchRunning}
+                      disabled={batchRunning || !aiConfigured}
                       onClick={() => setBatchMode("ai")}
                       className={`flex items-center gap-2 rounded-lg border p-3 transition-all text-left ${
                         batchMode === "ai"
                           ? "border-purple-500/50 bg-purple-500/5 ring-1 ring-purple-500/20"
                           : "border-border/40 hover:border-border/60"
                       } disabled:opacity-50`}
+                      title={!aiConfigured ? (scraperT.aiNotConfiguredHint || "请先在设置中配置AI服务") : undefined}
                     >
                       <Brain className="h-4 w-4 text-purple-500 flex-shrink-0" />
                       <div>
                         <div className="text-xs font-medium text-foreground">{scraperT.modeAI || "AI 智能"}</div>
-                        <div className="text-[10px] text-muted mt-0.5">{scraperT.modeAIShort || "AI识别+搜索+补全"}</div>
+                        <div className="text-[10px] text-muted mt-0.5">
+                          {!aiConfigured
+                            ? (scraperT.aiNotConfiguredShort || "需配置AI")
+                            : (scraperT.modeAIShort || "AI识别+搜索+补全")}
+                        </div>
                       </div>
                     </button>
                   </div>
@@ -2746,6 +2773,8 @@ export default function ScraperPage() {
                               <CheckCircle className="h-3.5 w-3.5 text-emerald-500" />
                             ) : item.status === "skipped" ? (
                               <AlertCircle className="h-3.5 w-3.5 text-amber-500" />
+                            ) : item.status === "warning" ? (
+                              <AlertCircle className="h-3.5 w-3.5 text-orange-500" />
                             ) : (
                               <XCircle className="h-3.5 w-3.5 text-red-500" />
                             )}
@@ -2821,6 +2850,7 @@ export default function ScraperPage() {
             saving={batchEditSaving}
             results={batchEditResults}
             aiLoading={aiRenameLoading}
+            aiConfigured={aiConfigured}
             onExit={exitBatchEditMode}
           />
         </div>
@@ -2854,7 +2884,7 @@ export default function ScraperPage() {
       )}
 
       {/* ── 悬浮 AI 助手按钮 ── */}
-      {isAdmin && !aiChatOpen && (
+      {isAdmin && aiConfigured && !aiChatOpen && (
         <button
           onClick={openAIChat}
           data-guide="ai-chat-btn"
@@ -2866,7 +2896,7 @@ export default function ScraperPage() {
       )}
 
       {/* ── 桌面端悬浮 AI 助手按钮（当右侧面板不是AI聊天时显示） ── */}
-      {isAdmin && !aiChatOpen && (
+      {isAdmin && aiConfigured && !aiChatOpen && (
         <button
           onClick={openAIChat}
           data-guide="ai-chat-btn"

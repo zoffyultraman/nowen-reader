@@ -844,6 +844,8 @@ autoDetect: "智能分组",
     detailSearchDesc: "搜索在线数据源，选择最匹配的结果应用到此书",
     modeStandardShort: "在线源搜索匹配",
     modeAIShort: "AI识别+搜索+补全",
+    aiNotConfiguredHint: "请先在设置中配置AI服务",
+    aiNotConfiguredShort: "需配置AI",
     rightPanelHint: "点击左侧书籍查看详情",
     rightPanelDesc: "选择一本书查看元数据详情并进行精准刮削，或使用上方批量操作对全库/选中项统一刮削",
     paginationPerPage: "每页",
@@ -1764,6 +1766,8 @@ export interface Translations {
     detailSearchDesc: string;
     modeStandardShort: string;
     modeAIShort: string;
+    aiNotConfiguredHint: string;
+    aiNotConfiguredShort: string;
     rightPanelHint: string;
     rightPanelDesc: string;
     paginationPerPage: string;

@@ -845,6 +845,8 @@ const en: Translations = {
     detailSearchDesc: "Search online sources and select the best match to apply",
     modeStandardShort: "Online source search",
     modeAIShort: "AI recognize + search + complete",
+    aiNotConfiguredHint: "Please configure AI service in Settings first",
+    aiNotConfiguredShort: "AI not configured",
     rightPanelHint: "Click a book to view details",
     rightPanelDesc: "Select a book to view metadata details and perform precise scraping, or use batch operations above",
     paginationPerPage: "Per page",

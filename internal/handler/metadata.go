@@ -959,6 +959,15 @@ func (h *MetadataHandler) BatchSelected(c *gin.Context) {
 		cfg := service.LoadAIConfig()
 		if cfg.EnableCloudAI && cfg.CloudAPIKey != "" {
 			aiCfg = &cfg
+		} else {
+			// AI 未配置，发送降级警告
+			sendSSE(gin.H{
+				"type":    "progress",
+				"current": 0,
+				"total":   total,
+				"status":  "warning",
+				"message": "AI not configured, falling back to standard mode",
+			})
 		}
 	}
 

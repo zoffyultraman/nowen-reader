@@ -66,6 +66,40 @@ func InitDB(dbPath string) error {
 	}
 
 	log.Println("[DB] Database schema ready.")
+
+	// 自动完整性检查与索引修复
+	if err := autoRepairIndexes(); err != nil {
+		log.Printf("[DB] Warning: auto-repair failed: %v", err)
+	}
+
+	return nil
+}
+
+// autoRepairIndexes 检查数据库索引完整性，发现损坏时自动执行 REINDEX 修复。
+func autoRepairIndexes() error {
+	rows, err := db.Query("PRAGMA integrity_check(1)")
+	if err != nil {
+		return fmt.Errorf("integrity_check failed: %w", err)
+	}
+	defer rows.Close()
+
+	var result string
+	if rows.Next() {
+		rows.Scan(&result)
+	}
+
+	if result == "ok" {
+		return nil
+	}
+
+	log.Printf("[DB] ⚠️ 检测到数据库完整性问题: %s", result)
+	log.Println("[DB] 正在自动修复索引 (REINDEX)...")
+
+	if _, err := db.Exec("REINDEX"); err != nil {
+		return fmt.Errorf("REINDEX failed: %w", err)
+	}
+
+	log.Println("[DB] ✅ 索引修复完成")
 	return nil
 }
 
