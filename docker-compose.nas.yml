@@ -12,6 +12,12 @@
 services:
   nowen-reader:
     image: cropflre/nowen-reader:latest
+    # 平台架构说明：
+    # - ARM 设备（树莓派、部分 NAS）: linux/arm64
+    # - x86/x64 设备（群晖 x86、威联通 x86）: linux/amd64
+    # 请根据你的 NAS 实际架构取消注释对应行：
+    # platform: linux/amd64
+    # platform: linux/arm64
     container_name: nowen-reader
     restart: unless-stopped
     ports:
