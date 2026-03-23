@@ -304,12 +304,19 @@ export default function GroupDetailPage() {
       {/* Header */}
       <div className="sticky top-0 z-30 border-b border-border/30 bg-background/95 backdrop-blur-xl">
         <div className="mx-auto flex max-w-[1200px] items-center gap-3 px-4 py-3">
-          <Link
-            href="/"
+          <button
+            onClick={() => {
+              // 优先使用浏览器后退（保留上一页的 URL 参数如分页状态）
+              if (window.history.length > 1) {
+                router.back();
+              } else {
+                router.push("/");
+              }
+            }}
             className="flex h-9 w-9 items-center justify-center rounded-lg text-muted transition-colors hover:bg-card hover:text-foreground"
           >
             <ArrowLeft className="h-5 w-5" />
-          </Link>
+          </button>
 
           {editMode ? (
             <div className="flex flex-1 items-center gap-2">

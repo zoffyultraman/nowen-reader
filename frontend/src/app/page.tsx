@@ -165,19 +165,19 @@ export default function Home() {
   const [aiTagsLoading, setAiTagsLoading] = useState(false);
   const [aiCategoryLoading, setAiCategoryLoading] = useState(false);
 
-  // 分组视图分页（优先从 URL 参数恢复，其次从 sessionStorage 恢复，确保从分组详情页返回时保持页码）
+  // 分组视图分页（优先从 sessionStorage 恢复，因为 Next.js 客户端导航后 URL 参数可能丢失）
   const [groupPage, setGroupPage] = useState(() => {
     if (typeof window !== "undefined") {
-      // 优先从 URL 查询参数 gpage 读取
-      const gp = new URLSearchParams(window.location.search).get("gpage");
-      if (gp) {
-        const n = parseInt(gp, 10);
-        if (n > 0) return n;
-      }
-      // URL 没有 gpage 参数时，尝试从 sessionStorage 恢复
+      // 优先从 sessionStorage 恢复（最可靠来源，不受 Next.js 路由影响）
       const saved = sessionStorage.getItem("homeGroupPage");
       if (saved) {
         const n = parseInt(saved, 10);
+        if (n > 0) return n;
+      }
+      // 其次尝试从 URL 查询参数 gpage 读取
+      const gp = new URLSearchParams(window.location.search).get("gpage");
+      if (gp) {
+        const n = parseInt(gp, 10);
         if (n > 0) return n;
       }
     }
@@ -186,6 +186,18 @@ export default function Home() {
   const GROUP_PAGE_SIZE = 24;
   // 用于跳过 showGroupView effect 首次挂载时的重置
   const showGroupViewMountedRef = useRef(false);
+  // 挂载保护：防止首次挂载时 effect 将页码重置为1并清除 sessionStorage
+  const pageResetGuardRef = useRef(true);
+
+  // 受保护的页码 setter：在挂载保护期内阻止将页码重置为1
+  const safeSetGroupPage = useCallback((v: number | ((prev: number) => number)) => {
+    if (pageResetGuardRef.current && typeof v === 'number' && v === 1) return;
+    setGroupPage(v as number);
+  }, []);
+  const safeSetCurrentPage = useCallback((v: number | ((prev: number) => number)) => {
+    if (pageResetGuardRef.current && typeof v === 'number' && v === 1) return;
+    setCurrentPage(v as number);
+  }, []);
 
   // 右键菜单状态
   const [contextMenu, setContextMenu] = useState<{
@@ -277,19 +289,19 @@ export default function Home() {
   const [removingIds, setRemovingIds] = useState<Set<string>>(new Set());
   const [removingGroupIds, setRemovingGroupIds] = useState<Set<number>>(new Set());
 
-  // Pagination — 从 URL 初始化页码，URL 没有则从 sessionStorage 恢复（解决从阅读页返回时页码丢失的问题）
+  // Pagination — 优先从 sessionStorage 恢复（最可靠），其次从 URL 恢复
   const [currentPage, setCurrentPage] = useState(() => {
     if (typeof window !== "undefined") {
-      // 优先从 URL 查询参数读取
-      const p = new URLSearchParams(window.location.search).get("page");
-      if (p) {
-        const n = parseInt(p, 10);
-        if (n > 0) return n;
-      }
-      // URL 没有 page 参数时，尝试从 sessionStorage 恢复
+      // 优先从 sessionStorage 恢复
       const saved = sessionStorage.getItem("homePage");
       if (saved) {
         const n = parseInt(saved, 10);
+        if (n > 0) return n;
+      }
+      // 其次从 URL 查询参数读取
+      const p = new URLSearchParams(window.location.search).get("page");
+      if (p) {
+        const n = parseInt(p, 10);
         if (n > 0) return n;
       }
     }
@@ -325,6 +337,14 @@ export default function Home() {
     loadGroups();
   }, [loadGroups]);
 
+  // 挂载保护期结束后解除保护（延迟 600ms，确保所有首次 effect 都已执行完毕）
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      pageResetGuardRef.current = false;
+    }, 600);
+    return () => clearTimeout(timer);
+  }, []);
+
   // 分页变化时同步 URL 并持久化到 sessionStorage（确保从其他页面返回时可恢复）
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -333,7 +353,10 @@ export default function Home() {
       sessionStorage.setItem("homePage", String(currentPage));
     } else {
       params.delete("page");
-      sessionStorage.removeItem("homePage");
+      // 挂载保护期内不清除 sessionStorage（防止首次挂载时误清除已保存的页码）
+      if (!pageResetGuardRef.current) {
+        sessionStorage.removeItem("homePage");
+      }
     }
     const newUrl = params.toString() ? `?${params.toString()}` : window.location.pathname;
     window.history.replaceState(null, "", newUrl);
@@ -346,7 +369,10 @@ export default function Home() {
       sessionStorage.setItem("homeGroupPage", String(groupPage));
       params.set("gpage", String(groupPage));
     } else {
-      sessionStorage.removeItem("homeGroupPage");
+      // 挂载保护期内不清除 sessionStorage（防止首次挂载时误清除已保存的页码）
+      if (!pageResetGuardRef.current) {
+        sessionStorage.removeItem("homeGroupPage");
+      }
       params.delete("gpage");
     }
     const newUrl = params.toString() ? `?${params.toString()}` : window.location.pathname;
@@ -384,7 +410,7 @@ export default function Home() {
   const activePage = showGroupView ? groupPage : currentPage;
   const setActivePage = showGroupView ? setGroupPage : setCurrentPage;
 
-  // Reset to page 1 when filters change（通过对比上一次的筛选条件key，避免首次挂载时误触发）
+  // Reset to page 1 when filters change（使用受保护的 setter，在挂载保护期内不会重置页码）
   const filterKeyRef = useRef(
     JSON.stringify([debouncedSearch, selectedTags, favoritesOnly, selectedCategory, sortBy, sortOrder, contentType])
   );
@@ -392,18 +418,18 @@ export default function Home() {
     const newKey = JSON.stringify([debouncedSearch, selectedTags, favoritesOnly, selectedCategory, sortBy, sortOrder, contentType]);
     if (filterKeyRef.current === newKey) return; // 值没变，不重置
     filterKeyRef.current = newKey;
-    setCurrentPage(1);
-    setGroupPage(1);
-  }, [debouncedSearch, selectedTags, favoritesOnly, selectedCategory, sortBy, sortOrder, contentType]);
+    safeSetCurrentPage(1);
+    safeSetGroupPage(1);
+  }, [debouncedSearch, selectedTags, favoritesOnly, selectedCategory, sortBy, sortOrder, contentType, safeSetCurrentPage, safeSetGroupPage]);
 
-  // 分组视图切换时重置分组分页（跳过首次挂载，避免覆盖从 URL/sessionStorage 恢复的页码）
+  // 分组视图切换时重置分组分页（使用受保护的 setter，挂载保护期内不会重置）
   useEffect(() => {
     if (!showGroupViewMountedRef.current) {
       showGroupViewMountedRef.current = true;
       return;
     }
-    setGroupPage(1);
-  }, [showGroupView]);
+    safeSetGroupPage(1);
+  }, [showGroupView, safeSetGroupPage]);
 
   // Use real comics if API has been initialized (even if current page is empty due to filters)
   const useRealData = apiTotal > 0 || apiComics.length > 0 || initializedRef.current;

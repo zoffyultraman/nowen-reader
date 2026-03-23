@@ -84,25 +84,33 @@ export default function CollectionsPage() {
   const [mergeName, setMergeName] = useState("");
   const [merging, setMerging] = useState(false);
 
-  // 分页状态（优先从 URL 参数恢复，其次从 sessionStorage 恢复，确保从详情页返回时保持页码）
+  // 分页状态（优先从 sessionStorage 恢复，因为 Next.js 客户端导航后 URL 参数可能丢失）
   const COLLECTIONS_PAGE_SIZE = 24;
   const [currentPage, setCurrentPage] = useState(() => {
     if (typeof window !== "undefined") {
-      // 优先从 URL 查询参数 page 读取
-      const p = new URLSearchParams(window.location.search).get("page");
-      if (p) {
-        const n = parseInt(p, 10);
-        if (n > 0) return n;
-      }
-      // URL 没有 page 参数时，尝试从 sessionStorage 恢复
+      // 优先从 sessionStorage 恢复（最可靠来源，不受 Next.js 路由影响）
       const saved = sessionStorage.getItem("collectionsPage");
       if (saved) {
         const n = parseInt(saved, 10);
         if (n > 0) return n;
       }
+      // 其次尝试从 URL 查询参数 page 读取
+      const p = new URLSearchParams(window.location.search).get("page");
+      if (p) {
+        const n = parseInt(p, 10);
+        if (n > 0) return n;
+      }
     }
     return 1;
   });
+  // 挂载保护：防止首次挂载时 effect 将页码重置为1并清除 sessionStorage
+  const pageResetGuardRef = useRef(true);
+
+  // 受保护的页码 setter：在挂载保护期内阻止将页码重置为1
+  const safeSetCurrentPage = useCallback((v: number | ((prev: number) => number)) => {
+    if (pageResetGuardRef.current && typeof v === 'number' && v === 1) return;
+    setCurrentPage(v as number);
+  }, []);
 
   // 弹窗状态
   const [showAutoDetect, setShowAutoDetect] = useState(false);
@@ -118,6 +126,14 @@ export default function CollectionsPage() {
   const tGroup = (t as any).comicGroup || {};
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const tCollections = (t as any).collections || {};
+
+  // 挂载保护期结束后解除保护
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      pageResetGuardRef.current = false;
+    }, 600);
+    return () => clearTimeout(timer);
+  }, []);
 
   // ── 持久化视图模式 ──
   useEffect(() => {
@@ -159,8 +175,11 @@ export default function CollectionsPage() {
       sessionStorage.setItem("collectionsPage", String(currentPage));
       params.set("page", String(currentPage));
     } else {
-      sessionStorage.removeItem("collectionsPage");
       params.delete("page");
+      // 挂载保护期内不清除 sessionStorage（防止首次挂载时误清除已保存的页码）
+      if (!pageResetGuardRef.current) {
+        sessionStorage.removeItem("collectionsPage");
+      }
     }
     const newUrl = params.toString() ? `?${params.toString()}` : window.location.pathname;
     window.history.replaceState(null, "", newUrl);
@@ -206,17 +225,25 @@ export default function CollectionsPage() {
     return filteredAndSorted.slice(start, start + COLLECTIONS_PAGE_SIZE);
   }, [filteredAndSorted, currentPage, COLLECTIONS_PAGE_SIZE]);
 
-  // 搜索/排序/筛选变化时重置到第1页
+  // 搜索/排序/筛选变化时重置到第1页（使用受保护的 setter，在挂载保护期内不会重置页码）
+  const filterKeyRef = useRef(
+    JSON.stringify([searchQuery, sortField, sortOrder, contentFilter])
+  );
   useEffect(() => {
-    setCurrentPage(1);
-  }, [searchQuery, sortField, sortOrder, contentFilter]);
+    const newKey = JSON.stringify([searchQuery, sortField, sortOrder, contentFilter]);
+    if (filterKeyRef.current === newKey) return; // 值没变（含首次挂载），不重置
+    filterKeyRef.current = newKey;
+    safeSetCurrentPage(1);
+  }, [searchQuery, sortField, sortOrder, contentFilter, safeSetCurrentPage]);
 
   // 确保当前页码不超出范围（比如删除后总页数减少）
+  // 注意：数据加载中时跳过检查，避免 groups 为空数组时 totalPages=1 导致误重置已从 sessionStorage 恢复的页码
+  // 同时在挂载保护期内也跳过检查
   useEffect(() => {
-    if (currentPage > collectionsTotalPages) {
+    if (!loading && !pageResetGuardRef.current && currentPage > collectionsTotalPages) {
       setCurrentPage(collectionsTotalPages);
     }
-  }, [currentPage, collectionsTotalPages]);
+  }, [currentPage, collectionsTotalPages, loading]);
 
   // ── 创建分组 ──
   const handleCreate = useCallback(async () => {
