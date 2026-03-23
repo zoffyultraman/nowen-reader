@@ -215,6 +215,20 @@ func (h *ComicHandler) RemoveTag(c *gin.Context) {
 }
 
 // ============================================================
+// DELETE /api/comics/:id/tags/clear-all — Clear all tags
+// ============================================================
+
+func (h *ComicHandler) ClearAllTags(c *gin.Context) {
+	id := c.Param("id")
+
+	if err := store.ClearAllTagsFromComic(id); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to clear all tags"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true})
+}
+
+// ============================================================
 // POST /api/comics/:id/categories — Add categories
 // ============================================================
 

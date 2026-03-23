@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -64,6 +64,8 @@ export default function GroupDetailPage() {
   const isAdmin = user?.role === "admin";
 
   const groupId = Number(params?.id);
+  const searchParams = useSearchParams();
+  const contentType = searchParams?.get("contentType") || undefined;
 
   const [group, setGroup] = useState<ComicGroupDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -87,11 +89,11 @@ export default function GroupDetailPage() {
   const loadGroup = useCallback(async () => {
     if (!groupId) return;
     setLoading(true);
-    const data = await fetchGroupDetail(groupId);
+    const data = await fetchGroupDetail(groupId, contentType);
     setGroup(data);
     if (data) setEditName(data.name);
     setLoading(false);
-  }, [groupId]);
+  }, [groupId, contentType]);
 
   useEffect(() => {
     loadGroup();

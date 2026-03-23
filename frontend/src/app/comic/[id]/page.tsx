@@ -11,10 +11,12 @@ import {
   updateComicRating,
   addComicTags,
   removeComicTag,
+  clearAllComicTags,
   deleteComicById,
   useCategories,
   addComicCategories,
   removeComicCategory,
+  clearAllComicCategories,
   updateComicMetadata,
   ApiCategory,
 } from "@/hooks/useComics";
@@ -269,6 +271,23 @@ export default function ComicDetailPage() {
     refetch();
     refetchCategories();
   }, [comicId, refetch, refetchCategories]);
+
+  // 一键清除所有标签
+  const handleClearAllTags = useCallback(async () => {
+    if (!comic?.tags || comic.tags.length === 0) return;
+    if (!window.confirm(t.comicDetail.clearAllTagsConfirm)) return;
+    await clearAllComicTags(comicId);
+    refetch();
+  }, [comic?.tags, comicId, refetch, t.comicDetail.clearAllTagsConfirm]);
+
+  // 一键清除所有分类
+  const handleClearAllCategories = useCallback(async () => {
+    if (!comic?.categories || comic.categories.length === 0) return;
+    if (!window.confirm(t.comicDetail.clearAllCategoriesConfirm)) return;
+    await clearAllComicCategories(comicId);
+    refetch();
+    refetchCategories();
+  }, [comic?.categories, comicId, refetch, refetchCategories, t.comicDetail.clearAllCategoriesConfirm]);
 
   // Cover management handlers
   const handleCoverUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -989,7 +1008,7 @@ export default function ComicDetailPage() {
                 <div key={group.id} className="rounded-xl border border-border/40 bg-card/50 overflow-hidden">
                   {/* 合集头部 */}
                   <Link
-                    href={`/group/${group.id}`}
+                    href={`/group/${group.id}${comic?.type ? `?contentType=${comic.type}` : ''}`}
                     className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-card-hover"
                   >
                     <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent/10">
@@ -1066,7 +1085,19 @@ export default function ComicDetailPage() {
             {/* Tags — 仅管理员可编辑 */}
             {isAdmin && (
             <div>
-              <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted">{t.comicDetail.tagsLabel}</h3>
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="text-xs font-medium uppercase tracking-wider text-muted">{t.comicDetail.tagsLabel}</h3>
+                {(comic.tags || []).length > 0 && (
+                  <button
+                    onClick={handleClearAllTags}
+                    className="flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] text-muted transition-colors hover:bg-destructive/10 hover:text-destructive"
+                    title={t.comicDetail.clearAllTags}
+                  >
+                    <Trash2 className="h-3 w-3" />
+                    <span>{t.comicDetail.clearAllTags}</span>
+                  </button>
+                )}
+              </div>
               <div className="mb-3 flex flex-wrap gap-2">
                 {(comic.tags || []).map((tag) => (
                   <span
@@ -1171,9 +1202,21 @@ export default function ComicDetailPage() {
             {/* Categories — 仅管理员可编辑 */}
             {isAdmin && (
             <div>
-              <h3 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted">
-                {t.categoryFilter?.label || "分类"}
-              </h3>
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="text-xs font-medium uppercase tracking-wider text-muted">
+                  {t.categoryFilter?.label || "分类"}
+                </h3>
+                {(comic.categories || []).length > 0 && (
+                  <button
+                    onClick={handleClearAllCategories}
+                    className="flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] text-muted transition-colors hover:bg-destructive/10 hover:text-destructive"
+                    title={t.comicDetail.clearAllCategories}
+                  >
+                    <Trash2 className="h-3 w-3" />
+                    <span>{t.comicDetail.clearAllCategories}</span>
+                  </button>
+                )}
+              </div>
               <div className="mb-3 flex flex-wrap gap-2">
                 {comic.categories?.map((cat) => (
                   <span

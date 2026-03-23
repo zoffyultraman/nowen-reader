@@ -105,6 +105,7 @@ func SetupRoutes(r *gin.Engine) {
 		// Tags per comic
 		comicByIDWrite.POST("/tags", comic.AddTags)
 		comicByIDWrite.DELETE("/tags", comic.RemoveTag)
+		comicByIDWrite.DELETE("/tags/clear-all", comic.ClearAllTags)
 
 		// Categories per comic
 		comicByIDWrite.POST("/categories", comic.AddCategories)

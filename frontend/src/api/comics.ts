@@ -110,6 +110,19 @@ export async function removeComicTag(comicId: string, tag: string) {
 }
 
 /**
+ * 清除漫画的所有标签（调用后端批量清除接口，单次请求）
+ */
+export async function clearAllComicTags(comicId: string) {
+  try {
+    await fetch(`/api/comics/${comicId}/tags/clear-all`, {
+      method: "DELETE",
+    });
+  } catch {
+    // ignore
+  }
+}
+
+/**
  * 批量操作
  */
 export async function batchOperation(
@@ -254,6 +267,17 @@ export async function removeComicCategory(comicId: string, categorySlug: string)
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ categorySlug }),
     });
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * 清除漫画的所有分类（利用 PUT 设置空数组）
+ */
+export async function clearAllComicCategories(comicId: string) {
+  try {
+    await setComicCategories(comicId, []);
   } catch {
     // ignore
   }

@@ -44,7 +44,9 @@ func (h *GroupHandler) GetGroup(c *gin.Context) {
 		return
 	}
 
-	group, err := store.GetGroupByID(id)
+	// 支持按内容类型过滤分组内的漫画
+	contentType := c.Query("contentType")
+	group, err := store.GetGroupByID(id, contentType)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "获取分组详情失败"})
 		return

@@ -234,6 +234,45 @@ func RemoveTagFromComic(comicID string, tagName string) error {
 	return nil
 }
 
+// ClearAllTagsFromComic 一次性清除漫画的所有标签，并清理孤立标签。
+func ClearAllTagsFromComic(comicID string) error {
+	// 先获取该漫画关联的所有 tagId
+	rows, err := db.Query(`SELECT "tagId" FROM "ComicTag" WHERE "comicId" = ?`, comicID)
+	if err != nil {
+		return err
+	}
+	var tagIDs []int
+	for rows.Next() {
+		var id int
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return err
+		}
+		tagIDs = append(tagIDs, id)
+	}
+	rows.Close()
+
+	if len(tagIDs) == 0 {
+		return nil
+	}
+
+	// 批量删除关联记录
+	_, err = db.Exec(`DELETE FROM "ComicTag" WHERE "comicId" = ?`, comicID)
+	if err != nil {
+		return err
+	}
+
+	// 清理孤立标签（没有被任何漫画引用的标签）
+	for _, tagID := range tagIDs {
+		var count int
+		_ = db.QueryRow(`SELECT COUNT(*) FROM "ComicTag" WHERE "tagId" = ?`, tagID).Scan(&count)
+		if count == 0 {
+			_, _ = db.Exec(`DELETE FROM "Tag" WHERE "id" = ?`, tagID)
+		}
+	}
+	return nil
+}
+
 // UpdateTagColor 更新标签颜色。
 func UpdateTagColor(tagName, color string) error {
 	_, err := db.Exec(`UPDATE "Tag" SET "color" = ? WHERE "name" = ?`, color, tagName)

@@ -10,6 +10,7 @@ import type { ComicGroup } from "@/hooks/useComicTypes";
 interface GroupCardProps {
   group: ComicGroup;
   viewMode?: "grid" | "list";
+  contentType?: string;
   batchMode?: boolean;
   isSelected?: boolean;
   onSelect?: (id: number) => void;
@@ -24,6 +25,7 @@ interface GroupCardProps {
 const GroupCard = memo(function GroupCard({
   group,
   viewMode = "grid",
+  contentType,
   batchMode,
   isSelected,
   onSelect,
@@ -33,6 +35,11 @@ const GroupCard = memo(function GroupCard({
 }: GroupCardProps) {
   const t = useTranslation();
   const [coverLoaded, setCoverLoaded] = useState(false);
+
+  // 构建分组详情链接（携带 contentType 参数）
+  const groupHref = contentType
+    ? `/group/${group.id}?contentType=${contentType}`
+    : `/group/${group.id}`;
 
   const handleClick = (e: React.MouseEvent) => {
     if (batchMode) {
@@ -100,7 +107,7 @@ const GroupCard = memo(function GroupCard({
           </div>
         ) : (
           <Link
-            href={`/group/${group.id}`}
+            href={groupHref}
             className="flex flex-1 items-center gap-3 sm:gap-4 rounded-xl bg-card p-2.5 sm:p-3 transition-all duration-200 group-hover:bg-card-hover group-hover:shadow-lg group-hover:shadow-accent/5"
           >
             <div className="relative h-20 w-14 sm:h-16 sm:w-12 flex-shrink-0 overflow-hidden rounded-lg">
@@ -189,7 +196,7 @@ const GroupCard = memo(function GroupCard({
           </div>
         </div>
       ) : (
-        <Link href={`/group/${group.id}`} className="block">
+        <Link href={groupHref} className="block">
           <div className="relative overflow-hidden rounded-xl bg-card transition-all duration-300 ease-out group-hover:scale-[1.03] group-hover:shadow-2xl group-hover:shadow-accent/10">
             <div className="relative aspect-[5/7] w-full overflow-hidden">
               {/* 骨架屏 */}

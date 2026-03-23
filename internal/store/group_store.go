@@ -75,6 +75,7 @@ func GetAllGroups(userID ...string) ([]ComicGroupWithCount, error) {
 }
 
 // GetAllGroupsWithOptions 获取所有分组（带漫画数量），支持更多过滤选项。
+// 当指定 ContentType 时，只返回包含该类型漫画的分组，且 comicCount 只统计该类型的数量。
 func GetAllGroupsWithOptions(opts GroupListOptions) ([]ComicGroupWithCount, error) {
 	var conditions []string
 	var args []interface{}
@@ -98,12 +99,20 @@ func GetAllGroupsWithOptions(opts GroupListOptions) ([]ComicGroupWithCount, erro
 		whereClause = " WHERE " + strings.Join(conditions, " AND ")
 	}
 
+	// 当指定 contentType 时，JOIN 中也要按类型过滤，确保 comicCount 只统计该类型的漫画
+	joinClause := `LEFT JOIN "ComicGroupItem" gi ON gi."groupId" = g."id"`
+	if opts.ContentType == "comic" || opts.ContentType == "novel" {
+		joinClause = `LEFT JOIN ("ComicGroupItem" gi INNER JOIN "Comic" ct ON ct."id" = gi."comicId" AND ct."type" = ?) ON gi."groupId" = g."id"`
+		// 将 contentType 参数插入到 args 的最前面（因为 JOIN 子句在 WHERE 之前解析）
+		args = append([]interface{}{opts.ContentType}, args...)
+	}
+
 	rows, err := db.Query(`
 		SELECT g."id", g."name", g."coverUrl", g."sortOrder",
 		       g."createdAt", g."updatedAt",
 		       COUNT(gi."comicId") as comicCount
 		FROM "ComicGroup" g
-		LEFT JOIN "ComicGroupItem" gi ON gi."groupId" = g."id"
+		`+joinClause+`
 	`+whereClause+`
 		GROUP BY g."id"
 		ORDER BY g."sortOrder" ASC, g."name" ASC
@@ -142,14 +151,26 @@ func GetAllGroupsWithOptions(opts GroupListOptions) ([]ComicGroupWithCount, erro
 }
 
 // GetGroupByID 获取单个分组详情（含漫画列表）。
-func GetGroupByID(groupID int) (*ComicGroupDetail, error) {
+// 可选 contentType 参数：传入 "comic" 或 "novel" 时只返回对应类型的漫画，comicCount 也只统计该类型。
+func GetGroupByID(groupID int, contentType ...string) (*ComicGroupDetail, error) {
 	var g ComicGroupDetail
 	var createdAt, updatedAt time.Time
+
+	// 根据 contentType 决定 comicCount 子查询是否带类型过滤
+	countSubQuery := `(SELECT COUNT(*) FROM "ComicGroupItem" WHERE "groupId" = g."id")`
+	var countArgs []interface{}
+	cType := firstString(contentType)
+	if cType == "comic" || cType == "novel" {
+		countSubQuery = `(SELECT COUNT(*) FROM "ComicGroupItem" gi2 JOIN "Comic" c2 ON c2."id" = gi2."comicId" WHERE gi2."groupId" = g."id" AND c2."type" = ?)`
+		countArgs = append(countArgs, cType)
+	}
+
+	queryArgs := append(countArgs, groupID)
 	err := db.QueryRow(`
 		SELECT g."id", g."name", g."coverUrl", g."sortOrder", g."createdAt", g."updatedAt",
-		       (SELECT COUNT(*) FROM "ComicGroupItem" WHERE "groupId" = g."id") as comicCount
+		       `+countSubQuery+` as comicCount
 		FROM "ComicGroup" g WHERE g."id" = ?
-	`, groupID).Scan(&g.ID, &g.Name, &g.CoverURL, &g.SortOrder, &createdAt, &updatedAt, &g.ComicCount)
+	`, queryArgs...).Scan(&g.ID, &g.Name, &g.CoverURL, &g.SortOrder, &createdAt, &updatedAt, &g.ComicCount)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -159,16 +180,23 @@ func GetGroupByID(groupID int) (*ComicGroupDetail, error) {
 	g.CreatedAt = createdAt.UTC().Format(time.RFC3339)
 	g.UpdatedAt = updatedAt.UTC().Format(time.RFC3339)
 
-	// 获取分组内的漫画
-	rows, err := db.Query(`
+	// 获取分组内的漫画（按 contentType 过滤）
+	comicSQL := `
 		SELECT c."id", c."filename", c."title", c."pageCount", c."fileSize",
 		       c."lastReadPage", c."totalReadTime", c."readingStatus", c."lastReadAt",
 		       gi."sortIndex"
 		FROM "ComicGroupItem" gi
 		JOIN "Comic" c ON c."id" = gi."comicId"
-		WHERE gi."groupId" = ?
-		ORDER BY gi."sortIndex" ASC
-	`, groupID)
+		WHERE gi."groupId" = ?`
+	var comicArgs []interface{}
+	comicArgs = append(comicArgs, groupID)
+	if cType == "comic" || cType == "novel" {
+		comicSQL += ` AND c."type" = ?`
+		comicArgs = append(comicArgs, cType)
+	}
+	comicSQL += ` ORDER BY gi."sortIndex" ASC`
+
+	rows, err := db.Query(comicSQL, comicArgs...)
 	if err != nil {
 		return nil, err
 	}

@@ -9,12 +9,14 @@ import type { ComicGroup } from "@/hooks/useComicTypes";
 
 interface AddToGroupDialogProps {
   comicIds: string[];
+  contentType?: string;
   onClose: () => void;
   onDone: () => void;
 }
 
 export default function AddToGroupDialog({
   comicIds,
+  contentType,
   onClose,
   onDone,
 }: AddToGroupDialogProps) {
@@ -28,10 +30,10 @@ export default function AddToGroupDialog({
 
   const loadGroups = useCallback(async () => {
     setLoading(true);
-    const data = await fetchGroups();
+    const data = await fetchGroups(contentType);
     setGroups(data);
     setLoading(false);
-  }, []);
+  }, [contentType]);
 
   useEffect(() => {
     loadGroups();

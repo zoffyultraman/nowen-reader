@@ -1101,6 +1101,7 @@ accept=".zip,.cbz,.cbr,.rar,.7z,.cb7,.pdf,.txt,.epub,.mobi,.azw3,.html,.htm"
                     <GroupCard
                       group={group}
                       viewMode={viewMode}
+                      contentType={contentType}
                       batchMode={batchMode}
                       isSelected={selectedGroupIds.has(group.id)}
                       onSelect={toggleGroupSelect}
@@ -1441,6 +1442,7 @@ accept=".zip,.cbz,.cbr,.rar,.7z,.cb7,.pdf,.txt,.epub,.mobi,.azw3,.html,.htm"
       {showAddToGroup && (
         <AddToGroupDialog
           comicIds={Array.from(selectedIds)}
+          contentType={contentType}
           onClose={() => setShowAddToGroup(false)}
           onDone={() => {
             setShowAddToGroup(false);
@@ -1586,6 +1588,7 @@ accept=".zip,.cbz,.cbr,.rar,.7z,.cb7,.pdf,.txt,.epub,.mobi,.azw3,.html,.htm"
       {contextAddToGroupIds && (
         <AddToGroupDialog
           comicIds={contextAddToGroupIds}
+          contentType={contentType}
           onClose={() => setContextAddToGroupIds(null)}
           onDone={() => {
             setContextAddToGroupIds(null);

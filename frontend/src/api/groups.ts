@@ -23,10 +23,13 @@ export async function fetchGroups(contentType?: string): Promise<ComicGroup[]> {
   }
 }
 
-/** 获取分组详情 */
-export async function fetchGroupDetail(groupId: number): Promise<ComicGroupDetail | null> {
+/** 获取分组详情（支持按内容类型过滤分组内的漫画） */
+export async function fetchGroupDetail(groupId: number, contentType?: string): Promise<ComicGroupDetail | null> {
   try {
-    const res = await fetch(`/api/groups/${groupId}`);
+    const params = new URLSearchParams();
+    if (contentType) params.set("contentType", contentType);
+    const url = params.toString() ? `/api/groups/${groupId}?${params}` : `/api/groups/${groupId}`;
+    const res = await fetch(url);
     if (!res.ok) return null;
     return await res.json();
   } catch {

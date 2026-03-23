@@ -161,6 +161,12 @@ const zhCN = {
     aiNotConfigured: "请先在设置中配置 AI",
     aiAddSelected: "添加选中标签",
     aiAddAll: "全部添加",
+    clearAllTags: "清除所有标签",
+    clearAllTagsConfirm: "确定要清除所有标签吗？",
+    clearAllCategories: "清除所有分类",
+    clearAllCategoriesConfirm: "确定要清除所有分类吗？",
+    tagsCleared: "标签已清除",
+    categoriesCleared: "分类已清除",
     aiAnalyzeCover: "AI 分析封面",
     aiAnalyzeCoverLoading: "正在分析封面...",
     aiAnalyzeCoverResult: "封面分析结果",
@@ -208,6 +214,9 @@ const zhCN = {
     tagsLabel: "标签",
     noTags: "暂无标签",
     addTagPlaceholder: "添加标签...",
+    clearAllTags: "清除全部",
+    clearAllTagsConfirm: "确定要清除所有标签吗？",
+    tagsCleared: "标签已清除",
     readingInfo: "阅读信息",
     currentPage: "当前页",
     readProgress: "阅读进度",
@@ -1140,6 +1149,12 @@ export interface Translations {
     aiNotConfigured: string;
     aiAddSelected: string;
     aiAddAll: string;
+    clearAllTags: string;
+    clearAllTagsConfirm: string;
+    clearAllCategories: string;
+    clearAllCategoriesConfirm: string;
+    tagsCleared: string;
+    categoriesCleared: string;
     aiAnalyzeCover: string;
     aiAnalyzeCoverLoading: string;
     aiAnalyzeCoverResult: string;
@@ -1183,6 +1198,9 @@ export interface Translations {
     tagsLabel: string;
     noTags: string;
     addTagPlaceholder: string;
+    clearAllTags: string;
+    clearAllTagsConfirm: string;
+    tagsCleared: string;
     readingInfo: string;
     currentPage: string;
     readProgress: string;

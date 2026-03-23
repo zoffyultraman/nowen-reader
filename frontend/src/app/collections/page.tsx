@@ -1147,7 +1147,7 @@ function CollectionGridCard({
       }}
       onClick={handleCardClick}
     >
-      <Link href={batchMode ? "#" : `/group/${group.id}`} className="block" onClick={batchMode ? handleCardClick : undefined}>
+      <Link href={batchMode ? "#" : `/group/${group.id}?contentType=${contentFilter}`} className="block" onClick={batchMode ? handleCardClick : undefined}>
         <div className="relative overflow-hidden rounded-xl bg-card transition-all duration-300 ease-out group-hover:scale-[1.03] group-hover:shadow-2xl group-hover:shadow-accent/10">
           {/* 封面区域 */}
           <div className="relative aspect-[5/7] w-full overflow-hidden">
@@ -1224,7 +1224,7 @@ function CollectionGridCard({
           <div className="fixed inset-0 z-50" onClick={() => setShowMenu(false)} />
           <div className="absolute right-2 top-2 z-50 w-36 rounded-xl border border-border/50 bg-card py-1 shadow-xl">
             <Link
-              href={`/group/${group.id}`}
+              href={`/group/${group.id}?contentType=${contentFilter}`}
               className="flex w-full items-center gap-2 px-3 py-2 text-xs text-foreground hover:bg-card-hover"
               onClick={() => setShowMenu(false)}
             >
@@ -1304,7 +1304,7 @@ function CollectionListCard({
         )}
 
         {/* 封面缩略图 */}
-        <Link href={batchMode ? "#" : `/group/${group.id}`} className="flex-shrink-0" onClick={batchMode ? handleRowClick : undefined}>
+        <Link href={batchMode ? "#" : `/group/${group.id}?contentType=${contentFilter}`} className="flex-shrink-0" onClick={batchMode ? handleRowClick : undefined}>
           <div className="relative h-20 w-14 overflow-hidden rounded-lg">
             {group.coverUrl ? (
               <Image
@@ -1328,7 +1328,7 @@ function CollectionListCard({
         </Link>
 
         {/* 信息区域 */}
-        <Link href={batchMode ? "#" : `/group/${group.id}`} className="flex-1 min-w-0" onClick={batchMode ? handleRowClick : undefined}>
+        <Link href={batchMode ? "#" : `/group/${group.id}?contentType=${contentFilter}`} className="flex-1 min-w-0" onClick={batchMode ? handleRowClick : undefined}>
           <h3 className="truncate text-sm font-medium text-foreground/90 group-hover:text-foreground mb-1">
             {group.name}
           </h3>
@@ -1347,7 +1347,7 @@ function CollectionListCard({
         {!batchMode && (
           <div className="flex items-center gap-1 flex-shrink-0">
             <Link
-              href={`/group/${group.id}`}
+              href={`/group/${group.id}?contentType=${contentFilter}`}
               className="flex h-8 w-8 items-center justify-center rounded-lg text-muted opacity-0 transition-all hover:bg-accent/10 hover:text-accent group-hover:opacity-100"
             >
               <BookOpen className="h-4 w-4" />

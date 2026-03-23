@@ -28,6 +28,7 @@ export {
   updateComicRating,
   addComicTags,
   removeComicTag,
+  clearAllComicTags,
   batchOperation,
   deleteComicById,
   startSession,
@@ -37,6 +38,7 @@ export {
   addComicCategories,
   setComicCategories,
   removeComicCategory,
+  clearAllComicCategories,
   updateComicMetadata,
   setReadingStatus,
 } from "@/api/comics";

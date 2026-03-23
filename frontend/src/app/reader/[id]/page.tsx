@@ -10,6 +10,7 @@ import {
   updateComicRating,
   addComicTags,
   removeComicTag,
+  clearAllComicTags,
   startSession,
   endSession,
   endSessionBeacon,
@@ -23,7 +24,7 @@ import DoublePageView from "@/components/reader/DoublePageView";
 import WebtoonView from "@/components/reader/WebtoonView";
 import PdfView from "@/components/reader/PdfView";
 import ReaderOptionsPanel from "@/components/reader/ReaderOptionsPanel";
-import { Heart, Star, Tag, X, Plus, List } from "lucide-react";
+import { Heart, Star, Tag, X, Plus, List, Trash2 } from "lucide-react";
 import { useTranslation, useLocale } from "@/lib/i18n";
 import AIChatPanel from "@/components/reader/AIChatPanel";
 import PageTranslateOverlay from "@/components/reader/PageTranslateOverlay";
@@ -457,6 +458,14 @@ export default function ReaderPage() {
 
   const handleRemoveTag = async (tagName: string) => {
     await removeComicTag(comicId, tagName);
+    refetchDetail();
+  };
+
+  // 一键清除所有标签
+  const handleClearAllTags = async () => {
+    if (!comicDetail?.tags || comicDetail.tags.length === 0) return;
+    if (!window.confirm(t.reader.clearAllTagsConfirm)) return;
+    await clearAllComicTags(comicId);
     refetchDetail();
   };
 
@@ -899,9 +908,21 @@ export default function ReaderPage() {
 
             {/* Tags */}
             <div className="mb-6">
-              <h3 className="mb-2 text-xs font-medium uppercase tracking-wider text-white/40">
-                {t.reader.tagsLabel}
-              </h3>
+              <div className="mb-2 flex items-center justify-between">
+                <h3 className="text-xs font-medium uppercase tracking-wider text-white/40">
+                  {t.reader.tagsLabel}
+                </h3>
+                {(comicDetail?.tags || []).length > 0 && (
+                  <button
+                    onClick={handleClearAllTags}
+                    className="flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] text-white/40 transition-colors hover:bg-red-500/10 hover:text-red-400"
+                    title={t.reader.clearAllTags}
+                  >
+                    <Trash2 className="h-3 w-3" />
+                    <span>{t.reader.clearAllTags}</span>
+                  </button>
+                )}
+              </div>
 
               {/* Existing tags */}
               <div className="mb-3 flex flex-wrap gap-2">

@@ -10,13 +10,14 @@ import {
   updateComicRating,
   addComicTags,
   removeComicTag,
+  clearAllComicTags,
   startSession,
   endSession,
   endSessionBeacon,
 } from "@/hooks/useComics";
 import TextReaderView from "@/components/reader/TextReaderView";
 import NovelToolbar from "@/components/reader/NovelToolbar";
-import { Heart, Star, Tag, X, Plus } from "lucide-react";
+import { Heart, Star, Tag, X, Plus, Trash2 } from "lucide-react";
 import { useTranslation, useLocale } from "@/lib/i18n";
 import { useTheme } from "@/lib/theme-context";
 import type { ReaderTheme } from "@/components/reader/ReaderToolbar";
@@ -328,6 +329,14 @@ export default function NovelReaderPage() {
     refetchDetail();
   };
 
+  // 一键清除所有标签
+  const handleClearAllTags = async () => {
+    if (!comicDetail?.tags || comicDetail.tags.length === 0) return;
+    if (!window.confirm(t.reader.clearAllTagsConfirm)) return;
+    await clearAllComicTags(comicId);
+    refetchDetail();
+  };
+
   // Loading state
   if (isLoading) {
     return (
@@ -511,9 +520,21 @@ export default function NovelReaderPage() {
 
             {/* Tags */}
             <div className="mb-4 sm:mb-6">
-              <h3 className="mb-2 text-xs font-medium uppercase tracking-wider text-white/40">
-                {t.reader.tagsLabel}
-              </h3>
+              <div className="mb-2 flex items-center justify-between">
+                <h3 className="text-xs font-medium uppercase tracking-wider text-white/40">
+                  {t.reader.tagsLabel}
+                </h3>
+                {(comicDetail?.tags || []).length > 0 && (
+                  <button
+                    onClick={handleClearAllTags}
+                    className="flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] text-white/40 transition-colors hover:bg-red-500/10 hover:text-red-400"
+                    title={t.reader.clearAllTags}
+                  >
+                    <Trash2 className="h-3 w-3" />
+                    <span>{t.reader.clearAllTags}</span>
+                  </button>
+                )}
+              </div>
 
               <div className="mb-3 flex flex-wrap gap-2">
                 {(comicDetail?.tags || []).map((tag) => (
