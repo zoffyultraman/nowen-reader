@@ -41,7 +41,7 @@ import {
   previewInheritMetadata,
   inheritMetadataToVolumes,
   fetchGroupTags,
-  setGroupTags,
+  setGroupTags as setGroupTagsApi,
   syncGroupTags,
   aiSuggestGroupTags,
 } from "@/api/groups";
@@ -214,7 +214,7 @@ export default function GroupDetailPage() {
     // 支持逗号分隔批量添加
     const newNames = newTagInput.split(",").map(s => s.trim()).filter(Boolean);
     const allNames = [...new Set([...currentNames, ...newNames])];
-    const result = await setGroupTags(group.id, allNames);
+    const result = await setGroupTagsApi(group.id, allNames);
     if (result?.success) {
       const addedCount = result.added?.length || 0;
       const syncedTo = result.syncedTo || 0;
@@ -234,13 +234,12 @@ export default function GroupDetailPage() {
     if (!group) return;
     setTagSaving(true);
     const newNames = groupTags.filter(t => t.name !== tagName).map(t => t.name);
-    const result = await setGroupTags(group.id, newNames);
+    const result = await setGroupTagsApi(group.id, newNames);
     if (result?.success) {
       const syncedTo = result.syncedTo || 0;
       toast.success(
         `已移除标签「${tagName}」${syncedTo > 0 ? `，已从 ${syncedTo} 卷中移除` : ""}`
-      );
-      await loadGroupTags();
+      );      await loadGroupTags();
     }
     setTagSaving(false);
   }, [group, groupTags, toast, loadGroupTags]);
@@ -273,13 +272,12 @@ export default function GroupDetailPage() {
     setTagSaving(true);
     const currentNames = groupTags.map(t => t.name);
     const allNames = [...new Set([...currentNames, ...tagsToAdd])];
-    const result = await setGroupTags(group.id, allNames);
+    const result = await setGroupTagsApi(group.id, allNames);
     if (result?.success) {
       const addedCount = result.added?.length || 0;
       const syncedTo = result.syncedTo || 0;
       toast.success(
-        (t.comicGroup?.aiSuggestTagsSuccess || "已添加 {count} 个 AI 建议标签").replace("{count}", String(addedCount))
-        + (syncedTo > 0 ? `，已同步到 ${syncedTo} 卷` : "")
+        (t.comicGroup?.aiSuggestTagsSuccess || "已添加 {count} 个 AI 建议标签").replace("{count}", String(addedCount))        + (syncedTo > 0 ? `，已同步到 ${syncedTo} 卷` : "")
       );
       setAiSuggestedTags([]);
       setAiSelectedTags(new Set());
