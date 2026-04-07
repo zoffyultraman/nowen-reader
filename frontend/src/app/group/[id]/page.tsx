@@ -300,7 +300,7 @@ export default function GroupDetailPage() {
     if (result?.success) {
       toast.success(
         `同步完成：${result.syncedVolumes}/${result.totalVolumes} 卷已更新，` +
-        `添加 ${result.tagsAdded} 个、移除 ${result.tagsRemoved} 个标签关联`
+        `同步 ${result.tagsAdded} 个标签`
       );
     } else {
       toast.error("同步失败");

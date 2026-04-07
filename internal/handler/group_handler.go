@@ -494,12 +494,19 @@ func (h *GroupHandler) SyncGroupTags(c *gin.Context) {
 		return
 	}
 
-	if err := store.SyncGroupTagsToVolumes(id); err != nil {
+	totalVolumes, syncedVolumes, tagsCount, err := store.SyncGroupTagsToVolumes(id)
+	if err != nil {
 		log.Printf("[API] SyncGroupTags error: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "同步标签到所有卷失败"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	c.JSON(http.StatusOK, gin.H{
+		"success":       true,
+		"totalVolumes":  totalVolumes,
+		"syncedVolumes": syncedVolumes,
+		"tagsAdded":     tagsCount,
+		"tagsRemoved":   0,
+	})
 }
 
 // POST /api/groups/:id/override-tags — 将系列标签覆盖到所有卷（先清除卷标签再设置）
@@ -764,7 +771,7 @@ func (h *GroupHandler) ApplyScrapedMetadata(c *gin.Context) {
 			}
 			_ = store.SetGroupTags(id, allNames)
 			if body.SyncTags {
-				_ = store.SyncGroupTagsToVolumes(id)
+				_, _, _, _ = store.SyncGroupTagsToVolumes(id)
 			}
 		}
 	}

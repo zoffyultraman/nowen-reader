@@ -1601,16 +1601,21 @@ func SetGroupTags(groupID int, tagNames []string) error {
 
 // SyncGroupTagsToVolumes 将系列级标签同步到系列内所有卷。
 // 仅添加卷中缺少的标签，不删除卷已有的标签。
-func SyncGroupTagsToVolumes(groupID int) error {
-	group, err := GetGroupByID(groupID)
-	if err != nil || group == nil || len(group.Comics) == 0 {
-		return nil
+func SyncGroupTagsToVolumes(groupID int) (totalVolumes, syncedVolumes, tagsCount int, err error) {
+	group, e := GetGroupByID(groupID)
+	if e != nil {
+		err = e
+		return
+	}
+	if group == nil || len(group.Comics) == 0 {
+		return
 	}
 
 	// 获取系列级标签名称
-	groupTags, err := GetGroupTags(groupID)
-	if err != nil || len(groupTags) == 0 {
-		return nil
+	groupTags, e := GetGroupTags(groupID)
+	if e != nil {
+		err = e
+		return
 	}
 
 	var tagNames []string
@@ -1618,12 +1623,19 @@ func SyncGroupTagsToVolumes(groupID int) error {
 		tagNames = append(tagNames, t.Name)
 	}
 
+	totalVolumes = len(group.Comics)
+	tagsCount = len(tagNames)
+
 	// 为每本漫画添加缺少的标签
 	for _, comic := range group.Comics {
-		_ = AddTagsToComic(comic.ComicID, tagNames)
+		if e := AddTagsToComic(comic.ComicID, tagNames); e != nil {
+			log.Printf("[SyncGroupTags] 同步漫画 %s 标签失败: %v", comic.ComicID, e)
+			continue
+		}
+		syncedVolumes++
 	}
 
-	return nil
+	return
 }
 
 // OverrideGroupTagsToVolumes 将系列级标签覆盖到系列内所有卷。
