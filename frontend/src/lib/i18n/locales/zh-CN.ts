@@ -422,6 +422,7 @@ const zhCN = {
     translatingMetadata: "翻译中...",
     editMetadata: "编辑",
     editingMetadata: "编辑元数据",
+    skipCover: "不替换书籍封面",
   },
 
   // Recommendations
@@ -1495,6 +1496,7 @@ export interface Translations {
     translatingMetadata: string;
     editMetadata: string;
     editingMetadata: string;
+    skipCover: string;
   };
   recommend: {
     title: string;

@@ -425,6 +425,7 @@ const en: Translations = {
     translatingMetadata: "Translating...",
     editMetadata: "Edit",
     editingMetadata: "Edit Metadata",
+    skipCover: "Don't replace book cover",
   },
 
   // Recommendations
