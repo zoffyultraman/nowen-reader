@@ -189,7 +189,16 @@ func GetComicPagesEx(comicID string) (*PagesResult, error) {
 	}
 
 	archiveType := archive.DetectType(fp)
+
+	// 优先使用数据库中的 type 字段判断是否为小说
+	// 这样可以正确处理被标记为漫画的 epub 文件（图片为主的 epub）
 	isNovel := archive.IsNovelType(archiveType)
+	if archive.IsEbookType(archiveType) {
+		comic, dbErr := store.GetComicByID(comicID)
+		if dbErr == nil && comic != nil && comic.ComicType == "comic" {
+			isNovel = false // 数据库中标记为漫画，覆盖默认的小说判断
+		}
+	}
 
 	// Check cache for entries
 	pageListCacheMu.RLock()

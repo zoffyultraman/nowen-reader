@@ -440,3 +440,77 @@ func (h *GroupHandler) InheritToVolumes(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
+
+// ============================================================
+// P2: 系列级标签管理
+// ============================================================
+
+// GET /api/groups/:id/tags — 获取系列标签
+func (h *GroupHandler) GetGroupTags(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的系列ID"})
+		return
+	}
+
+	tags, err := store.GetGroupTags(id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "获取系列标签失败"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"tags": tags})
+}
+
+// PUT /api/groups/:id/tags — 设置系列标签
+func (h *GroupHandler) SetGroupTags(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的系列ID"})
+		return
+	}
+
+	var body struct {
+		Tags []string `json:"tags"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "请求格式错误"})
+		return
+	}
+
+	if err := store.SetGroupTags(id, body.Tags); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "设置系列标签失败"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true})
+}
+
+// POST /api/groups/:id/sync-tags — 将系列标签同步到所有卷
+func (h *GroupHandler) SyncGroupTags(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的系列ID"})
+		return
+	}
+
+	if err := store.SyncGroupTagsToVolumes(id); err != nil {
+		log.Printf("[API] SyncGroupTags error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "同步标签到所有卷失败"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true})
+}
+
+// ============================================================
+// P3: 按话/卷自动分组
+// ============================================================
+
+// POST /api/groups/auto-group-by-dir — 按文件夹自动创建分组
+func (h *GroupHandler) AutoGroupByDirectory(c *gin.Context) {
+	created, err := store.AutoGroupByDirectory()
+	if err != nil {
+		log.Printf("[API] AutoGroupByDirectory error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "自动分组失败"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "created": created})
+}

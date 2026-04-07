@@ -2,6 +2,7 @@ package store
 
 import (
 	"database/sql"
+	"strings"
 	"time"
 )
 
@@ -538,4 +539,332 @@ func GetFileStats() (*FileStats, error) {
 	}
 
 	return stats, nil
+}
+
+// ============================================================
+// 文件夹树形统计
+// ============================================================
+
+// FolderTreeNode 表示文件夹树中的一个节点。
+type FolderTreeNode struct {
+	Name       string            `json:"name"`
+	Path       string            `json:"path"`
+	FileCount  int               `json:"fileCount"`
+	TotalSize  int64             `json:"totalSize"`
+	TotalPages int               `json:"totalPages"`
+	ComicCount int               `json:"comicCount"`
+	NovelCount int               `json:"novelCount"`
+	ReadCount  int               `json:"readCount"` // 已读完的文件数
+	Children   []*FolderTreeNode `json:"children"`
+	Files      []FolderFileItem  `json:"files,omitempty"` // 叶子节点包含的文件列表
+}
+
+// FolderFileItem 文件夹中的单个文件信息。
+type FolderFileItem struct {
+	ID        string `json:"id"`
+	Title     string `json:"title"`
+	Filename  string `json:"filename"`
+	FileSize  int64  `json:"fileSize"`
+	PageCount int    `json:"pageCount"`
+	Type      string `json:"type"`
+	LastRead  int    `json:"lastRead"` // 最后阅读页
+}
+
+// GetFolderTreeStats 按文件夹层级结构返回统计数据。
+// filename 字段存储的是相对于扫描根目录的路径（如 "乌龙院/乌龙院前篇/卷1.cbz"）。
+func GetFolderTreeStats() ([]*FolderTreeNode, error) {
+	rows, err := db.Query(`
+		SELECT "id", "title", "filename", "fileSize", "pageCount", "type", "lastReadPage"
+		FROM "Comic"
+		ORDER BY "filename" ASC
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	// 构建虚拟根节点
+	root := &FolderTreeNode{
+		Name:     "root",
+		Path:     "",
+		Children: []*FolderTreeNode{},
+	}
+
+	for rows.Next() {
+		var id, title, filename, comicType string
+		var fileSize int64
+		var pageCount, lastReadPage int
+		if err := rows.Scan(&id, &title, &filename, &fileSize, &pageCount, &comicType, &lastReadPage); err != nil {
+			continue
+		}
+
+		// 解析文件路径中的目录层级
+		parts := splitPath(filename)
+		if len(parts) == 0 {
+			continue
+		}
+
+		// 判断是否已读完
+		isRead := lastReadPage > 0 && pageCount > 0 && lastReadPage >= pageCount-1
+
+		// 构建文件信息
+		fileItem := FolderFileItem{
+			ID:        id,
+			Title:     title,
+			Filename:  parts[len(parts)-1], // 只取文件名部分
+			FileSize:  fileSize,
+			PageCount: pageCount,
+			Type:      comicType,
+			LastRead:  lastReadPage,
+		}
+
+		// 遍历路径层级，创建或查找节点
+		current := root
+		pathSoFar := ""
+		for i := 0; i < len(parts)-1; i++ { // 最后一个是文件名，不创建节点
+			dirName := parts[i]
+			if pathSoFar == "" {
+				pathSoFar = dirName
+			} else {
+				pathSoFar = pathSoFar + "/" + dirName
+			}
+
+			// 查找已有子节点
+			var found *FolderTreeNode
+			for _, child := range current.Children {
+				if child.Name == dirName {
+					found = child
+					break
+				}
+			}
+			if found == nil {
+				found = &FolderTreeNode{
+					Name:     dirName,
+					Path:     pathSoFar,
+					Children: []*FolderTreeNode{},
+				}
+				current.Children = append(current.Children, found)
+			}
+			current = found
+		}
+
+		// 将文件添加到最深层目录节点
+		current.Files = append(current.Files, fileItem)
+
+		// 累加统计到当前节点及所有祖先节点
+		// 从叶子节点向上累加
+		current2 := root
+		current2.FileCount++
+		current2.TotalSize += fileSize
+		current2.TotalPages += pageCount
+		if comicType == "comic" {
+			current2.ComicCount++
+		} else {
+			current2.NovelCount++
+		}
+		if isRead {
+			current2.ReadCount++
+		}
+
+		pathSoFar2 := ""
+		for i := 0; i < len(parts)-1; i++ {
+			dirName := parts[i]
+			if pathSoFar2 == "" {
+				pathSoFar2 = dirName
+			} else {
+				pathSoFar2 = pathSoFar2 + "/" + dirName
+			}
+			for _, child := range current2.Children {
+				if child.Name == dirName {
+					child.FileCount++
+					child.TotalSize += fileSize
+					child.TotalPages += pageCount
+					if comicType == "comic" {
+						child.ComicCount++
+					} else {
+						child.NovelCount++
+					}
+					if isRead {
+						child.ReadCount++
+					}
+					current2 = child
+					break
+				}
+			}
+		}
+	}
+
+	// 如果所有文件都在根目录（没有子目录），返回空
+	if len(root.Children) == 0 {
+		return []*FolderTreeNode{}, nil
+	}
+
+	return root.Children, nil
+}
+
+// splitPath 将文件路径按 "/" 分割为各层级。
+func splitPath(filename string) []string {
+	// 统一使用正斜杠
+	filename = strings.ReplaceAll(filename, "\\", "/")
+	parts := strings.Split(filename, "/")
+	// 过滤空字符串
+	result := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if p != "" {
+			result = append(result, p)
+		}
+	}
+	return result
+}
+
+// MetadataFolderNode 元数据刮削页面的文件夹树节点。
+type MetadataFolderNode struct {
+	Name        string                `json:"name"`
+	Path        string                `json:"path"`
+	FileCount   int                   `json:"fileCount"`
+	WithMeta    int                   `json:"withMeta"`
+	MissingMeta int                   `json:"missingMeta"`
+	ComicCount  int                   `json:"comicCount"`
+	NovelCount  int                   `json:"novelCount"`
+	TotalSize   int64                 `json:"totalSize"`
+	Children    []*MetadataFolderNode `json:"children"`
+	Files       []MetadataFolderFile  `json:"files,omitempty"`
+}
+
+// MetadataFolderFile 文件夹中的单个文件（带元数据状态）。
+type MetadataFolderFile struct {
+	ID             string `json:"id"`
+	Title          string `json:"title"`
+	Filename       string `json:"filename"`
+	FileSize       int64  `json:"fileSize"`
+	Type           string `json:"type"`
+	HasMetadata    bool   `json:"hasMetadata"`
+	MetadataSource string `json:"metadataSource"`
+	Author         string `json:"author"`
+}
+
+// GetMetadataFolderTree 返回带有元数据状态的文件夹树形结构。
+func GetMetadataFolderTree() ([]*MetadataFolderNode, error) {
+	rows, err := db.Query(`
+		SELECT "id", "title", "filename", "fileSize", "type", "metadataSource", "author"
+		FROM "Comic"
+		ORDER BY "filename" ASC
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	root := &MetadataFolderNode{
+		Name:     "root",
+		Path:     "",
+		Children: []*MetadataFolderNode{},
+	}
+
+	for rows.Next() {
+		var id, title, filename, comicType, metadataSource, author string
+		var fileSize int64
+		if err := rows.Scan(&id, &title, &filename, &fileSize, &comicType, &metadataSource, &author); err != nil {
+			continue
+		}
+
+		parts := splitPath(filename)
+		if len(parts) == 0 {
+			continue
+		}
+
+		hasMeta := metadataSource != ""
+
+		fileItem := MetadataFolderFile{
+			ID:             id,
+			Title:          title,
+			Filename:       parts[len(parts)-1],
+			FileSize:       fileSize,
+			Type:           comicType,
+			HasMetadata:    hasMeta,
+			MetadataSource: metadataSource,
+			Author:         author,
+		}
+
+		// 遍历路径层级，创建或查找节点
+		current := root
+		pathSoFar := ""
+		for i := 0; i < len(parts)-1; i++ {
+			dirName := parts[i]
+			if pathSoFar == "" {
+				pathSoFar = dirName
+			} else {
+				pathSoFar = pathSoFar + "/" + dirName
+			}
+
+			var found *MetadataFolderNode
+			for _, child := range current.Children {
+				if child.Name == dirName {
+					found = child
+					break
+				}
+			}
+			if found == nil {
+				found = &MetadataFolderNode{
+					Name:     dirName,
+					Path:     pathSoFar,
+					Children: []*MetadataFolderNode{},
+				}
+				current.Children = append(current.Children, found)
+			}
+			current = found
+		}
+
+		// 将文件添加到最深层目录节点
+		current.Files = append(current.Files, fileItem)
+
+		// 累加统计到所有祖先节点
+		current2 := root
+		current2.FileCount++
+		current2.TotalSize += fileSize
+		if comicType == "comic" {
+			current2.ComicCount++
+		} else {
+			current2.NovelCount++
+		}
+		if hasMeta {
+			current2.WithMeta++
+		} else {
+			current2.MissingMeta++
+		}
+
+		pathSoFar2 := ""
+		for i := 0; i < len(parts)-1; i++ {
+			dirName := parts[i]
+			if pathSoFar2 == "" {
+				pathSoFar2 = dirName
+			} else {
+				pathSoFar2 = pathSoFar2 + "/" + dirName
+			}
+			for _, child := range current2.Children {
+				if child.Name == dirName {
+					child.FileCount++
+					child.TotalSize += fileSize
+					if comicType == "comic" {
+						child.ComicCount++
+					} else {
+						child.NovelCount++
+					}
+					if hasMeta {
+						child.WithMeta++
+					} else {
+						child.MissingMeta++
+					}
+					current2 = child
+					break
+				}
+			}
+		}
+	}
+
+	if len(root.Children) == 0 {
+		return []*MetadataFolderNode{}, nil
+	}
+
+	return root.Children, nil
 }

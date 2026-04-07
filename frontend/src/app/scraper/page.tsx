@@ -127,9 +127,331 @@ import {
   setCollectionEditingName,
   setCollectionCreateDialog,
   startBatchSelected as startBatchSelectedAction,
+  // 文件夹模式
+  setViewMode,
+  setSelectedFolderPath,
+  setFolderSearch,
+  loadFolderTree,
+  startFolderScrape,
+  cancelFolderScrape,
 } from "@/lib/scraper-store";
-import type { MetaFilter, LibraryItem, BatchEditNameEntry, LibrarySortBy, AIChatMessage, CollectionGroup, CollectionGroupDetail, CollectionGroupComic, AutoDetectSuggestion } from "@/lib/scraper-store";
-import { FolderOpen, FolderPlus, Layers, Plus, Minus } from "lucide-react";
+import type { MetaFilter, LibraryItem, BatchEditNameEntry, LibrarySortBy, AIChatMessage, CollectionGroup, CollectionGroupDetail, CollectionGroupComic, AutoDetectSuggestion, MetadataFolderNode, MetadataFolderFile, ViewMode } from "@/lib/scraper-store";
+import { FolderOpen, FolderPlus, Layers, Plus, Minus, FolderTree, Folder, List } from "lucide-react";
+
+/* ── 文件夹树搜索/筛选辅助函数 ── */
+function filterMetadataFolderTree(
+  nodes: MetadataFolderNode[],
+  search: string
+): MetadataFolderNode[] {
+  if (!search) return nodes;
+  const searchLower = search.toLowerCase();
+
+  function matchNode(node: MetadataFolderNode): MetadataFolderNode | null {
+    const nameMatch = node.name.toLowerCase().includes(searchLower);
+    const matchedFiles = (node.files || []).filter(
+      (f) =>
+        f.title.toLowerCase().includes(searchLower) ||
+        f.filename.toLowerCase().includes(searchLower)
+    );
+    const matchedChildren: MetadataFolderNode[] = [];
+    for (const child of node.children || []) {
+      const matched = matchNode(child);
+      if (matched) matchedChildren.push(matched);
+    }
+    if (matchedChildren.length > 0 || matchedFiles.length > 0 || (nameMatch && node.fileCount > 0)) {
+      return {
+        ...node,
+        children: matchedChildren,
+        files: matchedFiles.length > 0 ? matchedFiles : node.files,
+      };
+    }
+    return null;
+  }
+
+  return nodes.map(matchNode).filter(Boolean) as MetadataFolderNode[];
+}
+
+function highlightSearchText(text: string, search: string) {
+  if (!search) return text;
+  const idx = text.toLowerCase().indexOf(search.toLowerCase());
+  if (idx === -1) return text;
+  return (
+    <>
+      {text.slice(0, idx)}
+      <span className="bg-accent/30 text-accent font-medium rounded px-0.5">
+        {text.slice(idx, idx + search.length)}
+      </span>
+      {text.slice(idx + search.length)}
+    </>
+  );
+}
+
+/* ── 文件夹树节点组件 ── */
+function MetadataFolderTreeItem({
+  node,
+  depth,
+  selectedPath,
+  onSelect,
+  searchTerm = "",
+}: {
+  node: MetadataFolderNode;
+  depth: number;
+  selectedPath: string | null;
+  onSelect: (path: string | null) => void;
+  searchTerm?: string;
+}) {
+  const [expanded, setExpanded] = useState(depth < 1 || !!searchTerm);
+  const hasChildren = node.children && node.children.length > 0;
+  const isSelected = selectedPath === node.path;
+  const isExpanded = searchTerm ? true : expanded;
+
+  const metaPercent = node.fileCount > 0 ? Math.round((node.withMeta / node.fileCount) * 100) : 0;
+
+  return (
+    <div>
+      <div
+        className={`flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left transition-colors cursor-pointer ${
+          isSelected
+            ? "bg-accent/10 border-l-2 border-l-accent"
+            : "hover:bg-white/5 border-l-2 border-l-transparent"
+        }`}
+        style={{ paddingLeft: `${depth * 16 + 8}px` }}
+        onClick={() => {
+          onSelect(isSelected ? null : node.path);
+          if (hasChildren) setExpanded(!expanded);
+        }}
+      >
+        {/* 展开/收起箭头 */}
+        <span className="flex h-4 w-4 shrink-0 items-center justify-center">
+          {hasChildren ? (
+            <ChevronRight
+              className={`h-3.5 w-3.5 text-muted transition-transform ${
+                isExpanded ? "rotate-90" : ""
+              }`}
+            />
+          ) : (
+            <span className="h-1 w-1 rounded-full bg-muted/30" />
+          )}
+        </span>
+
+        {/* 文件夹图标 */}
+        {isExpanded && hasChildren ? (
+          <FolderOpen className="h-4 w-4 shrink-0 text-amber-400" />
+        ) : (
+          <Folder className="h-4 w-4 shrink-0 text-amber-400/60" />
+        )}
+
+        {/* 文件夹名 */}
+        <span className="flex-1 truncate text-xs font-medium text-foreground">
+          {highlightSearchText(node.name, searchTerm)}
+        </span>
+
+        {/* 元数据完成度 */}
+        <div className="flex items-center gap-1.5 shrink-0">
+          <div className="h-1.5 w-10 rounded-full bg-border/30 overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all ${
+                metaPercent === 100 ? "bg-emerald-500" : metaPercent > 0 ? "bg-accent/60" : "bg-amber-500/40"
+              }`}
+              style={{ width: `${metaPercent}%` }}
+            />
+          </div>
+          <span className={`text-[10px] font-medium ${
+            metaPercent === 100 ? "text-emerald-500" : metaPercent > 0 ? "text-accent" : "text-amber-500"
+          }`}>
+            {node.withMeta}/{node.fileCount}
+          </span>
+        </div>
+      </div>
+
+      {/* 子节点 */}
+      {isExpanded && hasChildren && (
+        <div>
+          {node.children.map((child) => (
+            <MetadataFolderTreeItem
+              key={child.path}
+              node={child}
+              depth={depth + 1}
+              selectedPath={selectedPath}
+              onSelect={onSelect}
+              searchTerm={searchTerm}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── 文件夹刮削控制面板 ── */
+function FolderScrapePanel({
+  folderPath,
+  folderTree,
+  scrapeRunning,
+  scrapeProgress,
+  scrapeDone,
+  batchMode,
+  scraperT,
+}: {
+  folderPath: string;
+  folderTree: MetadataFolderNode[] | null;
+  scrapeRunning: boolean;
+  scrapeProgress: { current: number; total: number; status: string; filename: string } | null;
+  scrapeDone: { total: number; success: number; failed: number } | null;
+  batchMode: string;
+  scraperT: Record<string, string>;
+}) {
+  // 查找选中的文件夹节点
+  const findNode = (nodes: MetadataFolderNode[], path: string): MetadataFolderNode | null => {
+    for (const n of nodes) {
+      if (n.path === path) return n;
+      if (n.children) {
+        const found = findNode(n.children, path);
+        if (found) return found;
+      }
+    }
+    return null;
+  };
+
+  const selectedNode = folderTree ? findNode(folderTree, folderPath) : null;
+  if (!selectedNode) return null;
+
+  const metaPercent = selectedNode.fileCount > 0
+    ? Math.round((selectedNode.withMeta / selectedNode.fileCount) * 100)
+    : 0;
+
+  return (
+    <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 space-y-4">
+      {/* 文件夹信息 */}
+      <div className="flex items-center gap-3">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/10 flex-shrink-0">
+          <FolderOpen className="h-5 w-5 text-amber-400" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="text-sm font-semibold text-foreground truncate">{selectedNode.name}</div>
+          <div className="text-[10px] text-muted truncate">{folderPath}</div>
+        </div>
+      </div>
+
+      {/* 统计信息 */}
+      <div className="grid grid-cols-3 gap-2">
+        <div className="rounded-lg bg-card/50 p-2 text-center">
+          <div className="text-lg font-bold text-foreground">{selectedNode.fileCount}</div>
+          <div className="text-[10px] text-muted">总文件</div>
+        </div>
+        <div className="rounded-lg bg-emerald-500/10 p-2 text-center">
+          <div className="text-lg font-bold text-emerald-500">{selectedNode.withMeta}</div>
+          <div className="text-[10px] text-muted">已刮削</div>
+        </div>
+        <div className="rounded-lg bg-amber-500/10 p-2 text-center">
+          <div className="text-lg font-bold text-amber-500">{selectedNode.missingMeta}</div>
+          <div className="text-[10px] text-muted">缺失</div>
+        </div>
+      </div>
+
+      {/* 元数据完成度进度条 */}
+      <div>
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-[11px] text-muted">元数据完成度</span>
+          <span className={`text-[11px] font-medium ${metaPercent === 100 ? "text-emerald-500" : "text-accent"}`}>
+            {metaPercent}%
+          </span>
+        </div>
+        <div className="h-2 rounded-full bg-border/30 overflow-hidden">
+          <div
+            className={`h-full rounded-full transition-all duration-500 ${
+              metaPercent === 100 ? "bg-emerald-500" : "bg-gradient-to-r from-accent to-emerald-500"
+            }`}
+            style={{ width: `${metaPercent}%` }}
+          />
+        </div>
+      </div>
+
+      {/* 文件列表预览 */}
+      {selectedNode.files && selectedNode.files.length > 0 && (
+        <div className="space-y-1 max-h-48 overflow-y-auto">
+          <div className="text-[11px] text-muted font-medium mb-1">文件列表</div>
+          {selectedNode.files.map((file) => (
+            <div key={file.id} className="flex items-center gap-2 rounded-lg px-2 py-1 text-[11px] hover:bg-white/5 transition-colors">
+              {file.hasMetadata ? (
+                <CheckCircle className="h-3 w-3 shrink-0 text-emerald-500" />
+              ) : (
+                <AlertCircle className="h-3 w-3 shrink-0 text-amber-500" />
+              )}
+              <span className="flex-1 truncate text-muted">{file.title}</span>
+              {file.metadataSource && (
+                <span className="text-[9px] text-muted/50 shrink-0">{file.metadataSource}</span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* 刮削操作按钮 */}
+      {!scrapeRunning ? (
+        <div className="space-y-2">
+          <button
+            onClick={() => startFolderScrape(folderPath, "missing")}
+            disabled={selectedNode.missingMeta === 0}
+            className="w-full flex items-center justify-center gap-2 rounded-lg bg-accent hover:bg-accent-hover text-white py-2 text-xs font-medium transition-all disabled:opacity-50"
+          >
+            <Play className="h-3.5 w-3.5" />
+            刮削缺失项 ({selectedNode.missingMeta})
+          </button>
+          <button
+            onClick={() => startFolderScrape(folderPath, "all")}
+            className="w-full flex items-center justify-center gap-2 rounded-lg border border-border/40 bg-card hover:bg-card-hover text-foreground py-2 text-xs font-medium transition-all"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+            全部重新刮削 ({selectedNode.fileCount})
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {/* 刮削进度 */}
+          {scrapeProgress && (
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[11px] text-muted">
+                  {scrapeProgress.status === "processing" ? "处理中..." : `${scrapeProgress.current}/${scrapeProgress.total}`}
+                </span>
+                <span className="text-[11px] text-accent font-medium">
+                  {scrapeProgress.total > 0 ? Math.round((scrapeProgress.current / scrapeProgress.total) * 100) : 0}%
+                </span>
+              </div>
+              <div className="h-1.5 rounded-full bg-border/30 overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-accent transition-all"
+                  style={{ width: `${scrapeProgress.total > 0 ? (scrapeProgress.current / scrapeProgress.total) * 100 : 0}%` }}
+                />
+              </div>
+              <div className="text-[10px] text-muted mt-1 truncate">{scrapeProgress.filename}</div>
+            </div>
+          )}
+          <button
+            onClick={cancelFolderScrape}
+            className="w-full flex items-center justify-center gap-2 rounded-lg bg-red-500/10 text-red-400 py-2 text-xs font-medium transition-all hover:bg-red-500/20"
+          >
+            <Square className="h-3.5 w-3.5" />
+            停止刮削
+          </button>
+        </div>
+      )}
+
+      {/* 刮削完成结果 */}
+      {scrapeDone && !scrapeRunning && (
+        <div className="rounded-lg bg-card/50 p-3 space-y-1">
+          <div className="text-xs font-medium text-foreground">刮削完成</div>
+          <div className="flex items-center gap-3 text-[11px]">
+            <span className="text-muted">总计: <span className="text-foreground font-medium">{scrapeDone.total}</span></span>
+            <span className="text-emerald-500">成功: {scrapeDone.success}</span>
+            <span className="text-red-400">失败: {scrapeDone.failed}</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 /* ── 引导遮罩组件 ── */
 function GuideOverlay({
@@ -1984,6 +2306,15 @@ export default function ScraperPage() {
     collectionAddToGroupDialog,
     collectionEditingId,
     collectionEditingName,
+    // 文件夹模式
+    viewMode,
+    folderTree,
+    folderTreeLoading,
+    selectedFolderPath,
+    folderSearch,
+    folderScrapeRunning,
+    folderScrapeProgress,
+    folderScrapeDone,
   } = useScraperStore();
 
   const isAdmin = user?.role === "admin";
@@ -2107,20 +2438,51 @@ export default function ScraperPage() {
         <div className="flex-1 flex flex-col min-w-0 border-r border-border/30">
           {/* 搜索 & 筛选 */}
           <div data-guide="filter-bar" className="flex-shrink-0 p-3 sm:p-4 space-y-3 border-b border-border/20 bg-card/30">
-            {/* 搜索框 */}
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted" />
-              <input
-                type="text"
-                value={librarySearch}
-                onChange={(e) => setLibrarySearch(e.target.value)}
-                onKeyDown={handleSearchKeyDown}
-                placeholder={scraperT.libSearchPlaceholder || "搜索书名、文件名..."}
-                className="w-full rounded-xl bg-card-hover/50 pl-10 pr-4 py-2 text-sm text-foreground placeholder-muted/50 outline-none border border-border/40 focus:border-accent/50 focus:ring-1 focus:ring-accent/20 transition-all"
-              />
+            {/* 视图模式切换 + 搜索框 */}
+            <div className="flex items-center gap-2">
+              {/* 模式切换 */}
+              <div className="flex rounded-lg border border-border/40 overflow-hidden flex-shrink-0">
+                <button
+                  onClick={() => setViewMode("list")}
+                  className={`flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-medium transition-colors ${
+                    viewMode === "list"
+                      ? "bg-accent text-white"
+                      : "text-muted hover:text-foreground hover:bg-white/5"
+                  }`}
+                  title="列表模式"
+                >
+                  <List className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">列表</span>
+                </button>
+                <button
+                  onClick={() => setViewMode("folder")}
+                  className={`flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-medium transition-colors ${
+                    viewMode === "folder"
+                      ? "bg-amber-500 text-white"
+                      : "text-muted hover:text-foreground hover:bg-white/5"
+                  }`}
+                  title="文件夹模式"
+                >
+                  <FolderTree className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">文件夹</span>
+                </button>
+              </div>
+              {/* 搜索框 */}
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted" />
+                <input
+                  type="text"
+                  value={viewMode === "folder" ? folderSearch : librarySearch}
+                  onChange={(e) => viewMode === "folder" ? setFolderSearch(e.target.value) : setLibrarySearch(e.target.value)}
+                  onKeyDown={viewMode === "list" ? handleSearchKeyDown : undefined}
+                  placeholder={viewMode === "folder" ? "搜索文件夹或文件名..." : (scraperT.libSearchPlaceholder || "搜索书名、文件名...")}
+                  className="w-full rounded-xl bg-card-hover/50 pl-10 pr-4 py-2 text-sm text-foreground placeholder-muted/50 outline-none border border-border/40 focus:border-accent/50 focus:ring-1 focus:ring-accent/20 transition-all"
+                />
+              </div>
             </div>
 
-            {/* 筛选 */}
+            {/* 筛选（仅列表模式） */}
+            {viewMode === "list" && (
             <div className="flex flex-wrap items-center gap-1.5">
               {(["all", "missing", "with"] as MetaFilter[]).map((f) => (
                 <button
@@ -2187,9 +2549,10 @@ export default function ScraperPage() {
                 );
               }))}
             </div>
+            )}
 
             {/* 多选操作栏 */}
-            {isAdmin && (
+            {isAdmin && viewMode === "list" && (
               <div data-guide="select-bar" className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <button
@@ -2248,6 +2611,32 @@ export default function ScraperPage() {
             )}
           </div>
 
+          {/* 书库列表 / 文件夹树 */}
+          {viewMode === "folder" ? (
+            /* ── 文件夹树形视图 ── */
+            <div className="flex-1 overflow-y-auto min-h-0 p-3">
+              {folderTreeLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-6 w-6 animate-spin text-accent" />
+                </div>
+              ) : !folderTree || folderTree.length === 0 ? (
+                <div className="py-12 text-center text-sm text-muted">暂无文件夹层级数据</div>
+              ) : (
+                <div className="space-y-0.5">
+                  {filterMetadataFolderTree(folderTree, folderSearch).map((node) => (
+                    <MetadataFolderTreeItem
+                      key={node.path}
+                      node={node}
+                      depth={0}
+                      selectedPath={selectedFolderPath}
+                      onSelect={setSelectedFolderPath}
+                      searchTerm={folderSearch}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (<>
           {/* 书库列表 */}
           <div ref={listRef} data-guide="book-list" className="flex-1 overflow-y-auto min-h-0">
             {libraryLoading ? (
@@ -2488,6 +2877,7 @@ export default function ScraperPage() {
               </div>
             </div>
           )}
+        </>)}
         </div>
 
         {/* ── 右侧面板：详情 / 刮削控制 / 进度 / AI聊天 / 帮助 ── */}
@@ -2851,6 +3241,19 @@ export default function ScraperPage() {
                   </div>
                   <ChevronRight className="h-4 w-4 text-muted/40 flex-shrink-0" />
                 </button>
+              )}
+
+              {/* 文件夹刮削面板（文件夹模式下选中文件夹时显示） */}
+              {viewMode === "folder" && selectedFolderPath && (
+                <FolderScrapePanel
+                  folderPath={selectedFolderPath}
+                  folderTree={folderTree}
+                  scrapeRunning={folderScrapeRunning}
+                  scrapeProgress={folderScrapeProgress}
+                  scrapeDone={folderScrapeDone}
+                  batchMode={batchMode}
+                  scraperT={scraperT}
+                />
               )}
             </div>
           )}

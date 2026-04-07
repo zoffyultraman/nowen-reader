@@ -710,3 +710,171 @@ func readZipEntry(f *zip.File) ([]byte, error) {
 	defer rc.Close()
 	return io.ReadAll(rc)
 }
+
+// ============================================================
+// EPUB 内容类型检测：漫画 vs 小说
+// ============================================================
+
+// imgTagRegex 匹配 HTML 中的 <img> 标签
+var imgTagRegex = regexp.MustCompile(`(?i)<img\s`)
+
+// IsImageHeavyEpub 检测 EPUB 文件是否以图片为主（漫画/画集类型）。
+// 通过分析 manifest 中图片资源占比和章节内容中图片与文字的比例来判断。
+// 返回 true 表示该 EPUB 应被视为漫画而非小说。
+func IsImageHeavyEpub(filePath string) bool {
+	rc, err := zip.OpenReader(filePath)
+	if err != nil {
+		return false
+	}
+	defer rc.Close()
+
+	// 方法1：统计 manifest 中图片资源 vs 文本资源的数量和大小
+	var imageCount, textCount int
+	var imageSize, textSize int64
+	for _, f := range rc.File {
+		lower := strings.ToLower(f.Name)
+		if strings.HasSuffix(lower, ".jpg") || strings.HasSuffix(lower, ".jpeg") ||
+			strings.HasSuffix(lower, ".png") || strings.HasSuffix(lower, ".gif") ||
+			strings.HasSuffix(lower, ".webp") || strings.HasSuffix(lower, ".bmp") {
+			imageCount++
+			imageSize += int64(f.UncompressedSize64)
+		} else if strings.HasSuffix(lower, ".xhtml") || strings.HasSuffix(lower, ".html") ||
+			strings.HasSuffix(lower, ".htm") {
+			textCount++
+			textSize += int64(f.UncompressedSize64)
+		}
+	}
+
+	// 如果图片数量 >= 5 且图片总大小占比 > 80%，判定为漫画
+	totalContentSize := imageSize + textSize
+	if imageCount >= 5 && totalContentSize > 0 {
+		imageRatio := float64(imageSize) / float64(totalContentSize)
+		if imageRatio > 0.80 {
+			return true
+		}
+	}
+
+	// 方法2：抽样检查前几个章节的内容，看图片标签 vs 纯文字的比例
+	// 找到 OPF 文件
+	opfPath := ""
+	for _, f := range rc.File {
+		if f.Name == "META-INF/container.xml" {
+			data, err := readZipEntry(f)
+			if err == nil {
+				var container epubContainer
+				if err := xml.Unmarshal(data, &container); err == nil {
+					for _, rf := range container.RootFiles {
+						if rf.MediaType == "application/oebps-package+xml" || strings.HasSuffix(rf.FullPath, ".opf") {
+							opfPath = rf.FullPath
+							break
+						}
+					}
+					if opfPath == "" && len(container.RootFiles) > 0 {
+						opfPath = container.RootFiles[0].FullPath
+					}
+				}
+			}
+			break
+		}
+	}
+
+	if opfPath == "" {
+		// 兜底：直接搜索 .opf 文件
+		for _, f := range rc.File {
+			if strings.HasSuffix(strings.ToLower(f.Name), ".opf") {
+				opfPath = f.Name
+				break
+			}
+		}
+	}
+
+	if opfPath == "" {
+		return false
+	}
+
+	// 解析 OPF 获取 spine 中的章节
+	var opfData []byte
+	for _, f := range rc.File {
+		if f.Name == opfPath {
+			opfData, _ = readZipEntry(f)
+			break
+		}
+	}
+	if opfData == nil {
+		return false
+	}
+
+	opfDir := path.Dir(opfPath)
+	if opfDir == "." {
+		opfDir = ""
+	}
+
+	var pkg opfPackage
+	if err := xml.Unmarshal(opfData, &pkg); err != nil {
+		return false
+	}
+
+	manifestMap := make(map[string]opfItem, len(pkg.Manifest.Items))
+	for _, item := range pkg.Manifest.Items {
+		manifestMap[item.ID] = item
+	}
+
+	// 抽样检查最多 10 个章节
+	sampleCount := 0
+	imageHeavyCount := 0
+	maxSamples := 10
+
+	for _, ref := range pkg.Spine.ItemRefs {
+		if sampleCount >= maxSamples {
+			break
+		}
+		item, ok := manifestMap[ref.IDRef]
+		if !ok {
+			continue
+		}
+		if !strings.HasPrefix(item.MediaType, "application/xhtml") &&
+			!strings.HasPrefix(item.MediaType, "text/html") {
+			continue
+		}
+
+		href := item.Href
+		if opfDir != "" {
+			href = opfDir + "/" + href
+		}
+
+		// 读取章节内容
+		var chapterData []byte
+		for _, f := range rc.File {
+			if f.Name == href {
+				chapterData, _ = readZipEntry(f)
+				break
+			}
+		}
+		if chapterData == nil {
+			continue
+		}
+
+		sampleCount++
+		html := string(chapterData)
+
+		// 统计 <img> 标签数量
+		imgMatches := imgTagRegex.FindAllStringIndex(html, -1)
+		imgCount := len(imgMatches)
+
+		// 提取纯文字长度
+		plainText := extractTextFromXHTML(html)
+		textLen := len(strings.TrimSpace(plainText))
+
+		// 如果章节中有图片且纯文字很少（< 100字符），认为是图片为主的章节
+		if imgCount > 0 && textLen < 100 {
+			imageHeavyCount++
+		}
+	}
+
+	// 如果 >= 60% 的抽样章节是图片为主，判定为漫画
+	if sampleCount > 0 && float64(imageHeavyCount)/float64(sampleCount) >= 0.6 {
+		return true
+	}
+
+	return false
+}

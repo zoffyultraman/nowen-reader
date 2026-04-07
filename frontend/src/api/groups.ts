@@ -316,3 +316,72 @@ export async function fetchGroupedComicMap(): Promise<Record<string, number[]>> 
     return {};
   }
 }
+
+// ============================================================
+// P2: 系列级标签管理
+// ============================================================
+
+/** 系列标签 */
+export interface GroupTag {
+  id: number;
+  name: string;
+  color: string;
+}
+
+/** 获取系列标签 */
+export async function fetchGroupTags(groupId: number): Promise<GroupTag[]> {
+  try {
+    const res = await fetch(`/api/groups/${groupId}/tags`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.tags || [];
+  } catch {
+    return [];
+  }
+}
+
+/** 设置系列标签（替换所有现有标签） */
+export async function setGroupTags(groupId: number, tags: string[]): Promise<boolean> {
+  try {
+    const res = await fetch(`/api/groups/${groupId}/tags`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tags }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+/** 将系列标签同步到所有卷 */
+export async function syncGroupTags(groupId: number): Promise<boolean> {
+  try {
+    const res = await fetch(`/api/groups/${groupId}/sync-tags`, {
+      method: "POST",
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+// ============================================================
+// P3: 按话/卷自动分组
+// ============================================================
+
+/** 按文件夹自动创建分组（用于按话分类模式） */
+export async function autoGroupByDirectory(): Promise<{ success: boolean; created: number }> {
+  try {
+    const res = await fetch("/api/groups/auto-group-by-dir", {
+      method: "POST",
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return { success: true, created: data.created || 0 };
+    }
+    return { success: false, created: 0 };
+  } catch {
+    return { success: false, created: 0 };
+  }
+}

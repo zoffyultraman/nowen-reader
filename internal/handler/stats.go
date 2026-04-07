@@ -110,3 +110,13 @@ func (h *StatsHandler) GetFileStats(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, stats)
 }
+
+// GET /api/stats/folder-tree — 文件夹树形统计
+func (h *StatsHandler) GetFolderTreeStats(c *gin.Context) {
+	tree, err := store.GetFolderTreeStats()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get folder tree stats"})
+		return
+	}
+	c.JSON(http.StatusOK, tree)
+}

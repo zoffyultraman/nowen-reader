@@ -16,7 +16,17 @@ import {
   Tag,
   ChevronDown,
   ChevronUp,
+  FolderTree,
+  Folder,
+  FolderOpen,
+  ChevronRight,
+  Search,
+  CheckCircle2,
+  ExternalLink,
+  ExpandIcon,
+  ShrinkIcon,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 // ============================================================
 // Types
@@ -49,6 +59,29 @@ interface FileItem {
   fileSize: number;
   pageCount: number;
   type: string;
+}
+
+interface FolderFileItem {
+  id: string;
+  title: string;
+  filename: string;
+  fileSize: number;
+  pageCount: number;
+  type: string;
+  lastRead: number;
+}
+
+interface FolderTreeNode {
+  name: string;
+  path: string;
+  fileCount: number;
+  totalSize: number;
+  totalPages: number;
+  comicCount: number;
+  novelCount: number;
+  readCount: number;
+  children: FolderTreeNode[];
+  files?: FolderFileItem[];
 }
 
 // ============================================================
@@ -102,6 +135,12 @@ export default function FileStatsPanel() {
   const [loading, setLoading] = useState(true);
   const [expandLargest, setExpandLargest] = useState(false);
   const [expandMostPages, setExpandMostPages] = useState(false);
+  const [activeTab, setActiveTab] = useState<"overview" | "folder-tree">("overview");
+  const [folderTree, setFolderTree] = useState<FolderTreeNode[] | null>(null);
+  const [folderTreeLoading, setFolderTreeLoading] = useState(false);
+  const [folderSearch, setFolderSearch] = useState("");
+  const [folderFilter, setFolderFilter] = useState<"all" | "comic" | "novel">("all");
+  const [expandAll, setExpandAll] = useState(false);
 
   useEffect(() => {
     fetch("/api/stats/files")
@@ -110,6 +149,18 @@ export default function FileStatsPanel() {
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
+
+  // 切换到文件夹树视图时懒加载数据
+  useEffect(() => {
+    if (activeTab === "folder-tree" && !folderTree) {
+      setFolderTreeLoading(true);
+      fetch("/api/stats/folder-tree")
+        .then((r) => r.json())
+        .then((data) => setFolderTree(data))
+        .catch(() => setFolderTree([]))
+        .finally(() => setFolderTreeLoading(false));
+    }
+  }, [activeTab, folderTree]);
 
   // 格式百分比
   const formatPercentages = useMemo(() => {
@@ -145,6 +196,108 @@ export default function FileStatsPanel() {
 
   return (
     <div className="space-y-6">
+
+      {/* ── Tab 切换 ── */}
+      <div className="flex gap-2">
+        <button
+          onClick={() => setActiveTab("overview")}
+          className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+            activeTab === "overview"
+              ? "bg-accent text-white"
+              : "bg-card text-muted hover:text-foreground"
+          }`}
+        >
+          <BarChart3 className="h-3.5 w-3.5" />
+          总览统计
+        </button>
+        <button
+          onClick={() => setActiveTab("folder-tree")}
+          className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+            activeTab === "folder-tree"
+              ? "bg-accent text-white"
+              : "bg-card text-muted hover:text-foreground"
+          }`}
+        >
+          <FolderTree className="h-3.5 w-3.5" />
+          文件夹统计
+        </button>
+      </div>
+
+      {/* ── 文件夹树视图 ── */}
+      {activeTab === "folder-tree" && (
+        <div className="rounded-xl bg-card p-4 sm:p-6">
+          {/* 标题 + 搜索 + 筛选 */}
+          <div className="mb-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="flex items-center gap-2 text-sm font-medium text-foreground">
+                <FolderTree className="h-4 w-4 text-muted" />
+                文件夹层级统计
+              </h2>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setExpandAll(!expandAll)}
+                  className="flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] text-muted hover:text-foreground hover:bg-white/5 transition-colors"
+                  title={expandAll ? "全部折叠" : "全部展开"}
+                >
+                  {expandAll ? <ShrinkIcon className="h-3.5 w-3.5" /> : <ExpandIcon className="h-3.5 w-3.5" />}
+                  {expandAll ? "折叠" : "展开"}
+                </button>
+              </div>
+            </div>
+            {/* 搜索框 */}
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted" />
+                <input
+                  type="text"
+                  value={folderSearch}
+                  onChange={(e) => setFolderSearch(e.target.value)}
+                  placeholder="搜索文件夹或文件名..."
+                  className="w-full rounded-lg border border-border/50 bg-background py-1.5 pl-8 pr-3 text-xs text-foreground outline-none focus:border-accent/50 transition-colors"
+                />
+              </div>
+              {/* 类型筛选 */}
+              <div className="flex rounded-lg border border-border/50 overflow-hidden">
+                {(["all", "comic", "novel"] as const).map((f) => (
+                  <button
+                    key={f}
+                    onClick={() => setFolderFilter(f)}
+                    className={`px-2.5 py-1.5 text-[11px] font-medium transition-colors ${
+                      folderFilter === f
+                        ? "bg-accent text-white"
+                        : "text-muted hover:text-foreground hover:bg-white/5"
+                    }`}
+                  >
+                    {f === "all" ? "全部" : f === "comic" ? "漫画" : "小说"}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+          {folderTreeLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="h-6 w-6 animate-spin rounded-full border-2 border-muted border-t-accent" />
+            </div>
+          ) : !folderTree || folderTree.length === 0 ? (
+            <p className="py-8 text-center text-sm text-muted">暂无文件夹层级数据（所有文件均在根目录下）</p>
+          ) : (
+            <div className="space-y-0.5">
+              {filterFolderTree(folderTree, folderSearch, folderFilter).map((node) => (
+                <FolderTreeItem
+                  key={node.path}
+                  node={node}
+                  depth={0}
+                  forceExpand={expandAll || folderSearch.length > 0}
+                  searchTerm={folderSearch}
+                  typeFilter={folderFilter}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {activeTab !== "overview" ? null : (<>
 
       {/* ── 总体概览 ── */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
@@ -446,13 +599,287 @@ export default function FileStatsPanel() {
           valueFormatter={(f) => `${f.pageCount} 页`}
         />
       )}
+
+      </>)}
     </div>
+  );
+}
+
+// ============================================================
+// 文件夹树搜索/筛选辅助函数
+// ============================================================
+
+function filterFolderTree(
+  nodes: FolderTreeNode[],
+  search: string,
+  typeFilter: "all" | "comic" | "novel"
+): FolderTreeNode[] {
+  if (!search && typeFilter === "all") return nodes;
+
+  const searchLower = search.toLowerCase();
+
+  function matchNode(node: FolderTreeNode): FolderTreeNode | null {
+    const nameMatch = !search || node.name.toLowerCase().includes(searchLower);
+
+    const matchedFiles = (node.files || []).filter((f) => {
+      const typeMatch = typeFilter === "all" || f.type === typeFilter;
+      const searchMatch = !search ||
+        f.title.toLowerCase().includes(searchLower) ||
+        f.filename.toLowerCase().includes(searchLower);
+      return typeMatch && searchMatch;
+    });
+
+    const matchedChildren: FolderTreeNode[] = [];
+    for (const child of node.children || []) {
+      const matched = matchNode(child);
+      if (matched) matchedChildren.push(matched);
+    }
+
+    if (matchedChildren.length > 0 || matchedFiles.length > 0 || (nameMatch && node.fileCount > 0)) {
+      let fileCount = node.fileCount;
+      let comicCount = node.comicCount;
+      let novelCount = node.novelCount;
+      if (typeFilter !== "all") {
+        fileCount = typeFilter === "comic" ? node.comicCount : node.novelCount;
+        comicCount = typeFilter === "comic" ? node.comicCount : 0;
+        novelCount = typeFilter === "novel" ? node.novelCount : 0;
+      }
+      if (fileCount === 0 && matchedChildren.length === 0) return null;
+
+      return {
+        ...node,
+        children: matchedChildren,
+        files: matchedFiles.length > 0 ? matchedFiles : node.files,
+        fileCount,
+        comicCount,
+        novelCount,
+      };
+    }
+
+    return null;
+  }
+
+  return nodes.map(matchNode).filter(Boolean) as FolderTreeNode[];
+}
+
+function highlightText(text: string, search: string) {
+  if (!search) return text;
+  const idx = text.toLowerCase().indexOf(search.toLowerCase());
+  if (idx === -1) return text;
+  return (
+    <>
+      {text.slice(0, idx)}
+      <span className="bg-accent/30 text-accent font-medium rounded px-0.5">
+        {text.slice(idx, idx + search.length)}
+      </span>
+      {text.slice(idx + search.length)}
+    </>
   );
 }
 
 // ============================================================
 // Sub-components
 // ============================================================
+
+function FolderFileRow({
+  file,
+  searchTerm,
+}: {
+  file: FolderFileItem;
+  searchTerm: string;
+}) {
+  const router = useRouter();
+  const isRead = file.lastRead > 0 && file.pageCount > 0 && file.lastRead >= file.pageCount - 1;
+  const readProgress = file.pageCount > 0 ? Math.round((file.lastRead / file.pageCount) * 100) : 0;
+
+  return (
+    <div
+      onClick={() => {
+        if (file.type === "novel") {
+          router.push(`/novel/${file.id}`);
+        } else {
+          router.push(`/comic/${file.id}`);
+        }
+      }}
+      className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-white/5 cursor-pointer group"
+    >
+      {file.type === "novel" ? (
+        <BookOpen className="h-3.5 w-3.5 shrink-0 text-violet-400/60" />
+      ) : (
+        <ImageIcon className="h-3.5 w-3.5 shrink-0 text-amber-400/60" />
+      )}
+      <span className="flex-1 truncate text-xs text-muted group-hover:text-foreground transition-colors">
+        {highlightText(file.title, searchTerm)}
+      </span>
+      {isRead ? (
+        <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
+      ) : readProgress > 0 ? (
+        <span className="shrink-0 text-[10px] text-accent">{readProgress}%</span>
+      ) : null}
+      {file.pageCount > 0 && (
+        <span className="shrink-0 text-[10px] text-muted/50">{file.pageCount}p</span>
+      )}
+      <span className="hidden sm:inline shrink-0 text-[10px] text-muted/50 w-14 text-right">
+        {formatBytes(file.fileSize)}
+      </span>
+      <ExternalLink className="h-3 w-3 shrink-0 text-muted/30 group-hover:text-accent transition-colors" />
+    </div>
+  );
+}
+
+function FolderTreeItem({
+  node,
+  depth,
+  forceExpand = false,
+  searchTerm = "",
+  typeFilter = "all",
+}: {
+  node: FolderTreeNode;
+  depth: number;
+  forceExpand?: boolean;
+  searchTerm?: string;
+  typeFilter?: "all" | "comic" | "novel";
+}) {
+  const [expanded, setExpanded] = useState(depth < 1);
+  const [showFiles, setShowFiles] = useState(false);
+  const hasChildren = node.children && node.children.length > 0;
+  const hasFiles = node.files && node.files.length > 0;
+  const isExpanded = forceExpand || expanded;
+
+  const readPercent = node.fileCount > 0 ? Math.round(((node.readCount || 0) / node.fileCount) * 100) : 0;
+
+  const filteredFiles = (node.files || []).filter(
+    (f) => typeFilter === "all" || f.type === typeFilter
+  );
+
+  return (
+    <div>
+      <div
+        className={`flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left transition-colors hover:bg-white/5 ${
+          hasChildren || hasFiles ? "cursor-pointer" : "cursor-default"
+        }`}
+        style={{ paddingLeft: `${depth * 20 + 8}px` }}
+        onClick={() => {
+          if (hasChildren) {
+            setExpanded(!expanded);
+          } else if (hasFiles) {
+            setShowFiles(!showFiles);
+          }
+        }}
+      >
+        {/* 展开/收起箭头 */}
+        <span className="flex h-4 w-4 shrink-0 items-center justify-center">
+          {hasChildren || hasFiles ? (
+            <ChevronRight
+              className={`h-3.5 w-3.5 text-muted transition-transform ${
+                isExpanded || showFiles ? "rotate-90" : ""
+              }`}
+            />
+          ) : (
+            <span className="h-1 w-1 rounded-full bg-muted/30" />
+          )}
+        </span>
+
+        {/* 文件夹图标 */}
+        {isExpanded && hasChildren ? (
+          <FolderOpen className="h-4 w-4 shrink-0 text-amber-400" />
+        ) : (
+          <Folder className="h-4 w-4 shrink-0 text-amber-400/60" />
+        )}
+
+        {/* 文件夹名 */}
+        <span className="flex-1 truncate text-sm text-foreground">
+          {highlightText(node.name, searchTerm)}
+        </span>
+
+        {/* 阅读进度条 */}
+        {(node.readCount || 0) > 0 && (
+          <div className="hidden sm:flex items-center gap-1.5 shrink-0" title={`已读 ${node.readCount}/${node.fileCount}`}>
+            <div className="h-1.5 w-12 rounded-full bg-background overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all ${
+                  readPercent === 100 ? "bg-emerald-500" : "bg-accent/60"
+                }`}
+                style={{ width: `${readPercent}%` }}
+              />
+            </div>
+            <span className="text-[10px] text-muted">{readPercent}%</span>
+          </div>
+        )}
+
+        {/* 统计信息 */}
+        <div className="flex shrink-0 items-center gap-3 text-[11px] text-muted">
+          <span className="flex items-center gap-1">
+            <Package className="h-3 w-3" />
+            {node.fileCount}
+          </span>
+          {node.comicCount > 0 && (
+            <span className="flex items-center gap-1 text-amber-400/70">
+              <ImageIcon className="h-3 w-3" />
+              {node.comicCount}
+            </span>
+          )}
+          {node.novelCount > 0 && (
+            <span className="flex items-center gap-1 text-violet-400/70">
+              <BookOpen className="h-3 w-3" />
+              {node.novelCount}
+            </span>
+          )}
+          <span className="hidden sm:inline w-16 text-right">{formatBytes(node.totalSize)}</span>
+          {node.totalPages > 0 && (
+            <span className="hidden sm:inline w-14 text-right">{node.totalPages.toLocaleString()}p</span>
+          )}
+        </div>
+      </div>
+
+      {/* 子节点 */}
+      {isExpanded && hasChildren && (
+        <div>
+          {node.children.map((child) => (
+            <FolderTreeItem
+              key={child.path}
+              node={child}
+              depth={depth + 1}
+              forceExpand={forceExpand}
+              searchTerm={searchTerm}
+              typeFilter={typeFilter}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* 叶子节点的文件列表（无子文件夹时自动展示） */}
+      {(isExpanded || showFiles) && hasFiles && !hasChildren && (
+        <div style={{ paddingLeft: `${depth * 20 + 28}px` }}>
+          {filteredFiles.map((file) => (
+            <FolderFileRow key={file.id} file={file} searchTerm={searchTerm} />
+          ))}
+        </div>
+      )}
+
+      {/* 有子节点时的文件列表展开按钮 */}
+      {isExpanded && hasFiles && hasChildren && (
+        <button
+          onClick={() => setShowFiles(!showFiles)}
+          className="flex items-center gap-1 rounded-lg px-2 py-1 text-[10px] text-muted hover:text-foreground transition-colors"
+          style={{ paddingLeft: `${(depth + 1) * 20 + 8}px` }}
+        >
+          <FileText className="h-3 w-3" />
+          {showFiles ? "隐藏文件列表" : `查看 ${filteredFiles.length} 个文件`}
+        </button>
+      )}
+
+      {/* 有子节点时的文件列表 */}
+      {showFiles && hasFiles && hasChildren && (
+        <div style={{ paddingLeft: `${(depth + 1) * 20 + 28}px` }}>
+          {filteredFiles.map((file) => (
+            <FolderFileRow key={file.id} file={file} searchTerm={searchTerm} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function OverviewCard({
   icon, iconBg, label, value, sub,

@@ -88,8 +88,16 @@ func DetectType(filepath string) ArchiveType {
 }
 
 // IsNovelType returns true if the archive type is a novel/text format.
+// Note: For EPUB/MOBI/AZW3, this returns true by default, but the actual
+// content type should be determined by IsImageHeavyEpub() for accurate detection.
 func IsNovelType(t ArchiveType) bool {
 	return t == TypeTxt || t == TypeEpub || t == TypeMobi || t == TypeAzw3 || t == TypeHtml
+}
+
+// IsEbookType returns true if the archive type is an ebook format (epub/mobi/azw3)
+// that could be either a novel or a comic depending on content.
+func IsEbookType(t ArchiveType) bool {
+	return t == TypeEpub || t == TypeMobi || t == TypeAzw3
 }
 
 // ============================================================

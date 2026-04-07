@@ -3,6 +3,7 @@ package store
 import (
 	"database/sql"
 	"fmt"
+	"log"
 	"path"
 	"sort"
 	"strings"
@@ -588,23 +589,29 @@ func AutoDetectGroups(contentType ...string) ([]AutoDetectGroup, error) {
 
 	// 收集所有未分组漫画
 	var allRefs []comicRef
+	totalCount := 0
+	skippedGrouped := 0
 	for rows.Next() {
 		var id, title, filename string
 		if rows.Scan(&id, &title, &filename) != nil {
 			continue
 		}
+		totalCount++
 		// 跳过已分组的漫画
 		if _, ok := grouped[id]; ok {
+			skippedGrouped++
 			continue
 		}
 		allRefs = append(allRefs, comicRef{ID: id, Title: title, Filename: filename})
 	}
+	log.Printf("[auto-detect] 总计 %d 本漫画，已分组 %d 本，待检测 %d 本", totalCount, skippedGrouped, len(allRefs))
 
 	var suggestions []AutoDetectGroup
 	matchedIDs := make(map[string]bool) // 记录已被匹配的漫画ID
 
 	// ── 第零轮：路径分组（同一文件夹下的文件归为一组）──
 	// 将 filename 按父文件夹聚合，如 "海贼王/1.cbz" → dir="海贼王"
+	// 增强：支持多级目录结构，如 "乌龙院/乌龙院前篇/卷1.cbz" → dir="乌龙院/乌龙院前篇"
 	dirMap := make(map[string][]comicRef)
 	for _, ref := range allRefs {
 		dir := path.Dir(ref.Filename) // 使用 path（正斜杠），因为 filename 已统一为 "/"
@@ -614,15 +621,17 @@ func AutoDetectGroups(contentType ...string) ([]AutoDetectGroup, error) {
 		dirMap[dir] = append(dirMap[dir], ref)
 	}
 
+	// 多级目录分组策略：
+	// 1. 优先按最深层目录分组（如 "乌龙院/乌龙院前篇" 下的文件归为一组）
+	// 2. 如果某个目录下只有子目录没有直接文件，则不单独创建分组
+	// 3. 组名使用完整的目录路径层级（如 "乌龙院 / 乌龙院前篇"）
 	for dir, refs := range dirMap {
 		if len(refs) < 2 {
 			continue // 文件夹下只有一个文件，不构成分组
 		}
 
-		// 使用最近一级文件夹名作为组名
-		groupName := path.Base(dir)
-		// 清理文件夹名中的常见杂质（如方括号标签等）
-		groupName = cleanDirName(groupName)
+		// 构建组名：使用目录路径中的各层级名称
+		groupName := buildGroupNameFromPath(dir)
 		if groupName == "" {
 			continue
 		}
@@ -640,6 +649,7 @@ func AutoDetectGroups(contentType ...string) ([]AutoDetectGroup, error) {
 			Titles:   titles,
 		})
 	}
+	log.Printf("[auto-detect] 路径分组: 发现 %d 个目录分组，匹配 %d 本漫画", len(suggestions), len(matchedIDs))
 
 	// ── 第一轮：精确匹配（normalizeTitle 完全相同）──
 	titleMap := make(map[string][]comicRef)
@@ -763,6 +773,10 @@ func AutoDetectGroups(contentType ...string) ([]AutoDetectGroup, error) {
 		}
 	}
 
+	log.Printf("[auto-detect] 检测完成: 共发现 %d 个可合并系列", len(suggestions))
+	if len(suggestions) == 0 {
+		log.Printf("[auto-detect] 未发现可合并系列。可能原因: 所有漫画已分组(%d本), 或文件名无法匹配", skippedGrouped)
+	}
 	if suggestions == nil {
 		suggestions = []AutoDetectGroup{}
 	}
@@ -985,6 +999,38 @@ func isAlphaNumeric(s string) bool {
 		}
 	}
 	return true
+}
+
+// buildGroupNameFromPath 从多级目录路径构建可读的组名。
+// 例如：
+//   - "乌龙院/乌龙院前篇" → "乌龙院 / 乌龙院前篇"
+//   - "海贼王" → "海贼王"
+//   - "[汉化组]作品名/第一部" → "作品名 / 第一部"
+func buildGroupNameFromPath(dirPath string) string {
+	parts := strings.Split(dirPath, "/")
+	var cleanParts []string
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p == "" || p == "." {
+			continue
+		}
+		cleaned := cleanDirName(p)
+		if cleaned != "" {
+			cleanParts = append(cleanParts, cleaned)
+		}
+	}
+	if len(cleanParts) == 0 {
+		return ""
+	}
+	// 如果只有一级，直接返回
+	if len(cleanParts) == 1 {
+		return cleanParts[0]
+	}
+	// 多级目录：使用最近一级作为主名称
+	// 但如果最近一级名称包含在上级名称中（如 "乌龙院/乌龙院前篇"），
+	// 则使用最近一级即可，因为它已经足够描述
+	lastPart := cleanParts[len(cleanParts)-1]
+	return lastPart
 }
 
 // cleanDirName 清理文件夹名称，提取出可读的组名。
@@ -1479,4 +1525,230 @@ func InheritMetadataToAllVolumes(groupID int) error {
 	}
 
 	return nil
+}
+
+// ============================================================
+// P2: 系列级标签管理
+// ============================================================
+
+// GetGroupTags 获取系列的所有标签。
+func GetGroupTags(groupID int) ([]Tag, error) {
+	rows, err := db.Query(`
+		SELECT t."id", t."name", t."color"
+		FROM "Tag" t
+		INNER JOIN "ComicGroupTag" cgt ON cgt."tagId" = t."id"
+		WHERE cgt."groupId" = ?
+		ORDER BY t."name" ASC
+	`, groupID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var tags []Tag
+	for rows.Next() {
+		var t Tag
+		if err := rows.Scan(&t.ID, &t.Name, &t.Color); err != nil {
+			continue
+		}
+		tags = append(tags, t)
+	}
+	if tags == nil {
+		tags = []Tag{}
+	}
+	return tags, nil
+}
+
+// SetGroupTags 设置系列的标签（替换所有现有标签）。
+// tagNames: 标签名称列表，不存在的标签会自动创建。
+func SetGroupTags(groupID int, tagNames []string) error {
+	// 先删除现有关联
+	if _, err := db.Exec(`DELETE FROM "ComicGroupTag" WHERE "groupId" = ?`, groupID); err != nil {
+		return err
+	}
+
+	if len(tagNames) == 0 {
+		return nil
+	}
+
+	// 确保标签存在并获取 ID
+	for _, name := range tagNames {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
+		// 查找或创建标签
+		var tagID int
+		err := db.QueryRow(`SELECT "id" FROM "Tag" WHERE "name" = ?`, name).Scan(&tagID)
+		if err == sql.ErrNoRows {
+			// 创建新标签
+			res, err := db.Exec(`INSERT INTO "Tag" ("name", "color") VALUES (?, '')`, name)
+			if err != nil {
+				continue
+			}
+			id, _ := res.LastInsertId()
+			tagID = int(id)
+		} else if err != nil {
+			continue
+		}
+		// 添加关联
+		db.Exec(`INSERT OR IGNORE INTO "ComicGroupTag" ("groupId", "tagId") VALUES (?, ?)`, groupID, tagID)
+	}
+
+	return nil
+}
+
+// SyncGroupTagsToVolumes 将系列级标签同步到系列内所有卷。
+// 仅添加卷中缺少的标签，不删除卷已有的标签。
+func SyncGroupTagsToVolumes(groupID int) error {
+	group, err := GetGroupByID(groupID)
+	if err != nil || group == nil || len(group.Comics) == 0 {
+		return nil
+	}
+
+	// 获取系列级标签名称
+	groupTags, err := GetGroupTags(groupID)
+	if err != nil || len(groupTags) == 0 {
+		return nil
+	}
+
+	var tagNames []string
+	for _, t := range groupTags {
+		tagNames = append(tagNames, t.Name)
+	}
+
+	// 为每本漫画添加缺少的标签
+	for _, comic := range group.Comics {
+		_ = AddTagsToComic(comic.ComicID, tagNames)
+	}
+
+	return nil
+}
+
+// ============================================================
+// P3: 按话/卷分类模式 — 扫描后自动分组
+// ============================================================
+
+// chapterPatterns 话级关键词正则
+var chapterKeywords = []string{
+	"第", "话", "話", "回", "chapter", "ch.", "ch ", "ep", "episode", "#",
+}
+
+// IsChapterNaming 判断文件名是否符合按话命名模式。
+func IsChapterNaming(filename string) bool {
+	lower := strings.ToLower(filename)
+	for _, kw := range chapterKeywords {
+		if strings.Contains(lower, kw) {
+			return true
+		}
+	}
+	return false
+}
+
+// AutoGroupByDirectory 按文件夹自动创建分组（用于按话分类模式）。
+// 扫描指定目录下的所有漫画，将同一文件夹下的漫画自动归为一组。
+// 仅处理尚未分组的漫画。
+func AutoGroupByDirectory() (int, error) {
+	grouped, err := GetGroupedComicIDs()
+	if err != nil {
+		return 0, err
+	}
+
+	// 查询所有未分组的漫画
+	rows, err := db.Query(`SELECT "id", "title", "filename" FROM "Comic" ORDER BY "title" ASC`)
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+
+	type comicRef struct {
+		ID       string
+		Title    string
+		Filename string
+	}
+
+	dirMap := make(map[string][]comicRef)
+	for rows.Next() {
+		var id, title, filename string
+		if rows.Scan(&id, &title, &filename) != nil {
+			continue
+		}
+		if _, ok := grouped[id]; ok {
+			continue
+		}
+		dir := path.Dir(filename)
+		if dir == "." || dir == "/" || dir == "" {
+			continue
+		}
+		dirMap[dir] = append(dirMap[dir], comicRef{ID: id, Title: title, Filename: filename})
+	}
+
+	created := 0
+	for dir, refs := range dirMap {
+		if len(refs) < 2 {
+			continue
+		}
+
+		// 检查是否有话级命名特征
+		hasChapterNaming := false
+		for _, ref := range refs {
+			if IsChapterNaming(ref.Title) || IsChapterNaming(ref.Filename) {
+				hasChapterNaming = true
+				break
+			}
+		}
+		if !hasChapterNaming {
+			continue
+		}
+
+		groupName := cleanDirName(path.Base(dir))
+		if groupName == "" {
+			continue
+		}
+
+		// 检查是否已存在同名分组
+		var existingID int
+		err := db.QueryRow(`SELECT "id" FROM "ComicGroup" WHERE "name" = ?`, groupName).Scan(&existingID)
+		if err == nil {
+			// 已存在，添加漫画到现有分组
+			var ids []string
+			for _, ref := range refs {
+				ids = append(ids, ref.ID)
+			}
+			_ = AddComicsToGroup(existingID, ids)
+			created++
+			continue
+		}
+
+		// 创建新分组
+		id, err := CreateGroup(groupName)
+		if err != nil {
+			continue
+		}
+
+		// 标记为自动创建 + 按话分类
+		db.Exec(`UPDATE "ComicGroup" SET "autoCreated" = 1, "classifyMode" = 'chapter' WHERE "id" = ?`, id)
+
+		var ids []string
+		for _, ref := range refs {
+			ids = append(ids, ref.ID)
+		}
+		if err := AddComicsToGroup(int(id), ids); err != nil {
+			continue
+		}
+
+		// 自动继承元数据
+		_ = InheritGroupMetadataFromFirstComic(int(id))
+		created++
+		log.Printf("[auto-group] 按话自动创建系列: %s (%d 话)", groupName, len(refs))
+	}
+
+	return created, nil
+}
+
+// Tag 是从 model 包复制的简化版本，避免循环依赖。
+type Tag struct {
+	ID    int    `json:"id"`
+	Name  string `json:"name"`
+	Color string `json:"color"`
 }

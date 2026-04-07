@@ -225,6 +225,33 @@ var Migrations = []Migration{
 			`ALTER TABLE "ComicGroup" ADD COLUMN "status" TEXT NOT NULL DEFAULT '';`,
 		}, "\n"),
 	},
+	{
+		Version:     17,
+		Description: "Add ComicGroupTag table for series-level tag management (P2)",
+		SQL: strings.Join([]string{
+			// 系列级标签关联表
+			`CREATE TABLE IF NOT EXISTS "ComicGroupTag" (
+				"groupId" INTEGER NOT NULL,
+				"tagId"   INTEGER NOT NULL,
+				PRIMARY KEY ("groupId", "tagId"),
+				CONSTRAINT "CGT_groupId_fkey" FOREIGN KEY ("groupId")
+					REFERENCES "ComicGroup" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+				CONSTRAINT "CGT_tagId_fkey" FOREIGN KEY ("tagId")
+					REFERENCES "Tag" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+			);`,
+			`CREATE INDEX IF NOT EXISTS "ComicGroupTag_tagId_idx" ON "ComicGroupTag"("tagId");`,
+		}, "\n"),
+	},
+	{
+		Version:     18,
+		Description: "Add classifyMode field to ComicGroup for chapter/volume classification (P3)",
+		SQL: strings.Join([]string{
+			// 分类模式：volume（按卷，默认）或 chapter（按话）
+			`ALTER TABLE "ComicGroup" ADD COLUMN "classifyMode" TEXT NOT NULL DEFAULT 'volume';`,
+			// 是否由扫描器自动创建（区分手动创建和自动创建的分组）
+			`ALTER TABLE "ComicGroup" ADD COLUMN "autoCreated" BOOLEAN NOT NULL DEFAULT 0;`,
+		}, "\n"),
+	},
 }
 
 // ensureMigrationsTable creates the migrations tracking table.

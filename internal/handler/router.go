@@ -169,6 +169,7 @@ func SetupRoutes(r *gin.Engine) {
 	api.GET("/stats/yearly", stats.GetYearlyReport)
 	api.GET("/stats/enhanced", stats.GetEnhancedStats)
 	api.GET("/stats/files", stats.GetFileStats)
+	api.GET("/stats/folder-tree", stats.GetFolderTreeStats)
 
 	statsAuth := api.Group("/stats")
 	statsAuth.Use(middleware.AuthRequired())
@@ -306,6 +307,8 @@ func SetupRoutes(r *gin.Engine) {
 		metadataGroup.POST("/batch-rename", meta.BatchRename)
 		metadataGroup.POST("/ai-rename", meta.AIRename)
 		metadataGroup.POST("/ai-chat", meta.AIChat)
+		metadataGroup.GET("/folder-tree", meta.FolderTree)
+		metadataGroup.POST("/batch-folder", meta.BatchFolder)
 	}
 
 	// AI services
@@ -450,6 +453,12 @@ func SetupRoutes(r *gin.Engine) {
 		groupWrite.POST("/:id/inherit-metadata", group.InheritMetadata)
 		groupWrite.POST("/:id/preview-inherit", group.PreviewInherit)
 		groupWrite.POST("/:id/inherit-to-volumes", group.InheritToVolumes)
+		// P2: 系列级标签管理
+		groupWrite.GET("/:id/tags", group.GetGroupTags)
+		groupWrite.PUT("/:id/tags", group.SetGroupTags)
+		groupWrite.POST("/:id/sync-tags", group.SyncGroupTags)
+		// P3: 按话/卷自动分组
+		groupWrite.POST("/auto-group-by-dir", group.AutoGroupByDirectory)
 		groupWrite.POST("/auto-detect", group.AutoDetect)
 		groupWrite.POST("/batch-create", group.BatchCreate)
 		groupWrite.POST("/batch-delete", group.BatchDelete)

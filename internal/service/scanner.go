@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+	"github.com/nowen-reader/nowen-reader/internal/archive"
 	"github.com/nowen-reader/nowen-reader/internal/config"
 	"github.com/nowen-reader/nowen-reader/internal/store"
 )
@@ -443,6 +444,21 @@ func fullSync() {
 						processed++
 						mu.Unlock()
 					}
+
+					// 对 epub/mobi/azw3 文件检测内容类型：如果以图片为主则标记为漫画
+					archiveType := archive.DetectType(item.Path)
+					if archive.IsEbookType(archiveType) {
+						// 对于 mobi/azw3，需要先转换为 epub 再检测
+						// 但 IsImageHeavyEpub 目前只支持 epub 格式
+						// mobi/azw3 通过 Calibre 转换后的临时 epub 路径不可用
+						// 所以只对 epub 文件进行检测
+						if archiveType == archive.TypeEpub {
+							if archive.IsImageHeavyEpub(item.Path) {
+								log.Printf("[full-sync] Detected image-heavy EPUB, marking as comic: %s", item.Filename)
+								_ = store.UpdateComicType(item.ID, "comic")
+							}
+						}
+					}
 				}()
 			}
 		}()
@@ -610,8 +626,20 @@ func SyncComicsToDatabase() {
 		syncMu.Unlock()
 	}()
 
-	quickSync()
+	added, _ := quickSync()
 	updateDirMtimes()
+
+	// P3: 扫描新增文件后，自动按文件夹分组（仅在有新增时执行）
+	if added > 0 {
+		go func() {
+			created, err := store.AutoGroupByDirectory()
+			if err != nil {
+				log.Printf("[auto-group] 自动分组失败: %v", err)
+			} else if created > 0 {
+				log.Printf("[auto-group] 自动创建了 %d 个系列", created)
+			}
+		}()
+	}
 }
 
 // ============================================================

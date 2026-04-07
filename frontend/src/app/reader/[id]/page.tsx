@@ -104,6 +104,7 @@ export default function ReaderPage() {
   // 系列跨卷连续阅读
   const [seriesVolumes, setSeriesVolumes] = useState<SeriesVolumeInfo[]>([]);
   const [seriesName, setSeriesName] = useState<string>("");
+  const [seriesGroupId, setSeriesGroupId] = useState<number | null>(null);
   const [showChapterDrawer, setShowChapterDrawer] = useState(false);
   // 无感跳转过渡提示
   const [volumeTransitionHint, setVolumeTransitionHint] = useState<string | null>(null);
@@ -153,7 +154,9 @@ export default function ReaderPage() {
         const groupIds = gmap[comicId];
         if (groupIds && groupIds.length > 0) {
           // 取第一个分组
-          fetchGroupDetail(groupIds[0]).then((detail) => {
+          const gid = groupIds[0];
+          setSeriesGroupId(gid);
+          fetchGroupDetail(gid).then((detail) => {
             if (detail && detail.comics.length > 1) {
               setSeriesName(detail.name);
               setSeriesVolumes(detail.comics.map((c, idx) => ({
@@ -264,13 +267,13 @@ export default function ReaderPage() {
       setVolumeTransitionHint(`${t.series.nextVolume}: ${nextVolume.title}`);
       if (transitionTimerRef.current) clearTimeout(transitionTimerRef.current);
       transitionTimerRef.current = setTimeout(() => setVolumeTransitionHint(null), 2000);
-      // 延迟 300ms 跳转，让用户看到提示
-      setTimeout(() => router.push(`/reader/${nextVolume.comicId}`), 300);
+      // 延迟 300ms 跳转，使用 replace 避免历史栈堆积
+      setTimeout(() => router.replace(`/reader/${nextVolume.comicId}`), 300);
     } else if (dir === "prev" && prevVolume) {
       setVolumeTransitionHint(`${t.series.prevVolume}: ${prevVolume.title}`);
       if (transitionTimerRef.current) clearTimeout(transitionTimerRef.current);
       transitionTimerRef.current = setTimeout(() => setVolumeTransitionHint(null), 2000);
-      setTimeout(() => router.push(`/reader/${prevVolume.comicId}`), 300);
+      setTimeout(() => router.replace(`/reader/${prevVolume.comicId}`), 300);
     }
   }, [nextVolume, prevVolume, router, t.series.nextVolume, t.series.prevVolume]);
 
@@ -599,7 +602,7 @@ export default function ReaderPage() {
         <div className="fixed bottom-20 left-1/2 z-50 flex -translate-x-1/2 items-center gap-2 rounded-full bg-black/70 px-3 py-1.5 backdrop-blur-sm">
           {prevVolume && (
             <button
-              onClick={() => router.push(`/reader/${prevVolume.comicId}`)}
+              onClick={() => router.replace(`/reader/${prevVolume.comicId}`)}
               className="text-xs text-white/70 hover:text-white transition-colors"
               title={t.series.prevVolume}
             >
@@ -612,7 +615,7 @@ export default function ReaderPage() {
           </span>
           {nextVolume && (
             <button
-              onClick={() => router.push(`/reader/${nextVolume.comicId}`)}
+              onClick={() => router.replace(`/reader/${nextVolume.comicId}`)}
               className="text-xs text-white/70 hover:text-white transition-colors"
               title={t.series.nextVolume}
             >
@@ -640,7 +643,14 @@ export default function ReaderPage() {
         direction={direction}
         isFullscreen={isFullscreen}
         readerTheme={readerTheme}
-        onBack={() => router.back()}
+        onBack={() => {
+          // 智能返回：优先回到合集详情页，否则回首页
+          if (seriesGroupId) {
+            router.push(`/group/${seriesGroupId}`);
+          } else {
+            router.back();
+          }
+        }}
         onPageChange={handlePageChange}
         onModeChange={handleModeChange}
         onDirectionChange={handleDirectionChange}
@@ -753,7 +763,7 @@ export default function ReaderPage() {
                     key={vol.comicId}
                     onClick={() => {
                       setShowChapterDrawer(false);
-                      if (!isCurrent) router.push(`/reader/${vol.comicId}`);
+                      if (!isCurrent) router.replace(`/reader/${vol.comicId}`);
                     }}
                     className={`flex w-full items-center gap-3 rounded-xl p-2.5 text-left transition-all ${
                       isCurrent

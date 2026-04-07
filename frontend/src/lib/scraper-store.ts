@@ -162,6 +162,34 @@ export interface GuideStep {
   actionKey?: string;
 }
 
+/* ── 文件夹模式相关类型 ── */
+
+export type ViewMode = "list" | "folder";
+
+export interface MetadataFolderFile {
+  id: string;
+  title: string;
+  filename: string;
+  fileSize: number;
+  type: string;
+  hasMetadata: boolean;
+  metadataSource: string;
+  author: string;
+}
+
+export interface MetadataFolderNode {
+  name: string;
+  path: string;
+  fileCount: number;
+  withMeta: number;
+  missingMeta: number;
+  comicCount: number;
+  novelCount: number;
+  totalSize: number;
+  children: MetadataFolderNode[];
+  files?: MetadataFolderFile[];
+}
+
 export interface ScraperState {
   // 统计
   stats: MetadataStats | null;
@@ -225,6 +253,16 @@ export interface ScraperState {
   collectionAddToGroupDialog: boolean; // 添加到合集弹窗（从选中项触发）
   collectionEditingId: number | null; // 正在编辑的合集ID
   collectionEditingName: string;      // 编辑中的合集名称
+
+  // 文件夹模式
+  viewMode: ViewMode;                          // 当前视图模式
+  folderTree: MetadataFolderNode[] | null;     // 文件夹树数据
+  folderTreeLoading: boolean;
+  selectedFolderPath: string | null;           // 当前选中的文件夹路径
+  folderSearch: string;                        // 文件夹搜索关键词
+  folderScrapeRunning: boolean;                // 文件夹刮削是否进行中
+  folderScrapeProgress: { current: number; total: number; status: string; filename: string } | null;
+  folderScrapeDone: { total: number; success: number; failed: number } | null;
 }
 
 /* ── 模块级状态 ── */
@@ -288,6 +326,16 @@ let state: ScraperState = {
   collectionAddToGroupDialog: false,
   collectionEditingId: null,
   collectionEditingName: "",
+
+  // 文件夹模式
+  viewMode: "list",
+  folderTree: null,
+  folderTreeLoading: false,
+  selectedFolderPath: null,
+  folderSearch: "",
+  folderScrapeRunning: false,
+  folderScrapeProgress: null,
+  folderScrapeDone: null,
 };
 
 let abortController: AbortController | null = null;
@@ -1603,5 +1651,147 @@ export async function mergeCollections(groupIds: number[], newName: string) {
 
 export function setCollectionCreateDialog(open: boolean) {
   state.collectionCreateDialog = open;
+  notify();
+}
+
+/* ── 文件夹模式 Actions ── */
+
+export function setViewMode(mode: ViewMode) {
+  state.viewMode = mode;
+  // 切换到文件夹模式时自动加载文件夹树
+  if (mode === "folder" && !state.folderTree && !state.folderTreeLoading) {
+    loadFolderTree();
+  }
+  notify();
+}
+
+export function setSelectedFolderPath(path: string | null) {
+  state.selectedFolderPath = path;
+  notify();
+}
+
+export function setFolderSearch(search: string) {
+  state.folderSearch = search;
+  notify();
+}
+
+export async function loadFolderTree() {
+  state.folderTreeLoading = true;
+  notify();
+  try {
+    const res = await fetch("/api/metadata/folder-tree");
+    if (res.ok) {
+      state.folderTree = await res.json();
+    }
+  } catch {
+    // ignore
+  } finally {
+    state.folderTreeLoading = false;
+    notify();
+  }
+}
+
+let folderScrapeAbort: AbortController | null = null;
+
+export async function startFolderScrape(folderPath: string, scope: "missing" | "all" = "missing") {
+  if (state.folderScrapeRunning) return;
+
+  state.folderScrapeRunning = true;
+  state.folderScrapeProgress = null;
+  state.folderScrapeDone = null;
+  state.completedItems = [];
+  state.showResults = true;
+  notify();
+
+  const abort = new AbortController();
+  folderScrapeAbort = abort;
+  const lang = navigator.language.startsWith("zh") ? "zh" : "en";
+
+  try {
+    const res = await fetch("/api/metadata/batch-folder", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        folderPath,
+        mode: state.batchMode,
+        scope,
+        lang,
+        skipCover: state.skipCover,
+      }),
+      signal: abort.signal,
+    });
+
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({ error: "Request failed" }));
+      state.folderScrapeDone = { total: 0, success: 0, failed: 0 };
+      state.completedItems = [{
+        type: "progress",
+        current: 0,
+        total: 0,
+        comicId: "",
+        filename: "",
+        status: "failed",
+        message: errData.error || `HTTP ${res.status}`,
+        id: `error-${Date.now()}`,
+      } as CompletedItem];
+      notify();
+      return;
+    }
+
+    const reader = res.body?.getReader();
+    if (!reader) return;
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n\n");
+      buffer = lines.pop() || "";
+
+      for (const line of lines) {
+        if (!line.startsWith("data: ")) continue;
+        try {
+          const data = JSON.parse(line.slice(6));
+          if (data.type === "complete") {
+            state.folderScrapeDone = data;
+            notify();
+          } else if (data.type === "progress") {
+            state.folderScrapeProgress = {
+              current: data.current,
+              total: data.total,
+              status: data.status,
+              filename: data.filename,
+            };
+            if (data.status === "success" || data.status === "failed" || data.status === "skipped") {
+              state.completedItems = [
+                ...state.completedItems,
+                { ...data, id: `${data.comicId}-${Date.now()}` },
+              ];
+            }
+            notify();
+          }
+        } catch { /* skip */ }
+      }
+    }
+  } catch (err) {
+    if ((err as Error).name !== "AbortError") {
+      state.folderScrapeDone = { total: 0, success: 0, failed: 0 };
+      notify();
+    }
+  } finally {
+    state.folderScrapeRunning = false;
+    folderScrapeAbort = null;
+    notify();
+    // 刷新数据
+    loadStats();
+    loadFolderTree();
+  }
+}
+
+export function cancelFolderScrape() {
+  folderScrapeAbort?.abort();
+  state.folderScrapeRunning = false;
   notify();
 }

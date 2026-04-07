@@ -335,6 +335,12 @@ func UpdateComicPageCount(comicID string, pageCount int) error {
 	return err
 }
 
+// UpdateComicType 更新单个漫画的内容类型（comic/novel）。
+func UpdateComicType(comicID string, comicType string) error {
+	_, err := db.Exec(`UPDATE "Comic" SET "type" = ? WHERE "id" = ?`, comicType, comicID)
+	return err
+}
+
 // UpdateComicMD5Hash 更新单个漫画的 MD5 哈希值。
 func UpdateComicMD5Hash(comicID string, md5Hash string) error {
 	_, err := db.Exec(`UPDATE "Comic" SET "md5Hash" = ? WHERE "id" = ?`, md5Hash, comicID)
