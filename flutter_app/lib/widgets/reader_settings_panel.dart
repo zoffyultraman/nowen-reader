@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// 漫画阅读模式
-enum ComicReadingMode { single, webtoon }
+enum ComicReadingMode { single, webtoon, doublePage }
 
 /// 阅读方向
 enum ReadingDirection { ltr, rtl, ttb }
@@ -196,6 +196,7 @@ class _ReaderSettingsPanelState extends State<ReaderSettingsPanel> {
                       value: _settings.mode,
                       items: const [
                         _ToggleItem(ComicReadingMode.single, '单页'),
+                        _ToggleItem(ComicReadingMode.doublePage, '双页'),
                         _ToggleItem(ComicReadingMode.webtoon, '长条'),
                       ],
                       onChanged: (v) =>

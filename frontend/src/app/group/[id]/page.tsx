@@ -15,6 +15,13 @@ import {
   X,
   Check,
   Plus,
+  Download,
+  User,
+  Calendar,
+  Globe,
+  Tag,
+  Layers,
+  MoreHorizontal,
 } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
 import { useToast } from "@/components/Toast";
@@ -26,8 +33,13 @@ import {
   removeComicFromGroup,
   reorderGroupComics,
   addComicsToGroup,
+  updateGroupMetadata,
+  inheritGroupMetadata,
+  previewInheritMetadata,
+  inheritMetadataToVolumes,
 } from "@/api/groups";
 import type { ComicGroupDetail, GroupComicItem } from "@/hooks/useComicTypes";
+import type { InheritPreview } from "@/api/groups";
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -53,6 +65,11 @@ function isNovelFile(filename?: string): boolean {
     ext.endsWith(".mobi") ||
     ext.endsWith(".azw3")
   );
+}
+
+// 自然排序键：将字符串中的数字部分补零对齐，实现数字感知排序
+function naturalSortKey(s: string): string {
+  return s.replace(/\d+/g, (match) => match.padStart(20, "0")).toLowerCase();
 }
 
 export default function GroupDetailPage() {
@@ -81,17 +98,63 @@ export default function GroupDetailPage() {
   const [removeConfirmId, setRemoveConfirmId] = useState<string | null>(null);
   const addSearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // 元数据编辑状态
+  const [showMetadataEdit, setShowMetadataEdit] = useState(false);
+  const [showInheritPreview, setShowInheritPreview] = useState(false);
+  const [inheritPreview, setInheritPreview] = useState<InheritPreview | null>(null);
+  const [inheritLoading, setInheritLoading] = useState(false);
+  const [metaForm, setMetaForm] = useState({
+    author: "",
+    description: "",
+    tags: "",
+    year: "" as string,
+    publisher: "",
+    language: "",
+    genre: "",
+    status: "",
+  });
+
   // 触摸拖拽状态
   const [touchDragId, setTouchDragId] = useState<string | null>(null);
   const touchStartY = useRef<number>(0);
   const comicListRef = useRef<HTMLDivElement>(null);
 
+  // 视图模式：grid（网格）或 list（列表）
+  const [viewMode, setViewMode] = useState<"grid" | "list">(() => {
+    if (typeof window !== "undefined") {
+      return (localStorage.getItem("seriesViewMode") as "grid" | "list") || "grid";
+    }
+    return "grid";
+  });
+
+  useEffect(() => {
+    localStorage.setItem("seriesViewMode", viewMode);
+  }, [viewMode]);
+
   const loadGroup = useCallback(async () => {
     if (!groupId) return;
     setLoading(true);
     const data = await fetchGroupDetail(groupId, contentType);
+    if (data && data.comics.length > 1) {
+      // 按标题自然排序（数字感知），修复字符串排序导致 "3" 排在 "29" 后面的问题
+      data.comics.sort((a: GroupComicItem, b: GroupComicItem) =>
+        naturalSortKey(a.title).localeCompare(naturalSortKey(b.title))
+      );
+    }
     setGroup(data);
-    if (data) setEditName(data.name);
+    if (data) {
+      setEditName(data.name);
+      setMetaForm({
+        author: data.author || "",
+        description: data.description || "",
+        tags: data.tags || "",
+        year: data.year != null ? String(data.year) : "",
+        publisher: data.publisher || "",
+        language: data.language || "",
+        genre: data.genre || "",
+        status: data.status || "",
+      });
+    }
     setLoading(false);
   }, [groupId, contentType]);
 
@@ -110,7 +173,7 @@ export default function GroupDetailPage() {
     }
   }, [group, editName, toast, t]);
 
-  // 删除分组
+  // 删除系列
   const handleDelete = useCallback(async () => {
     if (!group) return;
     const ok = await deleteGroup(group.id);
@@ -124,11 +187,9 @@ export default function GroupDetailPage() {
     async (comicId: string) => {
       if (!group) return;
       if (removeConfirmId !== comicId) {
-        // 第一次点击，进入确认状态
         setRemoveConfirmId(comicId);
         return;
       }
-      // 第二次点击，执行移除
       setRemoveConfirmId(null);
       const ok = await removeComicFromGroup(group.id, comicId);
       if (ok) {
@@ -217,7 +278,7 @@ export default function GroupDetailPage() {
     );
   }, [group, dragId, dragOverId]);
 
-  // 搜索漫画用于添加到分组（带防抖）
+  // 搜索漫画用于添加到系列（带防抖）
   const handleAddSearchImmediate = useCallback(async (query: string) => {
     if (!query.trim()) {
       setAddSearchResults([]);
@@ -264,6 +325,60 @@ export default function GroupDetailPage() {
     }
   }, [group, loadGroup, toast, t]);
 
+  // 保存元数据
+  const handleSaveMetadata = useCallback(async () => {
+    if (!group) return;
+    const ok = await updateGroupMetadata(group.id, {
+      author: metaForm.author,
+      description: metaForm.description,
+      tags: metaForm.tags,
+      year: metaForm.year ? parseInt(metaForm.year) : undefined,
+      publisher: metaForm.publisher,
+      language: metaForm.language,
+      genre: metaForm.genre,
+      status: metaForm.status,
+    });
+    if (ok) {
+      toast.success(t.comicGroup?.saveSuccess || "元数据保存成功");
+      setShowMetadataEdit(false);
+      await loadGroup();
+    }
+  }, [group, metaForm, toast, t, loadGroup]);
+
+  // 从首卷继承元数据（仅继承到系列）
+  const handleInheritMetadata = useCallback(async () => {
+    if (!group) return;
+    const ok = await inheritGroupMetadata(group.id);
+    if (ok) {
+      toast.success(t.comicGroup?.inheritSuccess || "元数据继承成功");
+      await loadGroup();
+    }
+  }, [group, toast, t, loadGroup]);
+
+  // 预览继承到所有卷
+  const handlePreviewInherit = useCallback(async () => {
+    if (!group) return;
+    setInheritLoading(true);
+    const preview = await previewInheritMetadata(group.id);
+    setInheritPreview(preview);
+    setShowInheritPreview(true);
+    setInheritLoading(false);
+  }, [group]);
+
+  // 确认继承到所有卷
+  const handleConfirmInheritToVolumes = useCallback(async () => {
+    if (!group) return;
+    setInheritLoading(true);
+    const ok = await inheritMetadataToVolumes(group.id);
+    if (ok) {
+      toast.success(t.comicGroup?.inheritToVolumesSuccess || "元数据已继承到所有卷");
+      setShowInheritPreview(false);
+      setInheritPreview(null);
+      await loadGroup();
+    }
+    setInheritLoading(false);
+  }, [group, toast, t, loadGroup]);
+
   // 计算统计
   const totalPages = group?.comics.reduce((s, c) => s + c.pageCount, 0) || 0;
   const totalReadTime =
@@ -276,6 +391,9 @@ export default function GroupDetailPage() {
     (c) => c.lastReadPage > 0 && c.lastReadPage < c.pageCount
   );
 
+  // 解析标签字符串
+  const tagsList = group?.tags ? group.tags.split(",").map(t => t.trim()).filter(Boolean) : [];
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
@@ -287,7 +405,7 @@ export default function GroupDetailPage() {
   if (!group) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-background">
-        <p className="mb-4 text-muted">{t.comicDetail?.comicNotFound || "分组不存在"}</p>
+        <p className="mb-4 text-muted">{t.comicDetail?.comicNotFound || "系列不存在"}</p>
         <Link
           href="/"
           className="flex items-center gap-2 text-accent hover:underline"
@@ -306,7 +424,6 @@ export default function GroupDetailPage() {
         <div className="mx-auto flex max-w-[1200px] items-center gap-3 px-4 py-3">
           <button
             onClick={() => {
-              // 优先使用浏览器后退（保留上一页的 URL 参数如分页状态）
               if (window.history.length > 1) {
                 router.back();
               } else {
@@ -385,69 +502,329 @@ export default function GroupDetailPage() {
 
       {/* Content */}
       <main className="mx-auto max-w-[1200px] px-4 py-6">
-        {/* 统计横条 */}
-        <div className="mb-6 flex flex-wrap items-center gap-4 rounded-xl bg-card/50 p-4">
-          <div className="flex items-center gap-2">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent/10">
-              <FileText className="h-5 w-5 text-accent" />
+        {/* ═══════════════════════════════════════════════════════
+            系列元数据区域（类似 Komga/Kavita 的布局）
+            ═══════════════════════════════════════════════════════ */}
+        <div className="mb-8 rounded-2xl bg-card/50 p-5 sm:p-6">
+          <div className="flex flex-col sm:flex-row gap-5 sm:gap-6">
+            {/* 系列封面 */}
+            <div className="flex-shrink-0 self-center sm:self-start">
+              <div className="relative h-[280px] w-[200px] overflow-hidden rounded-xl shadow-lg shadow-black/20">
+                {group.coverUrl ? (
+                  <Image
+                    src={group.coverUrl}
+                    alt={group.name}
+                    fill
+                    unoptimized
+                    className="object-cover"
+                    sizes="200px"
+                    priority
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-accent/20 to-accent/5">
+                    <Layers className="h-16 w-16 text-accent/40" />
+                  </div>
+                )}
+                {/* 卷数角标 */}
+                <div className="absolute top-2 right-2 rounded-lg bg-accent px-2 py-1 text-xs font-bold text-white shadow-lg">
+                  {group.comicCount}
+                </div>
+              </div>
             </div>
-            <div>
-              <p className="text-xs text-muted">{t.comicGroup?.totalPages || "总页数"}</p>
-              <p className="text-lg font-semibold text-foreground">
-                {totalPages.toLocaleString()}
-              </p>
-            </div>
-          </div>
-          <div className="hidden sm:block h-8 w-px bg-border/30" />
-          <div className="flex items-center gap-2">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-purple-500/10">
-              <Clock className="h-5 w-5 text-purple-400" />
-            </div>
-            <div>
-              <p className="text-xs text-muted">{t.comicGroup?.totalReadTime || "总阅读时长"}</p>
-              <p className="text-lg font-semibold text-foreground">
-                {formatDuration(totalReadTime)}
-              </p>
-            </div>
-          </div>
-          <div className="hidden sm:block h-8 w-px bg-border/30" />
-          <div>
-            <p className="text-xs text-muted">{t.comicDetail?.fileSize || "文件大小"}</p>
-            <p className="text-lg font-semibold text-foreground">
-              {formatFileSize(totalSize)}
-            </p>
-          </div>
 
-          {/* 继续阅读按钮 */}
-          {continueVolume && (
-            <>
-              <div className="flex-1" />
-              <Link
-                href={
-                  isNovelFile(continueVolume.filename)
-                    ? `/novel/${continueVolume.id}`
-                    : `/reader/${continueVolume.id}`
-                }
-                className="flex items-center gap-2 rounded-xl bg-accent px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-accent/20 transition-all hover:bg-accent-hover hover:shadow-accent/30"
-              >
-                <BookOpen className="h-4 w-4" />
-                {t.comicGroup?.continueReading || "继续阅读"}
-              </Link>
-            </>
-          )}
+            {/* 系列信息 */}
+            <div className="flex-1 min-w-0">
+              <h2 className="text-2xl font-bold text-foreground mb-2">{group.name}</h2>
+
+              {/* 元数据标签行 */}
+              <div className="flex flex-wrap items-center gap-2 mb-3">
+                {group.status && (
+                  <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                    group.status === "completed" ? "bg-emerald-500/15 text-emerald-400" :
+                    group.status === "ongoing" ? "bg-blue-500/15 text-blue-400" :
+                    "bg-amber-500/15 text-amber-400"
+                  }`}>
+                    {group.status === "ongoing" ? (t.comicGroup?.statusOngoing || "连载中") :
+                     group.status === "completed" ? (t.comicGroup?.statusCompleted || "已完结") :
+                     group.status === "hiatus" ? (t.comicGroup?.statusHiatus || "休刊中") :
+                     group.status}
+                  </span>
+                )}
+                {group.language && (
+                  <span className="rounded-full bg-purple-500/10 px-2.5 py-0.5 text-xs font-medium text-purple-400">
+                    {group.language}
+                  </span>
+                )}
+                {group.year != null && (
+                  <span className="text-sm text-muted">{group.year}年</span>
+                )}
+              </div>
+
+              {/* 统计信息 */}
+              <div className="flex flex-wrap items-center gap-4 mb-4 text-sm text-muted">
+                <span className="flex items-center gap-1.5">
+                  <FileText className="h-4 w-4" />
+                  {totalPages.toLocaleString()} {t.comicGroup?.totalPages || "页"}
+                </span>
+                {totalReadTime > 0 && (
+                  <span className="flex items-center gap-1.5">
+                    <Clock className="h-4 w-4" />
+                    {formatDuration(totalReadTime)}
+                  </span>
+                )}
+                <span>{formatFileSize(totalSize)}</span>
+              </div>
+
+              {/* 作者/出版商 */}
+              <div className="space-y-1.5 mb-4">
+                {group.author && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className="text-muted w-14 flex-shrink-0">{t.comicGroup?.author || "作者"}</span>
+                    <span className="text-foreground">{group.author}</span>
+                  </div>
+                )}
+                {group.publisher && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className="text-muted w-14 flex-shrink-0">{t.comicGroup?.publisher || "出版商"}</span>
+                    <span className="text-foreground">{group.publisher}</span>
+                  </div>
+                )}
+                {group.genre && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className="text-muted w-14 flex-shrink-0">{t.comicGroup?.genre || "类型"}</span>
+                    <span className="text-foreground">{group.genre}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* 简介 */}
+              {group.description && (
+                <p className="text-sm text-muted/80 leading-relaxed mb-4 line-clamp-4">
+                  {group.description}
+                </p>
+              )}
+
+              {/* 标签 */}
+              {tagsList.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mb-4">
+                  {tagsList.map((tag, i) => (
+                    <span key={i} className="rounded-md bg-accent/10 px-2 py-0.5 text-xs text-accent">
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {/* 操作按钮 */}
+              <div className="flex flex-wrap items-center gap-2">
+                {continueVolume && (
+                  <Link
+                    href={
+                      isNovelFile(continueVolume.filename)
+                        ? `/novel/${continueVolume.id}`
+                        : `/reader/${continueVolume.id}`
+                    }
+                    className="flex items-center gap-2 rounded-xl bg-accent px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-accent/20 transition-all hover:bg-accent-hover hover:shadow-accent/30"
+                  >
+                    <BookOpen className="h-4 w-4" />
+                    {t.comicGroup?.continueReading || "继续阅读"}
+                  </Link>
+                )}
+                {isAdmin && (
+                  <>
+                    <button
+                      onClick={() => {
+                        setMetaForm({
+                          author: group.author || "",
+                          description: group.description || "",
+                          tags: group.tags || "",
+                          year: group.year != null ? String(group.year) : "",
+                          publisher: group.publisher || "",
+                          language: group.language || "",
+                          genre: group.genre || "",
+                          status: group.status || "",
+                        });
+                        setShowMetadataEdit(true);
+                      }}
+                      className="flex items-center gap-1.5 rounded-xl bg-card px-4 py-2.5 text-sm text-foreground/80 transition-colors hover:bg-card-hover"
+                    >
+                      <Edit3 className="h-3.5 w-3.5" />
+                      {t.comicGroup?.editMetadata || "编辑元数据"}
+                    </button>
+                    {group.comics.length > 0 && (
+                      <button
+                        onClick={handleInheritMetadata}
+                        className="flex items-center gap-1.5 rounded-xl bg-card px-4 py-2.5 text-sm text-foreground/80 transition-colors hover:bg-card-hover"
+                        title={t.comicGroup?.inheritMetadataDesc || "从系列第一本漫画继承元数据"}
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                        {t.comicGroup?.inheritMetadata || "从首卷继承"}
+                      </button>
+                    )}
+                    {group.comics.length > 1 && (
+                      <button
+                        onClick={handlePreviewInherit}
+                        disabled={inheritLoading}
+                        className="flex items-center gap-1.5 rounded-xl bg-accent/10 px-4 py-2.5 text-sm text-accent transition-colors hover:bg-accent/20 disabled:opacity-50"
+                        title={t.comicGroup?.inheritToVolumesDesc || "将首卷的元数据继承到系列中所有卷"}
+                      >
+                        <Layers className="h-3.5 w-3.5" />
+                        {t.comicGroup?.inheritToVolumes || "继承到所有卷"}
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
 
-        {/* 卷列表 */}
+        {/* ═══════════════════════════════════════════════════════
+            卷列表区域
+            ═══════════════════════════════════════════════════════ */}
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="text-base font-semibold text-foreground">
+            {t.comicGroup?.volumes || "卷"} ({group.comicCount})
+          </h3>
+          <div className="flex items-center rounded-lg border border-border/60 bg-card/50 p-0.5">
+            <button
+              onClick={() => setViewMode("grid")}
+              className={`flex h-7 w-7 items-center justify-center rounded-md transition-all duration-200 ${
+                viewMode === "grid"
+                  ? "bg-accent text-white shadow-sm"
+                  : "text-muted hover:text-foreground"
+              }`}
+            >
+              <Layers className="h-3.5 w-3.5" />
+            </button>
+            <button
+              onClick={() => setViewMode("list")}
+              className={`flex h-7 w-7 items-center justify-center rounded-md transition-all duration-200 ${
+                viewMode === "list"
+                  ? "bg-accent text-white shadow-sm"
+                  : "text-muted hover:text-foreground"
+              }`}
+            >
+              <GripVertical className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+
         {group.comics.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-24 text-center">
             <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-2xl bg-card">
               <span className="text-4xl">📚</span>
             </div>
             <p className="text-sm text-muted">
-              {t.comicGroup?.emptyGroup || "此分组还没有漫画"}
+              {t.comicGroup?.emptyGroup || "此系列还没有漫画"}
             </p>
           </div>
+        ) : viewMode === "grid" ? (
+          /* ── 网格视图（类似 Komga/Kavita 的卷封面网格）── */
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6" ref={comicListRef}>
+            {group.comics.map((comic, index) => {
+              const progress =
+                comic.pageCount > 0
+                  ? Math.round((comic.lastReadPage / comic.pageCount) * 100)
+                  : 0;
+              const readerUrl = isNovelFile(comic.filename)
+                ? `/novel/${comic.id}`
+                : `/reader/${comic.id}`;
+
+              return (
+                <div
+                  key={comic.id}
+                  data-comic-id={comic.id}
+                  className={`group relative ${
+                    dragOverId === comic.id ? "ring-2 ring-accent rounded-xl" : ""
+                  }`}
+                  draggable={isAdmin}
+                  onDragStart={isAdmin ? (e) => {
+                    e.dataTransfer.effectAllowed = "move";
+                    setDragId(comic.id);
+                  } : undefined}
+                  onDragOver={isAdmin ? (e) => {
+                    e.preventDefault();
+                    setDragOverId(comic.id);
+                  } : undefined}
+                  onDrop={isAdmin ? (e) => {
+                    e.preventDefault();
+                    handleDragEnd();
+                  } : undefined}
+                >
+                  <Link href={`/comic/${comic.id}`} className="block">
+                    <div className="relative overflow-hidden rounded-xl bg-card transition-all duration-300 ease-out group-hover:scale-[1.03] group-hover:shadow-2xl group-hover:shadow-accent/10">
+                      <div className="relative aspect-[5/7] w-full overflow-hidden">
+                        <Image
+                          src={comic.coverUrl}
+                          alt={comic.title}
+                          fill
+                          unoptimized
+                          className="object-cover transition-all duration-500 group-hover:scale-110"
+                          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 16vw"
+                        />
+                        {/* 渐变遮罩 */}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-80" />
+                        {/* 进度条 */}
+                        {progress > 0 && (
+                          <div className="absolute bottom-0 left-0 right-0 h-1">
+                            <div
+                              className={`h-full ${progress >= 100 ? "bg-emerald-400" : "bg-accent"}`}
+                              style={{ width: `${Math.min(progress, 100)}%` }}
+                            />
+                          </div>
+                        )}
+                        {/* Hover 阅读按钮 */}
+                        <div className="absolute inset-0 flex items-center justify-center opacity-0 transition-all duration-300 group-hover:opacity-100">
+                          <Link
+                            href={readerUrl}
+                            className="flex h-12 w-12 items-center justify-center rounded-full bg-accent/90 shadow-lg shadow-accent/30 backdrop-blur-sm transition-transform duration-300 hover:scale-110"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <BookOpen className="h-5 w-5 text-white" />
+                          </Link>
+                        </div>
+                      </div>
+                      <div className="p-2.5">
+                        <h4 className="truncate text-xs font-medium text-foreground/90 group-hover:text-foreground">
+                          {comic.title}
+                        </h4>
+                        <p className="mt-0.5 text-[10px] text-muted">
+                          {comic.pageCount} {t.comicGroup?.totalPages ? "页" : "p"}
+                        </p>
+                      </div>
+                    </div>
+                  </Link>
+                  {/* 管理员移除按钮 */}
+                  {isAdmin && (
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleRemoveComic(comic.id);
+                      }}
+                      onMouseLeave={() => {
+                        if (removeConfirmId === comic.id) setRemoveConfirmId(null);
+                      }}
+                      className={`absolute top-1.5 left-1.5 z-10 flex items-center justify-center rounded-lg transition-all opacity-0 group-hover:opacity-100 ${
+                        removeConfirmId === comic.id
+                          ? "h-6 w-auto px-1.5 bg-red-500/90 text-white"
+                          : "h-6 w-6 bg-black/50 text-white/80 hover:bg-red-500/80"
+                      }`}
+                    >
+                      {removeConfirmId === comic.id ? (
+                        <span className="text-[9px] font-medium whitespace-nowrap">{t.common?.confirm || "确认"}</span>
+                      ) : (
+                        <X className="h-3 w-3" />
+                      )}
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         ) : (
+          /* ── 列表视图（保留原有的列表模式）── */
           <div className="space-y-2" ref={comicListRef}>
             {group.comics.map((comic, index) => {
               const progress =
@@ -510,7 +887,7 @@ export default function GroupDetailPage() {
                     />
                   </div>
 
-                  {/* 信息 - 点击跳转到漫画详情页 */}
+                  {/* 信息 */}
                   <Link href={`/comic/${comic.id}`} className="min-w-0 flex-1">
                     <h3 className="truncate text-sm font-medium text-foreground/90 group-hover:text-foreground">
                       {comic.title}
@@ -552,7 +929,7 @@ export default function GroupDetailPage() {
                     <BookOpen className="h-4 w-4" />
                   </Link>
 
-                  {/* 移除按钮（需二次确认）— 仅管理员可见 */}
+                  {/* 移除按钮 — 仅管理员可见 */}
                   {isAdmin && (
                   <button
                     onClick={() => handleRemoveComic(comic.id)}
@@ -582,17 +959,13 @@ export default function GroupDetailPage() {
 
       {/* 删除确认弹窗 */}
       {deleteConfirm && (
-        <>
-          <div
-            className="fixed inset-0 z-[60] bg-black/60 animate-backdrop-in"
-            onClick={() => setDeleteConfirm(false)}
-          />
-          <div className="fixed left-1/2 top-1/2 z-[60] w-80 -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-border bg-card p-6 shadow-2xl animate-modal-in">
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 animate-backdrop-in" onClick={() => setDeleteConfirm(false)}>
+          <div className="w-80 rounded-2xl border border-border bg-card p-6 shadow-2xl animate-modal-in" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-semibold text-foreground">
-              {t.comicGroup?.confirmDelete || "确认删除分组"}
+              {t.comicGroup?.confirmDelete || "确认删除系列"}
             </h3>
             <p className="mt-2 text-sm text-muted">
-              {(t.comicGroup?.confirmDeleteMsg || "确定要删除分组「{name}」吗？分组内的漫画不会被删除。").replace(
+              {(t.comicGroup?.confirmDeleteMsg || "确定要删除系列「{name}」吗？系列内的漫画不会被删除。").replace(
                 "{name}",
                 group.name
               )}
@@ -612,20 +985,137 @@ export default function GroupDetailPage() {
               </button>
             </div>
           </div>
-        </>
+          </div>
       )}
+
+      {/* 元数据编辑弹窗 */}
+      {showMetadataEdit && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 animate-backdrop-in" onClick={() => setShowMetadataEdit(false)}>
+          <div className="w-[90vw] max-w-lg rounded-2xl border border-border bg-card shadow-2xl animate-modal-in max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border/30 bg-card px-5 py-3 rounded-t-2xl">
+              <h3 className="text-base font-semibold text-foreground">
+                {t.comicGroup?.editMetadata || "编辑系列元数据"}
+              </h3>
+              <button
+                onClick={() => setShowMetadataEdit(false)}
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-muted hover:bg-card-hover"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              {/* 作者 */}
+              <div>
+                <label className="mb-1 block text-xs font-medium text-muted">{t.comicGroup?.author || "作者"}</label>
+                <input
+                  type="text"
+                  value={metaForm.author}
+                  onChange={(e) => setMetaForm(f => ({ ...f, author: e.target.value }))}
+                  className="w-full rounded-lg bg-background px-3 py-2 text-sm text-foreground outline-none focus:ring-1 focus:ring-accent/30"
+                />
+              </div>
+              {/* 出版商 */}
+              <div>
+                <label className="mb-1 block text-xs font-medium text-muted">{t.comicGroup?.publisher || "出版商"}</label>
+                <input
+                  type="text"
+                  value={metaForm.publisher}
+                  onChange={(e) => setMetaForm(f => ({ ...f, publisher: e.target.value }))}
+                  className="w-full rounded-lg bg-background px-3 py-2 text-sm text-foreground outline-none focus:ring-1 focus:ring-accent/30"
+                />
+              </div>
+              {/* 年份 + 语言 */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-muted">{t.comicGroup?.year || "年份"}</label>
+                  <input
+                    type="number"
+                    value={metaForm.year}
+                    onChange={(e) => setMetaForm(f => ({ ...f, year: e.target.value }))}
+                    placeholder="2024"
+                    className="w-full rounded-lg bg-background px-3 py-2 text-sm text-foreground outline-none focus:ring-1 focus:ring-accent/30"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-muted">{t.comicGroup?.language || "语言"}</label>
+                  <input
+                    type="text"
+                    value={metaForm.language}
+                    onChange={(e) => setMetaForm(f => ({ ...f, language: e.target.value }))}
+                    placeholder="Chinese"
+                    className="w-full rounded-lg bg-background px-3 py-2 text-sm text-foreground outline-none focus:ring-1 focus:ring-accent/30"
+                  />
+                </div>
+              </div>
+              {/* 类型 */}
+              <div>
+                <label className="mb-1 block text-xs font-medium text-muted">{t.comicGroup?.genre || "类型"}</label>
+                <input
+                  type="text"
+                  value={metaForm.genre}
+                  onChange={(e) => setMetaForm(f => ({ ...f, genre: e.target.value }))}
+                  className="w-full rounded-lg bg-background px-3 py-2 text-sm text-foreground outline-none focus:ring-1 focus:ring-accent/30"
+                />
+              </div>
+              {/* 状态 */}
+              <div>
+                <label className="mb-1 block text-xs font-medium text-muted">{t.comicGroup?.status || "状态"}</label>
+                <select
+                  value={metaForm.status}
+                  onChange={(e) => setMetaForm(f => ({ ...f, status: e.target.value }))}
+                  className="w-full rounded-lg bg-background px-3 py-2 text-sm text-foreground outline-none focus:ring-1 focus:ring-accent/30"
+                >
+                  <option value="">--</option>
+                  <option value="ongoing">{t.comicGroup?.statusOngoing || "连载中"}</option>
+                  <option value="completed">{t.comicGroup?.statusCompleted || "已完结"}</option>
+                  <option value="hiatus">{t.comicGroup?.statusHiatus || "休刊中"}</option>
+                </select>
+              </div>
+              {/* 标签 */}
+              <div>
+                <label className="mb-1 block text-xs font-medium text-muted">{t.comicGroup?.tags || "标签"}</label>
+                <input
+                  type="text"
+                  value={metaForm.tags}
+                  onChange={(e) => setMetaForm(f => ({ ...f, tags: e.target.value }))}
+                  placeholder="冒险, 友情, 少年漫画"
+                  className="w-full rounded-lg bg-background px-3 py-2 text-sm text-foreground outline-none focus:ring-1 focus:ring-accent/30"
+                />
+                <p className="mt-1 text-[10px] text-muted/60">多个标签用逗号分隔</p>
+              </div>
+              {/* 简介 */}
+              <div>
+                <label className="mb-1 block text-xs font-medium text-muted">{t.comicGroup?.description || "简介"}</label>
+                <textarea
+                  value={metaForm.description}
+                  onChange={(e) => setMetaForm(f => ({ ...f, description: e.target.value }))}
+                  rows={4}
+                  className="w-full rounded-lg bg-background px-3 py-2 text-sm text-foreground outline-none focus:ring-1 focus:ring-accent/30 resize-none"
+                />
+              </div>
+            </div>
+            <div className="sticky bottom-0 flex justify-end gap-3 border-t border-border/30 bg-card px-5 py-3 rounded-b-2xl">
+              <button
+                onClick={() => setShowMetadataEdit(false)}
+                className="rounded-lg bg-background px-4 py-2 text-sm text-foreground"
+              >
+                {t.common.cancel}
+              </button>
+              <button
+                onClick={handleSaveMetadata}
+                className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white"
+              >
+                {t.common.save}
+              </button>
+            </div>
+          </div>
+          </div>
+      )}
+
       {/* 添加漫画弹窗 */}
       {showAddComics && (
-        <>
-          <div
-            className="fixed inset-0 z-[60] bg-black/60 animate-backdrop-in"
-            onClick={() => {
-              setShowAddComics(false);
-              setAddSearchQuery("");
-              setAddSearchResults([]);
-            }}
-          />
-          <div className="fixed left-1/2 top-1/2 z-[60] w-[90vw] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-border bg-card shadow-2xl animate-modal-in">
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 animate-backdrop-in" onClick={() => { setShowAddComics(false); setAddSearchQuery(""); setAddSearchResults([]); }}>
+          <div className="w-[90vw] max-w-md rounded-2xl border border-border bg-card shadow-2xl animate-modal-in" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between border-b border-border/30 px-5 py-3">
               <div className="flex items-center gap-2">
                 <Plus className="h-5 w-5 text-accent" />
@@ -696,7 +1186,132 @@ export default function GroupDetailPage() {
               )}
             </div>
           </div>
-        </>
+          </div>
+      )}
+
+      {/* 继承预览确认弹窗 */}
+      {showInheritPreview && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 animate-backdrop-in" onClick={() => { setShowInheritPreview(false); setInheritPreview(null); }}>
+          <div className="w-[90vw] max-w-lg rounded-2xl border border-border bg-card shadow-2xl animate-modal-in max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border/30 bg-card px-5 py-3 rounded-t-2xl">
+              <div className="flex items-center gap-2">
+                <Layers className="h-5 w-5 text-accent" />
+                <h3 className="text-base font-semibold text-foreground">
+                  {t.comicGroup?.inheritPreviewTitle || "继承预览"}
+                </h3>
+              </div>
+              <button
+                onClick={() => {
+                  setShowInheritPreview(false);
+                  setInheritPreview(null);
+                }}
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-muted hover:bg-card-hover"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {inheritPreview ? (
+              <div className="p-5 space-y-5">
+                {/* 数据来源 */}
+                <div className="rounded-xl bg-accent/5 border border-accent/20 px-4 py-3">
+                  <p className="text-xs text-muted mb-1">{t.comicGroup?.inheritSource || "数据来源（首卷）"}</p>
+                  <p className="text-sm font-medium text-foreground">{inheritPreview.sourceComicTitle}</p>
+                </div>
+
+                {/* 系列级别变更 */}
+                {inheritPreview.groupChanges?.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-semibold text-foreground mb-2 flex items-center gap-1.5">
+                      <Tag className="h-3.5 w-3.5 text-accent" />
+                      {t.comicGroup?.groupLevelChanges || "系列级别变更"}
+                    </h4>
+                    <div className="space-y-2">
+                      {inheritPreview.groupChanges.map((change) => (
+                        <div key={change.field} className="flex items-center gap-3 rounded-lg bg-card/80 px-3 py-2">
+                          <span className="text-xs text-muted w-14 flex-shrink-0">{change.label}</span>
+                          <span className="text-xs text-muted/50 line-through flex-shrink-0">
+                            {change.oldValue || "（空）"}
+                          </span>
+                          <span className="text-xs text-muted mx-1">→</span>
+                          <span className="text-xs text-accent font-medium truncate">{change.value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* 卷级别变更 */}
+                {inheritPreview.volumeChanges?.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-semibold text-foreground mb-2 flex items-center gap-1.5">
+                      <BookOpen className="h-3.5 w-3.5 text-accent" />
+                      {t.comicGroup?.volumeLevelChanges || "卷级别变更"}
+                      <span className="text-xs text-muted font-normal">
+                        ({(t.comicGroup?.affectedVolumes || "{count} 卷将受影响").replace("{count}", String(inheritPreview.volumeCount))})
+                      </span>
+                    </h4>
+                    <div className="space-y-2">
+                      {inheritPreview.volumeChanges.map((change) => (
+                        <div key={change.field} className="flex items-center gap-3 rounded-lg bg-card/80 px-3 py-2">
+                          <span className="text-xs text-muted w-14 flex-shrink-0">{change.label}</span>
+                          <span className="text-xs text-accent font-medium truncate">{change.value}</span>
+                          <span className="text-[10px] text-muted ml-auto flex-shrink-0">{change.oldValue}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* 无变更提示 */}
+                {(inheritPreview.groupChanges?.length ?? 0) === 0 && (inheritPreview.volumeChanges?.length ?? 0) === 0 && (
+                  <div className="flex flex-col items-center justify-center py-8">
+                    <Check className="h-10 w-10 text-emerald-400 mb-3" />
+                    <p className="text-sm text-foreground/80">
+                      {t.comicGroup?.noChangesNeeded || "所有字段已填充，无需继承"}
+                    </p>
+                  </div>
+                )}
+
+                {/* 提示说明 */}
+                <p className="text-[10px] text-muted/60 leading-relaxed">
+                  {t.comicGroup?.inheritNote || "注意：仅填充为空的字段，不会覆盖已有数据。继承后可在各卷详情页手动调整。"}
+                </p>
+              </div>
+            ) : (
+              <div className="flex items-center justify-center py-12">
+                <div className="h-6 w-6 animate-spin rounded-full border-2 border-muted border-t-accent" />
+              </div>
+            )}
+
+            {/* 底部按钮 */}
+            <div className="sticky bottom-0 flex justify-end gap-3 border-t border-border/30 bg-card px-5 py-3 rounded-b-2xl">
+              <button
+                onClick={() => {
+                  setShowInheritPreview(false);
+                  setInheritPreview(null);
+                }}
+                className="rounded-lg bg-background px-4 py-2 text-sm text-foreground"
+              >
+                {t.common.cancel}
+              </button>
+              {inheritPreview && (inheritPreview.groupChanges?.length > 0 || inheritPreview.volumeChanges?.length > 0) && (
+                <button
+                  onClick={handleConfirmInheritToVolumes}
+                  disabled={inheritLoading}
+                  className="flex items-center gap-1.5 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                >
+                  {inheritLoading ? (
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                  ) : (
+                    <Check className="h-4 w-4" />
+                  )}
+                  {t.comicGroup?.confirmInherit || "确认继承"}
+                </button>
+              )}
+            </div>
+          </div>
+          </div>
       )}
     </div>
   );

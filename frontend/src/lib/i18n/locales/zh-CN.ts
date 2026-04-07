@@ -709,15 +709,15 @@ const zhCN = {
 
   // 漫画分组
   comicGroup: {
-    title: "漫画合并分组",
-    groups: "分组",
-    createGroup: "创建分组",
-    editGroup: "编辑分组",
-    deleteGroup: "删除分组",
-    groupName: "分组名称",
-    groupNamePlaceholder: "输入分组名称...",
-    addToGroup: "加入分组",
-    removeFromGroup: "从分组移除",
+    title: "漫画系列管理",
+    groups: "系列",
+    createGroup: "创建系列",
+    editGroup: "编辑系列",
+    deleteGroup: "删除系列",
+    groupName: "系列名称",
+    groupNamePlaceholder: "输入系列名称...",
+    addToGroup: "加入系列",
+    removeFromGroup: "从系列移除",
     volumes: "卷",
     totalPages: "总页数",
     totalReadTime: "总阅读时长",
@@ -728,24 +728,55 @@ autoDetect: "智能分组",
     noSuggestions: "未发现可合并的系列",
     createAll: "全部创建",
     createSelected: "创建选中",
-    created: "已创建 {count} 个分组",
-    confirmDelete: "确认删除分组",
-    confirmDeleteMsg: "确定要删除分组「{name}」吗？分组内的漫画不会被删除。",
-    emptyGroup: "此分组还没有漫画",
-    mergeSelected: "合并为分组",
-    viewGroup: "查看分组",
+    created: "已创建 {count} 个系列",
+    confirmDelete: "确认删除系列",
+    confirmDeleteMsg: "确定要删除系列「{name}」吗？系列内的漫画不会被删除。",
+    emptyGroup: "此系列还没有漫画",
+    mergeSelected: "合并为系列",
+    viewGroup: "查看系列",
     backToLibrary: "返回书库",
     continueReading: "继续阅读",
     volumeIndex: "第 {index} 卷",
     dragToReorder: "拖拽排序",
-    noGroups: "还没有分组",
-    noGroupsHint: "可以选中多本漫画后合并为分组，或使用智能分组自动发现同系列漫画",
+    noGroups: "还没有系列",
+    noGroupsHint: "可以选中多本漫画后合并为系列，或使用智能分组自动发现同系列漫画",
     aiEnhanceDetect: "智能 + AI 检测",
     aiDetecting: "AI 深度分析中...",
     searchComicHint: "输入关键词搜索漫画",
-    searchGroupHint: "搜索分组...",
-    noMatchGroup: "无匹配分组",
-    deleteSuccess: "分组已删除",
+    searchGroupHint: "搜索系列...",
+    noMatchGroup: "无匹配系列",
+    deleteSuccess: "系列已删除",
+    // 系列元数据
+    seriesInfo: "系列信息",
+    author: "作者",
+    publisher: "出版商",
+    year: "年份",
+    language: "语言",
+    genre: "类型",
+    status: "状态",
+    description: "简介",
+    tags: "标签",
+    editMetadata: "编辑元数据",
+    inheritMetadata: "从首卷继承",
+    inheritMetadataDesc: "从系列第一本漫画继承元数据",
+    inheritSuccess: "元数据继承成功",
+    inheritToVolumes: "继承到所有卷",
+    inheritToVolumesDesc: "将首卷的元数据继承到系列中所有卷",
+    inheritToVolumesSuccess: "元数据已继承到所有卷",
+    inheritPreviewTitle: "继承预览",
+    inheritSource: "数据来源（首卷）",
+    groupLevelChanges: "系列级别变更",
+    volumeLevelChanges: "卷级别变更",
+    affectedVolumes: "{count} 卷将受影响",
+    noChangesNeeded: "所有字段已填充，无需继承",
+    inheritNote: "注意：仅填充为空的字段，不会覆盖已有数据。继承后可在各卷详情页手动调整。",
+    confirmInherit: "确认继承",
+    autoInheritMetadata: "自动继承首卷元数据",
+    autoInheritMetadataDesc: "创建分组后自动将首卷的作者、出版商等信息继承到系列",
+    saveSuccess: "元数据保存成功",
+    statusOngoing: "连载中",
+    statusCompleted: "已完结",
+    statusHiatus: "休刊中",
   },
 
   // 合集管理页面
@@ -843,6 +874,9 @@ autoDetect: "智能分组",
     navEntry: "元数据刮削",
     updateTitleLabel: "同时更新书名",
     updateTitleDesc: "开启后会用元数据源中的标题替换当前书名（如文件名等）",
+    skipCoverLabel: "不替换书籍封面",
+    skipCoverDesc: "开启后刮削时不会替换现有封面（适用于资源封面与刮削源不一致的情况）",
+    skipCover: "不替换书籍封面",
     tabScrape: "刮削",
     tabLibrary: "书库管理",
     libSearchPlaceholder: "搜索书名、文件名...",
@@ -1758,6 +1792,37 @@ export interface Translations {
     searchGroupHint: string;
     noMatchGroup: string;
     deleteSuccess?: string;
+    // 系列元数据
+    seriesInfo?: string;
+    author?: string;
+    publisher?: string;
+    year?: string;
+    language?: string;
+    genre?: string;
+    status?: string;
+    description?: string;
+    tags?: string;
+    editMetadata?: string;
+    inheritMetadata?: string;
+    inheritMetadataDesc?: string;
+    inheritSuccess?: string;
+    inheritToVolumes?: string;
+    inheritToVolumesDesc?: string;
+    inheritToVolumesSuccess?: string;
+    inheritPreviewTitle?: string;
+    inheritSource?: string;
+    groupLevelChanges?: string;
+    volumeLevelChanges?: string;
+    affectedVolumes?: string;
+    noChangesNeeded?: string;
+    inheritNote?: string;
+    confirmInherit?: string;
+    autoInheritMetadata?: string;
+    autoInheritMetadataDesc?: string;
+    saveSuccess?: string;
+    statusOngoing?: string;
+    statusCompleted?: string;
+    statusHiatus?: string;
   };
   collections?: {
     title: string;
@@ -1848,6 +1913,9 @@ export interface Translations {
     navEntry: string;
     updateTitleLabel: string;
     updateTitleDesc: string;
+    skipCoverLabel?: string;
+    skipCoverDesc?: string;
+    skipCover?: string;
     tabScrape: string;
     tabLibrary: string;
     libSearchPlaceholder: string;

@@ -211,6 +211,20 @@ var Migrations = []Migration{
 		Description: "Add coverAspectRatio field to Comic for adaptive cover display",
 		SQL:         `ALTER TABLE "Comic" ADD COLUMN "coverAspectRatio" REAL NOT NULL DEFAULT 0;`,
 	},
+	{
+		Version:     16,
+		Description: "Add series metadata fields to ComicGroup (author, description, tags, year, publisher, language, genre, status)",
+		SQL: strings.Join([]string{
+			`ALTER TABLE "ComicGroup" ADD COLUMN "author" TEXT NOT NULL DEFAULT '';`,
+			`ALTER TABLE "ComicGroup" ADD COLUMN "description" TEXT NOT NULL DEFAULT '';`,
+			`ALTER TABLE "ComicGroup" ADD COLUMN "tags" TEXT NOT NULL DEFAULT '';`,
+			`ALTER TABLE "ComicGroup" ADD COLUMN "year" INTEGER;`,
+			`ALTER TABLE "ComicGroup" ADD COLUMN "publisher" TEXT NOT NULL DEFAULT '';`,
+			`ALTER TABLE "ComicGroup" ADD COLUMN "language" TEXT NOT NULL DEFAULT '';`,
+			`ALTER TABLE "ComicGroup" ADD COLUMN "genre" TEXT NOT NULL DEFAULT '';`,
+			`ALTER TABLE "ComicGroup" ADD COLUMN "status" TEXT NOT NULL DEFAULT '';`,
+		}, "\n"),
+	},
 }
 
 // ensureMigrationsTable creates the migrations tracking table.

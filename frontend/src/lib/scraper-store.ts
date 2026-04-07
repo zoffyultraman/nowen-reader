@@ -171,6 +171,7 @@ export interface ScraperState {
   batchMode: BatchMode;
   scrapeScope: ScrapeScope;
   updateTitle: boolean;
+  skipCover: boolean; // P2-A: 不替换书籍封面
   // 进度
   currentProgress: ProgressItem | null;
   batchDone: BatchDone | null;
@@ -234,6 +235,7 @@ let state: ScraperState = {
   batchMode: "standard",
   scrapeScope: "missing",
   updateTitle: false,
+  skipCover: false,
   currentProgress: null,
   batchDone: null,
   completedItems: [],
@@ -334,6 +336,12 @@ export function setUpdateTitle(enabled: boolean) {
   notify();
 }
 
+export function setSkipCover(enabled: boolean) {
+  if (state.batchRunning) return;
+  state.skipCover = enabled;
+  notify();
+}
+
 export async function loadStats() {
   state.statsLoading = true;
   notify();
@@ -371,7 +379,7 @@ export async function startBatch() {
     const res = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mode: state.scrapeScope, lang, updateTitle: state.updateTitle }),
+      body: JSON.stringify({ mode: state.scrapeScope, lang, updateTitle: state.updateTitle, skipCover: state.skipCover }),
       signal: abort.signal,
     });
 
@@ -737,6 +745,7 @@ export async function startBatchSelected() {
         lang,
         updateTitle: state.updateTitle,
         mode: state.batchMode,
+        skipCover: state.skipCover,
       }),
       signal: abort.signal,
     });

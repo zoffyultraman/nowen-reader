@@ -33,6 +33,11 @@ type ComicMetadata struct {
 	Source      string `json:"source"`
 }
 
+// ApplyOption 控制 ApplyMetadata 的可选行为。
+type ApplyOption struct {
+	SkipCover bool // 为 true 时跳过封面更新（用户反馈：刮削的封面大多是日版，而资源一般是台版）
+}
+
 // ============================================================
 // Genre / Tag translation map (English → Chinese)
 // ============================================================
@@ -1277,7 +1282,13 @@ func mergeResults(primary, extra []ComicMetadata) []ComicMetadata {
 // ============================================================
 
 // ApplyMetadata updates comic fields in DB from metadata.
-func ApplyMetadata(comicID string, meta ComicMetadata, lang string, overwrite bool) (*store.ComicListItem, error) {
+func ApplyMetadata(comicID string, meta ComicMetadata, lang string, overwrite bool, opts ...ApplyOption) (*store.ComicListItem, error) {
+	// 解析可选参数
+	opt := ApplyOption{}
+	if len(opts) > 0 {
+		opt = opts[0]
+	}
+
 	existing, err := store.GetComicByID(comicID)
 	if err != nil || existing == nil {
 		return nil, fmt.Errorf("comic not found: %s", comicID)
@@ -1315,7 +1326,8 @@ func ApplyMetadata(comicID string, meta ComicMetadata, lang string, overwrite bo
 	if meta.Source != "" {
 		updates["metadataSource"] = meta.Source
 	}
-	if meta.CoverURL != "" {
+	// P2-A: 当 skipCover 为 true 时，跳过封面更新
+	if meta.CoverURL != "" && !opt.SkipCover {
 		updates["coverImageUrl"] = meta.CoverURL
 	}
 
@@ -1325,8 +1337,8 @@ func ApplyMetadata(comicID string, meta ComicMetadata, lang string, overwrite bo
 		}
 	}
 
-	// Download cover image as thumbnail
-	if meta.CoverURL != "" {
+	// Download cover image as thumbnail（仅在不跳过封面时）
+	if meta.CoverURL != "" && !opt.SkipCover {
 		go downloadCoverAsThumbnail(comicID, meta.CoverURL)
 	}
 

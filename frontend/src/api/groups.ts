@@ -69,6 +69,46 @@ export async function updateGroup(groupId: number, name: string, coverUrl?: stri
   }
 }
 
+/** 更新系列元数据 */
+export async function updateGroupMetadata(
+  groupId: number,
+  metadata: {
+    name?: string;
+    coverUrl?: string;
+    author?: string;
+    description?: string;
+    tags?: string;
+    year?: number;
+    publisher?: string;
+    language?: string;
+    genre?: string;
+    status?: string;
+  }
+): Promise<boolean> {
+  try {
+    const res = await fetch(`/api/groups/${groupId}/metadata`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(metadata),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+/** 从第一本漫画继承元数据到系列 */
+export async function inheritGroupMetadata(groupId: number): Promise<boolean> {
+  try {
+    const res = await fetch(`/api/groups/${groupId}/inherit-metadata`, {
+      method: "POST",
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 /** 删除分组 */
 export async function deleteGroup(groupId: number): Promise<boolean> {
   try {
@@ -142,12 +182,15 @@ export async function autoDetectGroups(contentType?: string): Promise<AutoDetect
 }
 
 /** 批量创建分组 */
-export async function batchCreateGroups(groups: AutoDetectGroup[]): Promise<{ success: boolean; created: number }> {
+export async function batchCreateGroups(
+  groups: AutoDetectGroup[],
+  autoInherit: boolean = false
+): Promise<{ success: boolean; created: number }> {
   try {
     const res = await fetch("/api/groups/batch-create", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ groups }),
+      body: JSON.stringify({ groups, autoInherit }),
     });
     if (res.ok) {
       const data = await res.json();
@@ -156,6 +199,52 @@ export async function batchCreateGroups(groups: AutoDetectGroup[]): Promise<{ su
     return { success: false, created: 0 };
   } catch {
     return { success: false, created: 0 };
+  }
+}
+
+// ============================================================
+// 元数据继承
+// ============================================================
+
+/** 继承字段变更 */
+export interface InheritField {
+  field: string;
+  label: string;
+  value: string;
+  oldValue: string;
+}
+
+/** 继承预览结果 */
+export interface InheritPreview {
+  sourceComicId: string;
+  sourceComicTitle: string;
+  groupChanges: InheritField[];
+  volumeCount: number;
+  volumeChanges: InheritField[];
+}
+
+/** 预览从首卷继承元数据的结果 */
+export async function previewInheritMetadata(groupId: number): Promise<InheritPreview | null> {
+  try {
+    const res = await fetch(`/api/groups/${groupId}/preview-inherit`, {
+      method: "POST",
+    });
+    if (res.ok) return await res.json();
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/** 从首卷继承元数据到系列所有卷 */
+export async function inheritMetadataToVolumes(groupId: number): Promise<boolean> {
+  try {
+    const res = await fetch(`/api/groups/${groupId}/inherit-to-volumes`, {
+      method: "POST",
+    });
+    return res.ok;
+  } catch {
+    return false;
   }
 }
 

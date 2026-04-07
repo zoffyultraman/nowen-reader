@@ -967,13 +967,13 @@ accept=".zip,.cbz,.cbr,.rar,.7z,.cb7,.pdf,.txt,.epub,.mobi,.azw3,.html,.htm"
                         ? "bg-accent/20 text-accent"
                         : "bg-card text-muted hover:text-foreground"
                     }`}
-                    title={t.comicGroup?.groups || "分组"}
+                    title={t.comicGroup?.groups || "系列"}
                   >
                     <Layers className="h-3.5 w-3.5" />
                     <span className="hidden sm:inline">
                       {groups.length > 0
-                        ? `${t.comicGroup?.groups || "分组"} (${groups.length})`
-                        : (t.comicGroup?.groups || "分组")}
+                        ? `${t.comicGroup?.groups || "系列"} (${groups.length})`
+                        : (t.comicGroup?.groups || "系列")}
                     </span>
                   </button>
 
@@ -1422,7 +1422,7 @@ accept=".zip,.cbz,.cbr,.rar,.7z,.cb7,.pdf,.txt,.epub,.mobi,.azw3,.html,.htm"
             <div className="flex items-center gap-2 sm:gap-3">
               <Layers className="h-4 w-4 text-accent" />
               <span className="text-sm font-medium text-foreground">
-                {t.batch.selected} <span className="text-accent">{selectedGroupIds.size}</span> {t.comicGroup?.groups || "分组"}
+                {t.batch.selected} <span className="text-accent">{selectedGroupIds.size}</span> {t.comicGroup?.groups || "系列"}
               </span>
             </div>
             <div className="flex items-center gap-1.5 sm:gap-2">

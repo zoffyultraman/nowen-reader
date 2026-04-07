@@ -69,6 +69,7 @@ import {
   setScrapeScope,
   setShowResults,
   setUpdateTitle,
+  setSkipCover,
   loadLibrary,
   setLibrarySearch,
   setLibraryMetaFilter,
@@ -1939,6 +1940,7 @@ export default function ScraperPage() {
     batchMode,
     scrapeScope,
     updateTitle,
+    skipCover,
     currentProgress,
     batchDone,
     completedItems,
@@ -2628,6 +2630,20 @@ export default function ScraperPage() {
                       }`}
                     >
                       <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition ${updateTitle ? "translate-x-4" : "translate-x-0"}`} />
+                    </button>
+                  </div>
+
+                  {/* P2-A: 不替换封面 toggle */}
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted">{scraperT.skipCoverLabel || "不替换书籍封面"}</span>
+                    <button
+                      disabled={batchRunning}
+                      onClick={() => setSkipCover(!skipCover)}
+                      className={`relative inline-flex h-5 w-9 flex-shrink-0 rounded-full border-2 border-transparent transition-colors disabled:opacity-50 ${
+                        skipCover ? "bg-accent" : "bg-border"
+                      }`}
+                    >
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition ${skipCover ? "translate-x-4" : "translate-x-0"}`} />
                     </button>
                   </div>
 

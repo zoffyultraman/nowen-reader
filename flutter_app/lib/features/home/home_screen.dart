@@ -23,9 +23,24 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
-    // 首次加载
+    // 首次加载 - 使用默认参数，确保首页始终显示默认状态
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(comicListProvider.notifier).loadComics();
+      final currentParams = ref.read(comicListProvider).params;
+      // 如果当前参数中包含搜索条件，则重置为默认参数重新加载
+      if (currentParams.search != null ||
+          currentParams.tag != null ||
+          currentParams.category != null) {
+        ref.read(comicListProvider.notifier).loadComics(
+              params: ComicListParams(
+                sort: currentParams.sort,
+                order: currentParams.order,
+                type: currentParams.type,
+                favoritesOnly: currentParams.favoritesOnly,
+              ),
+            );
+      } else {
+        ref.read(comicListProvider.notifier).loadComics();
+      }
     });
   }
 

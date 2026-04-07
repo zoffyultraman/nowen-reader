@@ -6,6 +6,7 @@ import '../../widgets/authenticated_image.dart';
 import '../../data/models/comic.dart';
 import '../../data/providers/auth_provider.dart';
 import '../../data/providers/comic_provider.dart';
+import '../../data/api/comic_api.dart';
 
 /// 搜索页面
 class SearchScreen extends ConsumerStatefulWidget {
@@ -59,17 +60,19 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
     setState(() => _searching = true);
     try {
-      final notifier = ref.read(comicListProvider.notifier);
-      await notifier.loadComics(
-        params: ComicListParams(
-          search: query.isNotEmpty ? query : null,
-          tag: _selectedTag,
-          category: _selectedCategory,
-        ),
+      // 直接调用 API，不污染首页的 comicListProvider 状态
+      final api = ref.read(comicApiProvider);
+      final data = await api.listComics(
+        search: query.isNotEmpty ? query : null,
+        tag: _selectedTag,
+        category: _selectedCategory,
       );
-      final state = ref.read(comicListProvider);
+      final list = (data['comics'] as List<dynamic>?)
+              ?.map((e) => Comic.fromJson(e))
+              .toList() ??
+          [];
       setState(() {
-        _results = state.comics;
+        _results = list;
         _searching = false;
       });
     } catch (_) {

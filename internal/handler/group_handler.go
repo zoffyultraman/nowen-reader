@@ -100,18 +100,43 @@ func (h *GroupHandler) UpdateGroup(c *gin.Context) {
 	}
 
 	var body struct {
-		Name     string `json:"name"`
-		CoverURL string `json:"coverUrl"`
+		Name        string  `json:"name"`
+		CoverURL    string  `json:"coverUrl"`
+		Author      *string `json:"author"`
+		Description *string `json:"description"`
+		Tags        *string `json:"tags"`
+		Year        *int    `json:"year"`
+		Publisher   *string `json:"publisher"`
+		Language    *string `json:"language"`
+		Genre       *string `json:"genre"`
+		Status      *string `json:"status"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "请求格式错误"})
 		return
 	}
 
+	// 更新基本信息（名称和封面）
 	if err := store.UpdateGroup(id, body.Name, body.CoverURL); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "更新分组失败"})
 		return
 	}
+
+	// 如果有元数据字段，也一并更新
+	update := store.GroupMetadataUpdate{
+		Author:      body.Author,
+		Description: body.Description,
+		Tags:        body.Tags,
+		Year:        body.Year,
+		Publisher:   body.Publisher,
+		Language:    body.Language,
+		Genre:       body.Genre,
+		Status:      body.Status,
+	}
+	if err := store.UpdateGroupMetadata(id, update); err != nil {
+		log.Printf("[API] UpdateGroup: 更新元数据失败: %v", err)
+	}
+
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
 
@@ -238,14 +263,15 @@ func (h *GroupHandler) AutoDetect(c *gin.Context) {
 
 func (h *GroupHandler) BatchCreate(c *gin.Context) {
 	var body struct {
-		Groups []store.AutoDetectGroup `json:"groups"`
+		Groups      []store.AutoDetectGroup `json:"groups"`
+		AutoInherit bool                    `json:"autoInherit"` // 自动从首卷继承元数据
 	}
 	if err := c.ShouldBindJSON(&body); err != nil || len(body.Groups) == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "分组列表不能为空"})
 		return
 	}
 
-	created, err := store.BatchCreateGroups(body.Groups, getUserID(c))
+	created, err := store.BatchCreateGroups(body.Groups, body.AutoInherit, getUserID(c))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "批量创建分组失败"})
 		return
@@ -331,4 +357,86 @@ func (h *GroupHandler) GetComicMap(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"map": groupedIDs})
+}
+
+// ============================================================
+// PUT /api/groups/:id/metadata — 更新系列元数据
+// ============================================================
+
+func (h *GroupHandler) UpdateMetadata(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的系列ID"})
+		return
+	}
+
+	var body store.GroupMetadataUpdate
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "请求格式错误"})
+		return
+	}
+
+	if err := store.UpdateGroupMetadata(id, body); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "更新系列元数据失败"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true})
+}
+
+// ============================================================
+// POST /api/groups/:id/inherit-metadata — 从第一本漫画继承元数据
+// ============================================================
+
+func (h *GroupHandler) InheritMetadata(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的系列ID"})
+		return
+	}
+
+	if err := store.InheritGroupMetadataFromFirstComic(id); err != nil {
+		log.Printf("[API] InheritMetadata error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "继承元数据失败"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true})
+}
+
+// ============================================================
+// POST /api/groups/:id/preview-inherit — 预览元数据继承结果
+// ============================================================
+
+func (h *GroupHandler) PreviewInherit(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的系列ID"})
+		return
+	}
+
+	preview, err := store.PreviewInheritMetadata(id)
+	if err != nil {
+		log.Printf("[API] PreviewInherit error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "预览继承失败"})
+		return
+	}
+	c.JSON(http.StatusOK, preview)
+}
+
+// ============================================================
+// POST /api/groups/:id/inherit-to-volumes — 从首卷继承元数据到所有卷
+// ============================================================
+
+func (h *GroupHandler) InheritToVolumes(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的系列ID"})
+		return
+	}
+
+	if err := store.InheritMetadataToAllVolumes(id); err != nil {
+		log.Printf("[API] InheritToVolumes error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "继承元数据到所有卷失败"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true})
 }

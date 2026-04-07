@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"path"
+	"sort"
 	"strings"
 	"time"
 	"unicode"
@@ -21,27 +22,43 @@ func firstString(s []string) string {
 // ComicGroup CRUD
 // ============================================================
 
-// ComicGroupWithCount 返回分组信息及其漫画数量。
+// ComicGroupWithCount 返回系列信息及其漫画数量。
 type ComicGroupWithCount struct {
-	ID         int    `json:"id"`
-	Name       string `json:"name"`
-	CoverURL   string `json:"coverUrl"`
-	SortOrder  int    `json:"sortOrder"`
-	CreatedAt  string `json:"createdAt"`
-	UpdatedAt  string `json:"updatedAt"`
-	ComicCount int    `json:"comicCount"`
+	ID          int    `json:"id"`
+	Name        string `json:"name"`
+	CoverURL    string `json:"coverUrl"`
+	SortOrder   int    `json:"sortOrder"`
+	Author      string `json:"author"`
+	Description string `json:"description"`
+	Tags        string `json:"tags"`
+	Year        *int   `json:"year"`
+	Publisher   string `json:"publisher"`
+	Language    string `json:"language"`
+	Genre       string `json:"genre"`
+	Status      string `json:"status"`
+	CreatedAt   string `json:"createdAt"`
+	UpdatedAt   string `json:"updatedAt"`
+	ComicCount  int    `json:"comicCount"`
 }
 
-// ComicGroupDetail 包含分组详情和所属漫画列表。
+// ComicGroupDetail 包含系列详情和所属漫画列表。
 type ComicGroupDetail struct {
-	ID         int              `json:"id"`
-	Name       string           `json:"name"`
-	CoverURL   string           `json:"coverUrl"`
-	SortOrder  int              `json:"sortOrder"`
-	CreatedAt  string           `json:"createdAt"`
-	UpdatedAt  string           `json:"updatedAt"`
-	ComicCount int              `json:"comicCount"`
-	Comics     []GroupComicItem `json:"comics"`
+	ID          int              `json:"id"`
+	Name        string           `json:"name"`
+	CoverURL    string           `json:"coverUrl"`
+	SortOrder   int              `json:"sortOrder"`
+	Author      string           `json:"author"`
+	Description string           `json:"description"`
+	Tags        string           `json:"tags"`
+	Year        *int             `json:"year"`
+	Publisher   string           `json:"publisher"`
+	Language    string           `json:"language"`
+	Genre       string           `json:"genre"`
+	Status      string           `json:"status"`
+	CreatedAt   string           `json:"createdAt"`
+	UpdatedAt   string           `json:"updatedAt"`
+	ComicCount  int              `json:"comicCount"`
+	Comics      []GroupComicItem `json:"comics"`
 }
 
 // GroupComicItem 分组内的漫画条目。
@@ -76,14 +93,12 @@ func GetAllGroups(userID ...string) ([]ComicGroupWithCount, error) {
 
 // GetAllGroupsWithOptions 获取所有分组（带漫画数量），支持更多过滤选项。
 // 当指定 ContentType 时，只返回包含该类型漫画的分组，且 comicCount 只统计该类型的数量。
+// 注意：分组是全局资源，所有已登录用户都能看到所有分组（不按 userId 过滤），只有管理员能修改。
 func GetAllGroupsWithOptions(opts GroupListOptions) ([]ComicGroupWithCount, error) {
 	var conditions []string
 	var args []interface{}
-	if opts.UserID != "" {
-		// 同时匹配当前用户创建的分组 和 公共分组（userId 为空，如单用户模式或早期创建的分组）
-		conditions = append(conditions, `(g."userId" = ? OR g."userId" = '')`)
-		args = append(args, opts.UserID)
-	}
+	// P0修复：不再按 userId 过滤分组列表，所有用户都能看到所有分组
+	// 旧逻辑会导致成员用户看不到管理员创建的分组
 	// contentType 过滤：只返回至少包含一本指定类型漫画的分组
 	if opts.ContentType == "comic" || opts.ContentType == "novel" {
 		conditions = append(conditions, `g."id" IN (
@@ -109,6 +124,8 @@ func GetAllGroupsWithOptions(opts GroupListOptions) ([]ComicGroupWithCount, erro
 
 	rows, err := db.Query(`
 		SELECT g."id", g."name", g."coverUrl", g."sortOrder",
+		       g."author", g."description", g."tags", g."year",
+		       g."publisher", g."language", g."genre", g."status",
 		       g."createdAt", g."updatedAt",
 		       COUNT(gi."comicId") as comicCount
 		FROM "ComicGroup" g
@@ -126,7 +143,10 @@ func GetAllGroupsWithOptions(opts GroupListOptions) ([]ComicGroupWithCount, erro
 	for rows.Next() {
 		var g ComicGroupWithCount
 		var createdAt, updatedAt time.Time
-		if err := rows.Scan(&g.ID, &g.Name, &g.CoverURL, &g.SortOrder, &createdAt, &updatedAt, &g.ComicCount); err != nil {
+		if err := rows.Scan(&g.ID, &g.Name, &g.CoverURL, &g.SortOrder,
+			&g.Author, &g.Description, &g.Tags, &g.Year,
+			&g.Publisher, &g.Language, &g.Genre, &g.Status,
+			&createdAt, &updatedAt, &g.ComicCount); err != nil {
 			continue
 		}
 		g.CreatedAt = createdAt.UTC().Format(time.RFC3339)
@@ -167,10 +187,16 @@ func GetGroupByID(groupID int, contentType ...string) (*ComicGroupDetail, error)
 
 	queryArgs := append(countArgs, groupID)
 	err := db.QueryRow(`
-		SELECT g."id", g."name", g."coverUrl", g."sortOrder", g."createdAt", g."updatedAt",
+		SELECT g."id", g."name", g."coverUrl", g."sortOrder",
+		       g."author", g."description", g."tags", g."year",
+		       g."publisher", g."language", g."genre", g."status",
+		       g."createdAt", g."updatedAt",
 		       `+countSubQuery+` as comicCount
 		FROM "ComicGroup" g WHERE g."id" = ?
-	`, queryArgs...).Scan(&g.ID, &g.Name, &g.CoverURL, &g.SortOrder, &createdAt, &updatedAt, &g.ComicCount)
+	`, queryArgs...).Scan(&g.ID, &g.Name, &g.CoverURL, &g.SortOrder,
+		&g.Author, &g.Description, &g.Tags, &g.Year,
+		&g.Publisher, &g.Language, &g.Genre, &g.Status,
+		&createdAt, &updatedAt, &g.ComicCount)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -255,6 +281,125 @@ func UpdateGroup(groupID int, name string, coverURL string) error {
 	return err
 }
 
+// GroupMetadataUpdate 系列元数据更新请求。
+type GroupMetadataUpdate struct {
+	Name        *string `json:"name"`
+	CoverURL    *string `json:"coverUrl"`
+	Author      *string `json:"author"`
+	Description *string `json:"description"`
+	Tags        *string `json:"tags"`
+	Year        *int    `json:"year"`
+	Publisher   *string `json:"publisher"`
+	Language    *string `json:"language"`
+	Genre       *string `json:"genre"`
+	Status      *string `json:"status"`
+}
+
+// UpdateGroupMetadata 更新系列的元数据字段。
+func UpdateGroupMetadata(groupID int, update GroupMetadataUpdate) error {
+	var setClauses []string
+	var args []interface{}
+
+	if update.Name != nil {
+		setClauses = append(setClauses, `"name" = ?`)
+		args = append(args, *update.Name)
+	}
+	if update.CoverURL != nil {
+		setClauses = append(setClauses, `"coverUrl" = ?`)
+		args = append(args, *update.CoverURL)
+	}
+	if update.Author != nil {
+		setClauses = append(setClauses, `"author" = ?`)
+		args = append(args, *update.Author)
+	}
+	if update.Description != nil {
+		setClauses = append(setClauses, `"description" = ?`)
+		args = append(args, *update.Description)
+	}
+	if update.Tags != nil {
+		setClauses = append(setClauses, `"tags" = ?`)
+		args = append(args, *update.Tags)
+	}
+	if update.Year != nil {
+		setClauses = append(setClauses, `"year" = ?`)
+		args = append(args, *update.Year)
+	}
+	if update.Publisher != nil {
+		setClauses = append(setClauses, `"publisher" = ?`)
+		args = append(args, *update.Publisher)
+	}
+	if update.Language != nil {
+		setClauses = append(setClauses, `"language" = ?`)
+		args = append(args, *update.Language)
+	}
+	if update.Genre != nil {
+		setClauses = append(setClauses, `"genre" = ?`)
+		args = append(args, *update.Genre)
+	}
+	if update.Status != nil {
+		setClauses = append(setClauses, `"status" = ?`)
+		args = append(args, *update.Status)
+	}
+
+	if len(setClauses) == 0 {
+		return nil // 没有需要更新的字段
+	}
+
+	setClauses = append(setClauses, `"updatedAt" = ?`)
+	args = append(args, time.Now().UTC())
+	args = append(args, groupID)
+
+	_, err := db.Exec(`UPDATE "ComicGroup" SET `+strings.Join(setClauses, ", ")+` WHERE "id" = ?`, args...)
+	return err
+}
+
+// InheritGroupMetadataFromFirstComic 从系列的第一本漫画继承元数据到系列。
+// 仅填充系列中为空的字段，不覆盖已有数据。
+func InheritGroupMetadataFromFirstComic(groupID int) error {
+	// 获取当前系列元数据
+	group, err := GetGroupByID(groupID)
+	if err != nil || group == nil || len(group.Comics) == 0 {
+		return err
+	}
+
+	// 获取第一本漫画的详细元数据
+	firstComicID := group.Comics[0].ComicID
+	var author, publisher, language, genre, description string
+	var year sql.NullInt64
+	err = db.QueryRow(`
+		SELECT COALESCE("author",''), COALESCE("publisher",''), COALESCE("language",''),
+		       COALESCE("genre",''), COALESCE("description",''), "year"
+		FROM "Comic" WHERE "id" = ?
+	`, firstComicID).Scan(&author, &publisher, &language, &genre, &description, &year)
+	if err != nil {
+		return err
+	}
+
+	// 只填充系列中为空的字段
+	update := GroupMetadataUpdate{}
+	if group.Author == "" && author != "" {
+		update.Author = &author
+	}
+	if group.Publisher == "" && publisher != "" {
+		update.Publisher = &publisher
+	}
+	if group.Language == "" && language != "" {
+		update.Language = &language
+	}
+	if group.Genre == "" && genre != "" {
+		update.Genre = &genre
+	}
+	if group.Description == "" && description != "" {
+		update.Description = &description
+	}
+	if group.Year == nil && year.Valid {
+		y := int(year.Int64)
+		update.Year = &y
+	}
+
+	return UpdateGroupMetadata(groupID, update)
+}
+
 // DeleteGroup 删除分组（不删除漫画本身）。
 // 显式删除关联记录，避免外键 CASCADE 在某些连接上未启用的情况。
 func DeleteGroup(groupID int) error {
@@ -267,8 +412,50 @@ func DeleteGroup(groupID int) error {
 	return err
 }
 
+// naturalSortKey 生成自然排序键，将数字部分补零对齐，实现数字感知排序。
+// 例如 "怪医黑杰克 3" → "怪医黑杰克 00000000000000000003"
+func naturalSortKey(s string) string {
+	var buf strings.Builder
+	i := 0
+	runes := []rune(strings.ToLower(s))
+	for i < len(runes) {
+		if runes[i] >= '0' && runes[i] <= '9' {
+			j := i
+			for j < len(runes) && runes[j] >= '0' && runes[j] <= '9' {
+				j++
+			}
+			num := string(runes[i:j])
+			// 补零到20位，确保数字排序正确
+			for k := 0; k < 20-len(num); k++ {
+				buf.WriteByte('0')
+			}
+			buf.WriteString(num)
+			i = j
+		} else {
+			buf.WriteRune(runes[i])
+			i++
+		}
+	}
+	return buf.String()
+}
+
 // AddComicsToGroup 将多本漫画添加到分组。
+// 添加前会按标题自然排序（数字感知），确保 "第3卷" 排在 "第29卷" 前面。
 func AddComicsToGroup(groupID int, comicIDs []string) error {
+	// 查询漫画标题用于自然排序
+	if len(comicIDs) > 1 {
+		titleMap := make(map[string]string) // comicID → title
+		for _, cid := range comicIDs {
+			var title string
+			if err := db.QueryRow(`SELECT "title" FROM "Comic" WHERE "id" = ?`, cid).Scan(&title); err == nil {
+				titleMap[cid] = title
+			}
+		}
+		sort.Slice(comicIDs, func(i, j int) bool {
+			return naturalSortKey(titleMap[comicIDs[i]]) < naturalSortKey(titleMap[comicIDs[j]])
+		})
+	}
+
 	// 获取当前最大 sortIndex
 	var maxIdx int
 	db.QueryRow(`SELECT COALESCE(MAX("sortIndex"), -1) FROM "ComicGroupItem" WHERE "groupId" = ?`, groupID).Scan(&maxIdx)
@@ -1028,7 +1215,8 @@ func ExportGroupsData(groupIDs []int) ([]GroupExportItem, error) {
 
 // BatchCreateGroups 批量创建分组并添加漫画（用于自动检测后一键创建）。
 // 如果已存在同名分组，则将漫画添加到现有分组而不是创建新分组。
-func BatchCreateGroups(groups []AutoDetectGroup, userID ...string) (int, error) {
+// autoInherit: 为 true 时，创建分组后自动从首卷继承元数据到系列。
+func BatchCreateGroups(groups []AutoDetectGroup, autoInherit bool, userID ...string) (int, error) {
 	// 预加载所有已有分组名 → ID 的映射
 	existingGroups, err := GetAllGroups()
 	if err != nil {
@@ -1047,6 +1235,10 @@ func BatchCreateGroups(groups []AutoDetectGroup, userID ...string) (int, error) 
 			if err := AddComicsToGroup(existingID, g.ComicIDs); err != nil {
 				continue
 			}
+			// 自动继承元数据到系列
+			if autoInherit {
+				_ = InheritGroupMetadataFromFirstComic(existingID)
+			}
 			created++
 			continue
 		}
@@ -1058,7 +1250,233 @@ func BatchCreateGroups(groups []AutoDetectGroup, userID ...string) (int, error) 
 			continue
 		}
 		nameToID[key] = int(id)
+		// 自动继承元数据到系列
+		if autoInherit {
+			_ = InheritGroupMetadataFromFirstComic(int(id))
+		}
 		created++
 	}
 	return created, nil
+}
+
+// ============================================================
+// 元数据继承：从首卷继承到系列所有卷
+// ============================================================
+
+// InheritField 描述一个将要被继承的字段变更。
+type InheritField struct {
+	Field    string `json:"field"`    // 字段名
+	Label    string `json:"label"`    // 显示名称
+	Value    string `json:"value"`    // 将要设置的值
+	OldValue string `json:"oldValue"` // 当前值（空表示未设置）
+}
+
+// InheritPreview 继承预览结果。
+type InheritPreview struct {
+	SourceComicID    string         `json:"sourceComicId"`    // 首卷漫画ID
+	SourceComicTitle string         `json:"sourceComicTitle"` // 首卷标题
+	GroupChanges     []InheritField `json:"groupChanges"`     // 系列级别的变更
+	VolumeCount      int            `json:"volumeCount"`      // 将受影响的卷数
+	VolumeChanges    []InheritField `json:"volumeChanges"`    // 卷级别的变更（汇总）
+}
+
+// PreviewInheritMetadata 预览从首卷继承元数据的结果，不实际执行变更。
+// 返回将要变更的字段列表，供用户确认。
+func PreviewInheritMetadata(groupID int) (*InheritPreview, error) {
+	group, err := GetGroupByID(groupID)
+	if err != nil || group == nil || len(group.Comics) == 0 {
+		return nil, fmt.Errorf("系列不存在或没有漫画")
+	}
+
+	firstComicID := group.Comics[0].ComicID
+	var author, publisher, language, genre, description, title string
+	var year sql.NullInt64
+	err = db.QueryRow(`
+		SELECT COALESCE("title",''), COALESCE("author",''), COALESCE("publisher",''),
+		       COALESCE("language",''), COALESCE("genre",''), COALESCE("description",''), "year"
+		FROM "Comic" WHERE "id" = ?
+	`, firstComicID).Scan(&title, &author, &publisher, &language, &genre, &description, &year)
+	if err != nil {
+		return nil, err
+	}
+
+	preview := &InheritPreview{
+		SourceComicID:    firstComicID,
+		SourceComicTitle: title,
+	}
+
+	// 系列级别变更预览
+	if group.Author == "" && author != "" {
+		preview.GroupChanges = append(preview.GroupChanges, InheritField{
+			Field: "author", Label: "作者", Value: author, OldValue: group.Author,
+		})
+	}
+	if group.Publisher == "" && publisher != "" {
+		preview.GroupChanges = append(preview.GroupChanges, InheritField{
+			Field: "publisher", Label: "出版商", Value: publisher, OldValue: group.Publisher,
+		})
+	}
+	if group.Language == "" && language != "" {
+		preview.GroupChanges = append(preview.GroupChanges, InheritField{
+			Field: "language", Label: "语言", Value: language, OldValue: group.Language,
+		})
+	}
+	if group.Genre == "" && genre != "" {
+		preview.GroupChanges = append(preview.GroupChanges, InheritField{
+			Field: "genre", Label: "类型", Value: genre, OldValue: group.Genre,
+		})
+	}
+	if group.Description == "" && description != "" {
+		preview.GroupChanges = append(preview.GroupChanges, InheritField{
+			Field: "description", Label: "简介", Value: description, OldValue: group.Description,
+		})
+	}
+	if group.Year == nil && year.Valid {
+		preview.GroupChanges = append(preview.GroupChanges, InheritField{
+			Field: "year", Label: "年份", Value: fmt.Sprintf("%d", year.Int64), OldValue: "",
+		})
+	}
+
+	// 卷级别变更预览：统计有多少卷的空字段会被填充
+	affectedCount := 0
+	var volumeFieldChanges = map[string]int{} // field → 受影响的卷数
+	for _, comic := range group.Comics {
+		if comic.ComicID == firstComicID {
+			continue // 跳过首卷自身
+		}
+		var cAuthor, cPublisher, cLanguage, cGenre, cDescription string
+		var cYear sql.NullInt64
+		err := db.QueryRow(`
+			SELECT COALESCE("author",''), COALESCE("publisher",''), COALESCE("language",''),
+			       COALESCE("genre",''), COALESCE("description",''), "year"
+			FROM "Comic" WHERE "id" = ?
+		`, comic.ComicID).Scan(&cAuthor, &cPublisher, &cLanguage, &cGenre, &cDescription, &cYear)
+		if err != nil {
+			continue
+		}
+		changed := false
+		if cAuthor == "" && author != "" {
+			volumeFieldChanges["author"]++
+			changed = true
+		}
+		if cPublisher == "" && publisher != "" {
+			volumeFieldChanges["publisher"]++
+			changed = true
+		}
+		if cLanguage == "" && language != "" {
+			volumeFieldChanges["language"]++
+			changed = true
+		}
+		if cGenre == "" && genre != "" {
+			volumeFieldChanges["genre"]++
+			changed = true
+		}
+		if cDescription == "" && description != "" {
+			volumeFieldChanges["description"]++
+			changed = true
+		}
+		if !cYear.Valid && year.Valid {
+			volumeFieldChanges["year"]++
+			changed = true
+		}
+		if changed {
+			affectedCount++
+		}
+	}
+	preview.VolumeCount = affectedCount
+
+	// 汇总卷级别变更
+	fieldLabels := map[string]string{
+		"author": "作者", "publisher": "出版商", "language": "语言",
+		"genre": "类型", "description": "简介", "year": "年份",
+	}
+	fieldValues := map[string]string{
+		"author": author, "publisher": publisher, "language": language,
+		"genre": genre, "description": description,
+	}
+	if year.Valid {
+		fieldValues["year"] = fmt.Sprintf("%d", year.Int64)
+	}
+	for field, count := range volumeFieldChanges {
+		preview.VolumeChanges = append(preview.VolumeChanges, InheritField{
+			Field:    field,
+			Label:    fieldLabels[field],
+			Value:    fieldValues[field],
+			OldValue: fmt.Sprintf("%d 卷将被更新", count),
+		})
+	}
+
+	return preview, nil
+}
+
+// InheritMetadataToAllVolumes 将首卷的元数据继承到系列中所有卷。
+// 仅填充各卷中为空的字段，不覆盖已有数据。
+// 同时也会继承到系列（ComicGroup）本身。
+func InheritMetadataToAllVolumes(groupID int) error {
+	group, err := GetGroupByID(groupID)
+	if err != nil || group == nil || len(group.Comics) == 0 {
+		return fmt.Errorf("系列不存在或没有漫画")
+	}
+
+	// 先继承到系列本身
+	if err := InheritGroupMetadataFromFirstComic(groupID); err != nil {
+		return fmt.Errorf("继承到系列失败: %w", err)
+	}
+
+	// 获取首卷元数据
+	firstComicID := group.Comics[0].ComicID
+	var author, publisher, language, genre, description string
+	var year sql.NullInt64
+	err = db.QueryRow(`
+		SELECT COALESCE("author",''), COALESCE("publisher",''), COALESCE("language",''),
+		       COALESCE("genre",''), COALESCE("description",''), "year"
+		FROM "Comic" WHERE "id" = ?
+	`, firstComicID).Scan(&author, &publisher, &language, &genre, &description, &year)
+	if err != nil {
+		return fmt.Errorf("读取首卷元数据失败: %w", err)
+	}
+
+	// 遍历所有卷，填充空字段
+	for _, comic := range group.Comics {
+		if comic.ComicID == firstComicID {
+			continue // 跳过首卷自身
+		}
+
+		var cAuthor, cPublisher, cLanguage, cGenre, cDescription string
+		var cYear sql.NullInt64
+		err := db.QueryRow(`
+			SELECT COALESCE("author",''), COALESCE("publisher",''), COALESCE("language",''),
+			       COALESCE("genre",''), COALESCE("description",''), "year"
+			FROM "Comic" WHERE "id" = ?
+		`, comic.ComicID).Scan(&cAuthor, &cPublisher, &cLanguage, &cGenre, &cDescription, &cYear)
+		if err != nil {
+			continue
+		}
+
+		updates := map[string]interface{}{}
+		if cAuthor == "" && author != "" {
+			updates["author"] = author
+		}
+		if cPublisher == "" && publisher != "" {
+			updates["publisher"] = publisher
+		}
+		if cLanguage == "" && language != "" {
+			updates["language"] = language
+		}
+		if cGenre == "" && genre != "" {
+			updates["genre"] = genre
+		}
+		if cDescription == "" && description != "" {
+			updates["description"] = description
+		}
+		if !cYear.Valid && year.Valid {
+			updates["year"] = year.Int64
+		}
+
+		if len(updates) > 0 {
+			UpdateComicFields(comic.ComicID, updates)
+		}
+	}
+
+	return nil
 }

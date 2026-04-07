@@ -1,5 +1,5 @@
 Running Gradle task 'assembleRelease'...                        
 Expected to find fonts for (packages/cupertino_icons/CupertinoIcons, MaterialIcons), but found (MaterialIcons). This usually means you are referring to font families in an IconData class but not including them in the assets section of your pubspec.yaml, are missing the package that would include them, or are missing "uses-material-design: true".
-Font asset "MaterialIcons-Regular.otf" was tree-shaken, reducing it from 1645184 to 10556 bytes (99.4% reduction). Tree-shaking can be disabled by providing the --no-tree-shake-icons flag when building your app.
-Running Gradle task 'assembleRelease'...                           81.3s
-√ Built build\app\outputs\flutter-apk\app-release.apk (51.7MB)
+Font asset "MaterialIcons-Regular.otf" was tree-shaken, reducing it from 1645184 to 11200 bytes (99.3% reduction). Tree-shaking can be disabled by providing the --no-tree-shake-icons flag when building your app.
+Running Gradle task 'assembleRelease'...                           92.9s
+√ Built build\app\outputs\flutter-apk\app-release.apk (52.1MB)

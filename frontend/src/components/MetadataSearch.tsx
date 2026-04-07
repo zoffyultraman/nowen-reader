@@ -81,6 +81,7 @@ export function MetadataSearch({ comicId, comicTitle, filename, onApplied }: Pro
   const [error, setError] = useState("");
   const [enabledSources, setEnabledSources] = useState<string[]>(defaultSources as unknown as string[]);
   const [showSourceFilter, setShowSourceFilter] = useState(false);
+  const [skipCover, setSkipCover] = useState(false); // P2-A: 不替换封面
 
   const toggleSource = (id: string) => {
     setEnabledSources((prev) =>
@@ -126,7 +127,7 @@ export function MetadataSearch({ comicId, comicTitle, filename, onApplied }: Pro
       const res = await fetch(scanUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ comicId, lang: locale }),
+        body: JSON.stringify({ comicId, lang: locale, skipCover }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
@@ -151,7 +152,7 @@ export function MetadataSearch({ comicId, comicTitle, filename, onApplied }: Pro
       const res = await fetch("/api/metadata/apply", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ comicId, metadata: results[index], lang: locale, overwrite: true }),
+        body: JSON.stringify({ comicId, metadata: results[index], lang: locale, overwrite: true, skipCover }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
@@ -230,6 +231,19 @@ export function MetadataSearch({ comicId, comicTitle, filename, onApplied }: Pro
           ))}
         </div>
       )}
+
+      {/* P2-A: 不替换封面开关 */}
+      <label className="flex items-center gap-2 cursor-pointer select-none">
+        <input
+          type="checkbox"
+          checked={skipCover}
+          onChange={(e) => setSkipCover(e.target.checked)}
+          className="h-3.5 w-3.5 rounded border-border accent-accent"
+        />
+        <span className="text-xs text-muted">
+          {t.metadata?.skipCover || "不替换书籍封面"}
+        </span>
+      </label>
 
       {error && <div className="text-sm text-red-400">{error}</div>}
 

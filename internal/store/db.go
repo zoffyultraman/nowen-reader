@@ -275,13 +275,21 @@ func createTables() error {
 		// ComicGroup (自定义合并分组)
 		// ============================================================
 		`CREATE TABLE IF NOT EXISTS "ComicGroup" (
-			"id"        INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-			"name"      TEXT NOT NULL,
-			"userId"    TEXT NOT NULL DEFAULT '',
-			"coverUrl"  TEXT NOT NULL DEFAULT '',
-			"sortOrder" INTEGER NOT NULL DEFAULT 0,
-			"createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			"updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+			"id"          INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+			"name"        TEXT NOT NULL,
+			"userId"      TEXT NOT NULL DEFAULT '',
+			"coverUrl"    TEXT NOT NULL DEFAULT '',
+			"sortOrder"   INTEGER NOT NULL DEFAULT 0,
+			"author"      TEXT NOT NULL DEFAULT '',
+			"description" TEXT NOT NULL DEFAULT '',
+			"tags"        TEXT NOT NULL DEFAULT '',
+			"year"        INTEGER,
+			"publisher"   TEXT NOT NULL DEFAULT '',
+			"language"    TEXT NOT NULL DEFAULT '',
+			"genre"       TEXT NOT NULL DEFAULT '',
+			"status"      TEXT NOT NULL DEFAULT '',
+			"createdAt"   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			"updatedAt"   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 		)`,
 		`CREATE INDEX IF NOT EXISTS "ComicGroup_name_idx" ON "ComicGroup"("name")`,
 		`CREATE INDEX IF NOT EXISTS "ComicGroup_userId_idx" ON "ComicGroup"("userId")`,

@@ -190,7 +190,7 @@ const GroupCard = memo(function GroupCard({
                 {group.name}
               </h3>
               <p className="text-[10px] text-muted">
-                {t.comicGroup?.groups || "分组"}
+                {t.comicGroup?.groups || "系列"}
               </p>
             </div>
           </div>
@@ -239,7 +239,7 @@ const GroupCard = memo(function GroupCard({
                 {group.name}
               </h3>
               <p className="text-[10px] text-muted">
-                {t.comicGroup?.groups || "分组"}
+                {t.comicGroup?.groups || "系列"}
               </p>
             </div>
           </div>

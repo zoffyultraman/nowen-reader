@@ -72,6 +72,7 @@ func (h *MetadataHandler) Apply(c *gin.Context) {
 		Metadata  service.ComicMetadata `json:"metadata"`
 		Lang      string                `json:"lang"`
 		Overwrite bool                  `json:"overwrite"`
+		SkipCover bool                  `json:"skipCover"` // P2-A: 不替换封面
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(400, gin.H{"error": "invalid request body"})
@@ -82,7 +83,7 @@ func (h *MetadataHandler) Apply(c *gin.Context) {
 		return
 	}
 
-	comic, err := service.ApplyMetadata(body.ComicID, body.Metadata, body.Lang, body.Overwrite)
+	comic, err := service.ApplyMetadata(body.ComicID, body.Metadata, body.Lang, body.Overwrite, service.ApplyOption{SkipCover: body.SkipCover})
 	if err != nil {
 		c.JSON(500, gin.H{"error": "Failed to apply metadata"})
 		return
@@ -93,8 +94,9 @@ func (h *MetadataHandler) Apply(c *gin.Context) {
 // POST /api/metadata/scan
 func (h *MetadataHandler) Scan(c *gin.Context) {
 	var body struct {
-		ComicID string `json:"comicId"`
-		Lang    string `json:"lang"`
+		ComicID   string `json:"comicId"`
+		Lang      string `json:"lang"`
+		SkipCover bool   `json:"skipCover"` // P2-A: 不替换封面
 	}
 	if err := c.ShouldBindJSON(&body); err != nil || body.ComicID == "" {
 		c.JSON(400, gin.H{"error": "comicId is required"})
@@ -120,7 +122,7 @@ func (h *MetadataHandler) Scan(c *gin.Context) {
 	// Try extracting ComicInfo.xml first
 	comicInfo, _ := service.ExtractComicInfoFromArchive(filePath)
 	if comicInfo != nil && comicInfo.Title != "" {
-		result, err := service.ApplyMetadata(body.ComicID, *comicInfo, body.Lang, false)
+		result, err := service.ApplyMetadata(body.ComicID, *comicInfo, body.Lang, false, service.ApplyOption{SkipCover: body.SkipCover})
 		if err != nil {
 			c.JSON(500, gin.H{"error": "Failed to apply metadata"})
 			return
@@ -160,7 +162,7 @@ func (h *MetadataHandler) Scan(c *gin.Context) {
 	}
 
 	// Apply best match — scan 是用户主动触发的，使用 overwrite 覆盖旧数据
-	updated, err := service.ApplyMetadata(body.ComicID, results[0], body.Lang, true)
+	updated, err := service.ApplyMetadata(body.ComicID, results[0], body.Lang, true, service.ApplyOption{SkipCover: body.SkipCover})
 	if err != nil {
 		c.JSON(500, gin.H{"error": "Failed to apply metadata"})
 		return
@@ -175,8 +177,9 @@ func (h *MetadataHandler) Scan(c *gin.Context) {
 // 优先从 EPUB OPF 提取本地元数据，再通过小说数据源在线搜索。
 func (h *MetadataHandler) NovelScan(c *gin.Context) {
 	var body struct {
-		ComicID string `json:"comicId"`
-		Lang    string `json:"lang"`
+		ComicID   string `json:"comicId"`
+		Lang      string `json:"lang"`
+		SkipCover bool   `json:"skipCover"` // P2-A: 不替换封面
 	}
 	if err := c.ShouldBindJSON(&body); err != nil || body.ComicID == "" {
 		c.JSON(400, gin.H{"error": "comicId is required"})
@@ -204,7 +207,7 @@ func (h *MetadataHandler) NovelScan(c *gin.Context) {
 	if ext == ".epub" {
 		epubMeta, err := service.ExtractEpubMetadata(filePath)
 		if err == nil && epubMeta != nil && epubMeta.Title != "" {
-			result, err := service.ApplyMetadata(body.ComicID, *epubMeta, body.Lang, false)
+			result, err := service.ApplyMetadata(body.ComicID, *epubMeta, body.Lang, false, service.ApplyOption{SkipCover: body.SkipCover})
 			if err != nil {
 				c.JSON(500, gin.H{"error": "Failed to apply metadata"})
 				return
@@ -245,7 +248,7 @@ func (h *MetadataHandler) NovelScan(c *gin.Context) {
 	}
 
 	// 应用最佳匹配结果 — novel-scan 是用户主动触发的，使用 overwrite 覆盖旧数据
-	updated, err := service.ApplyMetadata(body.ComicID, results[0], body.Lang, true)
+	updated, err := service.ApplyMetadata(body.ComicID, results[0], body.Lang, true, service.ApplyOption{SkipCover: body.SkipCover})
 	if err != nil {
 		c.JSON(500, gin.H{"error": "Failed to apply metadata"})
 		return
@@ -262,6 +265,7 @@ func (h *MetadataHandler) Batch(c *gin.Context) {
 		Mode        string `json:"mode"` // "all" or "missing"
 		Lang        string `json:"lang"`
 		UpdateTitle bool   `json:"updateTitle"` // 是否同时更新书名/漫画名
+		SkipCover   bool   `json:"skipCover"`   // P2-A: 不替换封面
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		body.Mode = "all"
@@ -330,7 +334,7 @@ func (h *MetadataHandler) Batch(c *gin.Context) {
 			if ext == ".epub" {
 				epubMeta, err := service.ExtractEpubMetadata(filePath)
 				if err == nil && epubMeta != nil && epubMeta.Title != "" {
-					_, err := service.ApplyMetadata(comic.ID, *epubMeta, body.Lang, body.UpdateTitle)
+					_, err := service.ApplyMetadata(comic.ID, *epubMeta, body.Lang, body.UpdateTitle, service.ApplyOption{SkipCover: body.SkipCover})
 					if err == nil {
 						progress["status"] = "success"
 						progress["source"] = "epub_opf"
@@ -349,7 +353,7 @@ func (h *MetadataHandler) Batch(c *gin.Context) {
 		if !isNovel && filePath != "" {
 			comicInfo, _ := service.ExtractComicInfoFromArchive(filePath)
 			if comicInfo != nil && comicInfo.Title != "" {
-				_, err := service.ApplyMetadata(comic.ID, *comicInfo, body.Lang, body.UpdateTitle)
+				_, err := service.ApplyMetadata(comic.ID, *comicInfo, body.Lang, body.UpdateTitle, service.ApplyOption{SkipCover: body.SkipCover})
 				if err == nil {
 					progress["status"] = "success"
 					progress["source"] = "comicinfo"
@@ -384,7 +388,7 @@ func (h *MetadataHandler) Batch(c *gin.Context) {
 
 		results := service.SearchMetadata(searchQuery, nil, body.Lang, batchContentType)
 		if len(results) > 0 {
-			_, err := service.ApplyMetadata(comic.ID, results[0], body.Lang, body.UpdateTitle)
+			_, err := service.ApplyMetadata(comic.ID, results[0], body.Lang, body.UpdateTitle, service.ApplyOption{SkipCover: body.SkipCover})
 			if err == nil {
 				progress["status"] = "success"
 				progress["source"] = results[0].Source
@@ -551,6 +555,7 @@ func (h *MetadataHandler) AIBatch(c *gin.Context) {
 		Mode        string `json:"mode"` // "all" or "missing"
 		Lang        string `json:"lang"`
 		UpdateTitle bool   `json:"updateTitle"` // 是否同时更新书名/漫画名
+		SkipCover   bool   `json:"skipCover"`   // P2-A: 不替换封面
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		body.Mode = "missing"
@@ -687,7 +692,7 @@ func (h *MetadataHandler) AIBatch(c *gin.Context) {
 			progress["resultsCount"] = len(results)
 			sendSSE(progress)
 
-			_, err := service.ApplyMetadata(comic.ID, results[0], body.Lang, body.UpdateTitle)
+			_, err := service.ApplyMetadata(comic.ID, results[0], body.Lang, body.UpdateTitle, service.ApplyOption{SkipCover: body.SkipCover})
 			if err == nil {
 				progress["status"] = "success"
 				progress["step"] = "done"
@@ -907,7 +912,8 @@ func (h *MetadataHandler) BatchSelected(c *gin.Context) {
 		ComicIDs    []string `json:"comicIds"`
 		Lang        string   `json:"lang"`
 		UpdateTitle bool     `json:"updateTitle"`
-		Mode        string   `json:"mode"` // "standard" | "ai"
+		Mode        string   `json:"mode"`      // "standard" | "ai"
+		SkipCover   bool     `json:"skipCover"` // P2-A: 不替换封面
 	}
 	if err := c.ShouldBindJSON(&body); err != nil || len(body.ComicIDs) == 0 {
 		c.JSON(400, gin.H{"error": "comicIds array required"})
@@ -1041,7 +1047,7 @@ func (h *MetadataHandler) BatchSelected(c *gin.Context) {
 				}
 				results := service.SearchMetadata(searchQuery, nil, body.Lang, ct)
 				if len(results) > 0 {
-					_, err := service.ApplyMetadata(comic.ID, results[0], body.Lang, body.UpdateTitle)
+					_, err := service.ApplyMetadata(comic.ID, results[0], body.Lang, body.UpdateTitle, service.ApplyOption{SkipCover: body.SkipCover})
 					if err == nil {
 						progress["status"] = "success"
 						progress["step"] = "done"
@@ -1127,7 +1133,7 @@ func (h *MetadataHandler) BatchSelected(c *gin.Context) {
 			if ext == ".epub" {
 				epubMeta, err := service.ExtractEpubMetadata(filePath)
 				if err == nil && epubMeta != nil && epubMeta.Title != "" {
-					_, err := service.ApplyMetadata(comic.ID, *epubMeta, body.Lang, body.UpdateTitle)
+					_, err := service.ApplyMetadata(comic.ID, *epubMeta, body.Lang, body.UpdateTitle, service.ApplyOption{SkipCover: body.SkipCover})
 					if err == nil {
 						progress["status"] = "success"
 						progress["source"] = "epub_opf"
@@ -1145,7 +1151,7 @@ func (h *MetadataHandler) BatchSelected(c *gin.Context) {
 		if !isNovel && filePath != "" {
 			comicInfo, _ := service.ExtractComicInfoFromArchive(filePath)
 			if comicInfo != nil && comicInfo.Title != "" {
-				_, err := service.ApplyMetadata(comic.ID, *comicInfo, body.Lang, body.UpdateTitle)
+				_, err := service.ApplyMetadata(comic.ID, *comicInfo, body.Lang, body.UpdateTitle, service.ApplyOption{SkipCover: body.SkipCover})
 				if err == nil {
 					progress["status"] = "success"
 					progress["source"] = "comicinfo"
@@ -1176,7 +1182,7 @@ func (h *MetadataHandler) BatchSelected(c *gin.Context) {
 		}
 		results := service.SearchMetadata(searchQuery, nil, body.Lang, ct)
 		if len(results) > 0 {
-			_, err := service.ApplyMetadata(comic.ID, results[0], body.Lang, body.UpdateTitle)
+			_, err := service.ApplyMetadata(comic.ID, results[0], body.Lang, body.UpdateTitle, service.ApplyOption{SkipCover: body.SkipCover})
 			if err == nil {
 				progress["status"] = "success"
 				progress["source"] = results[0].Source

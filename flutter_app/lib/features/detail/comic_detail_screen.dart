@@ -58,7 +58,7 @@ class _ComicDetailScreenState extends ConsumerState<ComicDetailScreen> {
       final api = ref.read(comicApiProvider);
       await api.updateRating(widget.comicId, rating);
       setState(() {
-        _comic = _comic!.copyWith(rating: rating);
+        _comic = _comic!.copyWith(rating: rating.toDouble());
       });
     } catch (_) {}
   }

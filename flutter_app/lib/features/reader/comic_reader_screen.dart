@@ -179,6 +179,12 @@ class _ComicReaderScreenState extends ConsumerState<ComicReaderScreen> {
               duration: const Duration(milliseconds: 400),
               curve: Curves.easeInOut,
             );
+          } else if (_settings.mode == ComicReadingMode.doublePage) {
+            // 双页模式 — 翻两页
+            _pageController.nextPage(
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeInOut,
+            );
           } else {
             _pageController.nextPage(
               duration: const Duration(milliseconds: 300),
@@ -249,7 +255,9 @@ class _ComicReaderScreenState extends ConsumerState<ComicReaderScreen> {
               onTap: _toggleOverlay,
               child: _settings.mode == ComicReadingMode.webtoon
                   ? _buildWebtoonView(serverUrl)
-                  : _buildPageView(serverUrl),
+                  : _settings.mode == ComicReadingMode.doublePage
+                      ? _buildDoublePageView(serverUrl)
+                      : _buildPageView(serverUrl),
             ),
 
             // 顶部 & 底部覆盖层
@@ -295,6 +303,104 @@ class _ComicReaderScreenState extends ConsumerState<ComicReaderScreen> {
             child: Icon(Icons.broken_image,
                 color: Colors.white54, size: 48),
           ),
+        );
+      },
+    );
+  }
+
+  /// 双页模式 — 横屏时左右各显示一页，竖屏时自动回退到单页
+  Widget _buildDoublePageView(String serverUrl) {
+    // 计算双页对：第1页单独显示（封面），之后每两页一组
+    final isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
+    if (!isLandscape) {
+      // 竖屏回退到单页模式
+      return _buildPageView(serverUrl);
+    }
+
+    // 构建双页列表：[0], [1,2], [3,4], ...
+    final List<List<int>> pageGroups = [];
+    pageGroups.add([0]); // 封面单独一页
+    for (int i = 1; i < _totalPages; i += 2) {
+      if (i + 1 < _totalPages) {
+        pageGroups.add([i, i + 1]);
+      } else {
+        pageGroups.add([i]);
+      }
+    }
+
+    // 找到当前页对应的 group index
+    int currentGroupIndex = 0;
+    for (int g = 0; g < pageGroups.length; g++) {
+      if (pageGroups[g].contains(_currentPage)) {
+        currentGroupIndex = g;
+        break;
+      }
+    }
+
+    final doublePageController = PageController(initialPage: currentGroupIndex);
+
+    return PageView.builder(
+      controller: doublePageController,
+      itemCount: pageGroups.length,
+      reverse: _settings.direction == ReadingDirection.rtl,
+      onPageChanged: (groupIndex) {
+        final firstPage = pageGroups[groupIndex].first;
+        setState(() => _currentPage = firstPage);
+        if (firstPage % 5 == 0) _saveProgress();
+      },
+      itemBuilder: (context, groupIndex) {
+        final pages = pageGroups[groupIndex];
+        if (pages.length == 1) {
+          // 单页（封面或最后一页）
+          final imageUrl = getImageUrl(serverUrl, widget.comicId, page: pages[0]);
+          return PhotoView(
+            imageProvider: AuthenticatedImageProvider(imageUrl),
+            minScale: PhotoViewComputedScale.contained,
+            maxScale: PhotoViewComputedScale.covered * 3,
+            initialScale: PhotoViewComputedScale.contained,
+            backgroundDecoration: const BoxDecoration(color: Colors.black),
+            loadingBuilder: (_, event) => Center(
+              child: CircularProgressIndicator(
+                value: event?.expectedTotalBytes != null
+                    ? event!.cumulativeBytesLoaded / event.expectedTotalBytes!
+                    : null,
+              ),
+            ),
+            errorBuilder: (_, __, ___) => const Center(
+              child: Icon(Icons.broken_image, color: Colors.white54, size: 48),
+            ),
+          );
+        }
+
+        // 双页并排
+        final leftPage = _settings.direction == ReadingDirection.rtl ? pages[1] : pages[0];
+        final rightPage = _settings.direction == ReadingDirection.rtl ? pages[0] : pages[1];
+        final leftUrl = getImageUrl(serverUrl, widget.comicId, page: leftPage);
+        final rightUrl = getImageUrl(serverUrl, widget.comicId, page: rightPage);
+
+        return Row(
+          children: [
+            Expanded(
+              child: AuthenticatedImage(
+                imageUrl: leftUrl,
+                fit: BoxFit.contain,
+                placeholder: const Center(child: CircularProgressIndicator()),
+                errorWidget: const Center(
+                  child: Icon(Icons.broken_image, color: Colors.white54, size: 48),
+                ),
+              ),
+            ),
+            Expanded(
+              child: AuthenticatedImage(
+                imageUrl: rightUrl,
+                fit: BoxFit.contain,
+                placeholder: const Center(child: CircularProgressIndicator()),
+                errorWidget: const Center(
+                  child: Icon(Icons.broken_image, color: Colors.white54, size: 48),
+                ),
+              ),
+            ),
+          ],
         );
       },
     );

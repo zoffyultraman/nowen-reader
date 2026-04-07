@@ -125,7 +125,7 @@ class SettingsScreen extends ConsumerWidget {
             onTap: () async {
               await ref.read(authProvider.notifier).logout();
               await saveServerUrl('');
-              ref.read(serverUrlProvider.notifier).state = '';
+              ref.invalidate(serverUrlProvider);
               if (context.mounted) context.go('/server');
             },
           ),

@@ -126,8 +126,8 @@ const ComicCard = memo(function ComicCard({
 
   // Detect landscape cover: aspect ratio > 1.3 means wide cover
   const isLandscape = (comic.coverAspectRatio ?? 0) > 1.3;
-  const coverAspectClass = isLandscape ? "aspect-[7/5]" : "aspect-[5/7]";
-  const coverObjectFit = isLandscape ? "object-contain" : "object-cover";
+  const coverAspectClass = "aspect-[5/7]"; // Keep consistent aspect ratio for all covers
+  const coverObjectFit = "object-cover"; // Use cover to fill container properly
 
   const handleClick = (e: React.MouseEvent) => {
     if (batchMode) {

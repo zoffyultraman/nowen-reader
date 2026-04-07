@@ -925,15 +925,8 @@ export default function CollectionsPage() {
 
       {/* ── 手动创建合集弹窗 ── */}
       {showCreateDialog && (
-        <>
-          <div
-            className="fixed inset-0 z-[60] bg-black/60 animate-backdrop-in"
-            onClick={() => {
-              setShowCreateDialog(false);
-              setCreateName("");
-            }}
-          />
-          <div className="fixed left-1/2 top-1/2 z-[60] w-[90vw] max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-border bg-card p-6 shadow-2xl animate-modal-in">
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 animate-backdrop-in" onClick={() => { setShowCreateDialog(false); setCreateName(""); }}>
+          <div className="w-[90vw] max-w-sm rounded-2xl border border-border bg-card p-6 shadow-2xl animate-modal-in" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center gap-2 mb-4">
               <FolderPlus className="h-5 w-5 text-accent" />
               <h3 className="text-lg font-semibold text-foreground">
@@ -973,17 +966,13 @@ export default function CollectionsPage() {
               </button>
             </div>
           </div>
-        </>
+          </div>
       )}
 
       {/* ── 删除确认弹窗 ── */}
       {deleteConfirmId !== null && deleteTarget && (
-        <>
-          <div
-            className="fixed inset-0 z-[60] bg-black/60 animate-backdrop-in"
-            onClick={() => setDeleteConfirmId(null)}
-          />
-          <div className="fixed left-1/2 top-1/2 z-[60] w-80 -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-border bg-card p-6 shadow-2xl animate-modal-in">
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 animate-backdrop-in" onClick={() => setDeleteConfirmId(null)}>
+          <div className="w-80 rounded-2xl border border-border bg-card p-6 shadow-2xl animate-modal-in" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-semibold text-foreground">
               {tGroup.confirmDelete || "确认删除合集"}
             </h3>
@@ -1010,17 +999,13 @@ export default function CollectionsPage() {
               </button>
             </div>
           </div>
-        </>
+          </div>
       )}
 
       {/* ── 批量删除确认弹窗 ── */}
       {showBatchDeleteConfirm && (
-        <>
-          <div
-            className="fixed inset-0 z-[60] bg-black/60 animate-backdrop-in"
-            onClick={() => setShowBatchDeleteConfirm(false)}
-          />
-          <div className="fixed left-1/2 top-1/2 z-[60] w-[90vw] max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-border bg-card p-6 shadow-2xl animate-modal-in">
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 animate-backdrop-in" onClick={() => setShowBatchDeleteConfirm(false)}>
+          <div className="w-[90vw] max-w-sm rounded-2xl border border-border bg-card p-6 shadow-2xl animate-modal-in" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-semibold text-foreground">
               {tCollections.batchDeleteConfirm || "确认批量删除"}
             </h3>
@@ -1057,17 +1042,13 @@ export default function CollectionsPage() {
               </button>
             </div>
           </div>
-        </>
+          </div>
       )}
 
       {/* ── 合并弹窗 ── */}
       {showMergeDialog && (
-        <>
-          <div
-            className="fixed inset-0 z-[60] bg-black/60 animate-backdrop-in"
-            onClick={() => { setShowMergeDialog(false); setMergeName(""); }}
-          />
-          <div className="fixed left-1/2 top-1/2 z-[60] w-[90vw] max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-border bg-card p-6 shadow-2xl animate-modal-in">
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 animate-backdrop-in" onClick={() => { setShowMergeDialog(false); setMergeName(""); }}>
+          <div className="w-[90vw] max-w-sm rounded-2xl border border-border bg-card p-6 shadow-2xl animate-modal-in" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center gap-2 mb-4">
               <Merge className="h-5 w-5 text-blue-400" />
               <h3 className="text-lg font-semibold text-foreground">
@@ -1123,7 +1104,7 @@ export default function CollectionsPage() {
               </button>
             </div>
           </div>
-        </>
+          </div>
       )}
     </div>
   );

@@ -47,6 +47,8 @@ export default function AutoDetectPanel({
   // 编辑分组名
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editName, setEditName] = useState("");
+  // 自动继承元数据开关
+  const [autoInherit, setAutoInherit] = useState(true);
 
   // 弹窗打开时重置所有状态
   useEffect(() => {
@@ -60,6 +62,7 @@ export default function AutoDetectPanel({
       setCreatedCount(0);
       setEditingIndex(null);
       setEditName("");
+      setAutoInherit(true);
     }
   }, [open]);
 
@@ -176,7 +179,7 @@ export default function AutoDetectPanel({
     setCreating(true);
     const selected = Array.from(selectedIndices).map((i) => suggestions[i]);
     try {
-      const result = await batchCreateGroups(selected);
+      const result = await batchCreateGroups(selected, autoInherit);
       if (result.success) {
         setCreatedCount(result.created);
         // 移除已创建的建议
@@ -297,7 +300,7 @@ export default function AutoDetectPanel({
           {/* 检测结果列表 */}
           {!loading && !aiLoading && suggestions !== null && suggestions.length > 0 && (
             <div className="space-y-3">
-              {/* 统计 + 全选 */}
+              {/* 统计 + 自动继承开关 + 全选 */}
               <div className="flex items-center justify-between">
                 <p className="text-sm text-muted">
                   {(t.comicGroup?.foundSuggestions || "发现 {count} 个可合并的系列").replace(
@@ -317,6 +320,29 @@ export default function AutoDetectPanel({
                   {t.navbar?.selectAll || "全选"}
                 </button>
               </div>
+
+              {/* 自动继承元数据开关 */}
+              <label className="flex items-center justify-between rounded-xl bg-card/50 px-4 py-3 cursor-pointer select-none">
+                <div>
+                  <span className="text-sm font-medium text-foreground">
+                    {t.comicGroup?.autoInheritMetadata || "自动继承首卷元数据"}
+                  </span>
+                  <p className="text-[10px] text-muted mt-0.5">
+                    {t.comicGroup?.autoInheritMetadataDesc || "创建分组后自动将首卷的作者、出版商等信息继承到系列"}
+                  </p>
+                </div>
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setAutoInherit(!autoInherit);
+                  }}
+                  className={`relative inline-flex h-5 w-9 flex-shrink-0 rounded-full border-2 border-transparent transition-colors ${
+                    autoInherit ? "bg-accent" : "bg-border"
+                  }`}
+                >
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition ${autoInherit ? "translate-x-4" : "translate-x-0"}`} />
+                </button>
+              </label>
 
               {/* 分组建议列表 */}
               {suggestions.map((suggestion, index) => {
