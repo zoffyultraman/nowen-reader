@@ -1054,3 +1054,124 @@ func splitAndTrim(s string) []string {
 	}
 	return result
 }
+
+// ============================================================
+// POST /api/groups/detect-dirty — 检测系列脏数据
+// ============================================================
+
+func (h *GroupHandler) DetectDirty(c *gin.Context) {
+	issues, err := store.DetectGroupDirtyData()
+	if err != nil {
+		log.Printf("[API] DetectDirty error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "检测脏数据失败: " + err.Error()})
+		return
+	}
+	if issues == nil {
+		issues = []store.GroupDirtyIssue{}
+	}
+
+	// 统计各类问题数量
+	stats := map[string]int{
+		"empty_group":    0,
+		"orphan_link":    0,
+		"dirty_name":     0,
+		"duplicate_name": 0,
+	}
+	for _, issue := range issues {
+		stats[issue.Type]++
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"issues": issues,
+		"stats":  stats,
+		"total":  len(issues),
+	})
+}
+
+// ============================================================
+// POST /api/groups/cleanup — 执行系列数据清理
+// ============================================================
+
+func (h *GroupHandler) Cleanup(c *gin.Context) {
+	var body struct {
+		Actions []string `json:"actions"` // 要执行的清理动作: empty_groups, orphan_links, dirty_names, full
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		body.Actions = []string{"full"}
+	}
+
+	// 默认执行全部清理
+	if len(body.Actions) == 0 || contains(body.Actions, "full") {
+		result, err := store.RunFullGroupCleanup()
+		if err != nil {
+			log.Printf("[API] Cleanup error: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "清理失败: " + err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"result":  result,
+		})
+		return
+	}
+
+	// 按指定动作执行
+	result := store.GroupCleanupResult{}
+	for _, action := range body.Actions {
+		switch action {
+		case "empty_groups":
+			n, err := store.CleanupEmptyGroups()
+			if err != nil {
+				log.Printf("[API] Cleanup empty_groups error: %v", err)
+			}
+			result.EmptyGroupsDeleted = n
+		case "orphan_links":
+			n, err := store.CleanupOrphanLinks()
+			if err != nil {
+				log.Printf("[API] Cleanup orphan_links error: %v", err)
+			}
+			result.OrphanLinksRemoved = n
+		case "dirty_names":
+			n, err := store.FixDirtyGroupNames()
+			if err != nil {
+				log.Printf("[API] Cleanup dirty_names error: %v", err)
+			}
+			result.DirtyNamesFixed = n
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"result":  result,
+	})
+}
+
+// ============================================================
+// POST /api/groups/fix-name — 修复单个系列名称
+// ============================================================
+
+func (h *GroupHandler) FixName(c *gin.Context) {
+	var body struct {
+		GroupID int    `json:"groupId"`
+		NewName string `json:"newName"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil || body.GroupID == 0 || body.NewName == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "参数不完整"})
+		return
+	}
+
+	if err := store.FixSingleGroupName(body.GroupID, body.NewName); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "修复名称失败: " + err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true})
+}
+
+func contains(slice []string, item string) bool {
+	for _, s := range slice {
+		if s == item {
+			return true
+		}
+	}
+	return false
+}

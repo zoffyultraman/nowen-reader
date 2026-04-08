@@ -277,6 +277,12 @@ export interface ScraperState {
   groupBatchRunning: boolean;
   groupBatchProgress: { current: number; total: number; currentName: string } | null;
   groupBatchDone: { total: number; success: number; failed: number } | null;
+  // 脏数据检测与清理
+  dirtyIssues: GroupDirtyIssue[];
+  dirtyStats: Record<string, number> | null;
+  dirtyDetecting: boolean;
+  dirtyCleaning: boolean;
+  cleanupResult: GroupCleanupResult | null;
 }
 
 /* ── 系列模式相关类型 ── */
@@ -299,6 +305,24 @@ export interface ScraperGroup {
 
 export type GroupMetaFilter = "all" | "hasMeta" | "missingMeta";
 export type GroupSortBy = "name" | "updatedAt" | "comicCount";
+
+export interface GroupDirtyIssue {
+  type: "empty_group" | "orphan_link" | "dirty_name" | "duplicate_name";
+  groupId: number;
+  groupName: string;
+  description: string;
+  suggestion: string;
+  autoFixable: boolean;
+  cleanedName?: string;
+  duplicateIds?: number[];
+}
+
+export interface GroupCleanupResult {
+  emptyGroupsDeleted: number;
+  orphanLinksRemoved: number;
+  dirtyNamesFixed: number;
+  duplicatesMerged: number;
+}
 
 /* ── 模块级状态 ── */
 let state: ScraperState = {
@@ -385,6 +409,12 @@ let state: ScraperState = {
   groupBatchRunning: false,
   groupBatchProgress: null,
   groupBatchDone: null,
+  // 脏数据检测与清理
+  dirtyIssues: [],
+  dirtyStats: null,
+  dirtyDetecting: false,
+  dirtyCleaning: false,
+  cleanupResult: null,
 };
 
 let abortController: AbortController | null = null;
@@ -1993,5 +2023,85 @@ export function cancelGroupBatchScrape() {
 
 export function clearGroupBatchDone() {
   state.groupBatchDone = null;
+  notify();
+}
+
+/* ── 脏数据检测与清理 Actions ── */
+
+export async function detectDirtyData() {
+  state.dirtyDetecting = true;
+  state.dirtyIssues = [];
+  state.dirtyStats = null;
+  state.cleanupResult = null;
+  notify();
+  try {
+    const res = await fetch("/api/groups/detect-dirty", { method: "POST" });
+    if (!res.ok) throw new Error("检测失败");
+    const data = await res.json();
+    state.dirtyIssues = data.issues || [];
+    state.dirtyStats = data.stats || null;
+  } catch {
+    state.dirtyIssues = [];
+    state.dirtyStats = null;
+  } finally {
+    state.dirtyDetecting = false;
+    notify();
+  }
+}
+
+export async function runCleanup(actions?: string[]) {
+  state.dirtyCleaning = true;
+  state.cleanupResult = null;
+  notify();
+  try {
+    const res = await fetch("/api/groups/cleanup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ actions: actions || ["full"] }),
+    });
+    if (!res.ok) throw new Error("清理失败");
+    const data = await res.json();
+    state.cleanupResult = data.result || null;
+  } catch {
+    state.cleanupResult = null;
+  } finally {
+    state.dirtyCleaning = false;
+    notify();
+    // 清理后刷新数据
+    loadScraperGroups();
+    loadStats();
+  }
+}
+
+export async function fixGroupName(groupId: number, newName: string) {
+  try {
+    const res = await fetch("/api/groups/fix-name", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ groupId, newName }),
+    });
+    if (!res.ok) throw new Error("修复失败");
+    // 刷新数据
+    loadScraperGroups();
+    // 从 issues 中移除已修复的
+    state.dirtyIssues = state.dirtyIssues.filter(
+      (i) => !(i.type === "dirty_name" && i.groupId === groupId)
+    );
+    notify();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function clearCleanupResult() {
+  state.cleanupResult = null;
+  notify();
+}
+
+export function clearDirtyIssues() {
+  state.dirtyIssues = [];
+  state.dirtyStats = null;
+  state.cleanupResult = null;
   notify();
 }

@@ -54,6 +54,7 @@ import {
   Wrench,
   GraduationCap,
   CircleHelp,
+  AlertTriangle,
 } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth-context";
@@ -147,8 +148,14 @@ import {
   startGroupBatchScrape,
   cancelGroupBatchScrape,
   clearGroupBatchDone,
+  // 脏数据检测与清理
+  detectDirtyData,
+  runCleanup,
+  fixGroupName,
+  clearCleanupResult,
+  clearDirtyIssues,
 } from "@/lib/scraper-store";
-import type { MetaFilter, LibraryItem, BatchEditNameEntry, LibrarySortBy, AIChatMessage, CollectionGroup, CollectionGroupDetail, CollectionGroupComic, AutoDetectSuggestion, MetadataFolderNode, MetadataFolderFile, ViewMode, ScraperGroup, GroupMetaFilter, GroupSortBy } from "@/lib/scraper-store";
+import type { MetaFilter, LibraryItem, BatchEditNameEntry, LibrarySortBy, AIChatMessage, CollectionGroup, CollectionGroupDetail, CollectionGroupComic, AutoDetectSuggestion, MetadataFolderNode, MetadataFolderFile, ViewMode, ScraperGroup, GroupMetaFilter, GroupSortBy, GroupDirtyIssue, GroupCleanupResult } from "@/lib/scraper-store";
 import { FolderOpen, FolderPlus, Layers, Plus, Minus, FolderTree, Folder, List } from "lucide-react";
 
 /* ── 文件夹树搜索/筛选辅助函数 ── */
@@ -2341,6 +2348,12 @@ export default function ScraperPage() {
     groupBatchRunning,
     groupBatchProgress,
     groupBatchDone,
+    // 脏数据检测与清理
+    dirtyIssues,
+    dirtyStats,
+    dirtyDetecting,
+    dirtyCleaning,
+    cleanupResult,
   } = useScraperStore();
 
   const isAdmin = user?.role === "admin";
@@ -2788,6 +2801,15 @@ export default function ScraperPage() {
                     )}
                     <div className="flex-1" />
                     <button
+                      onClick={() => detectDirtyData()}
+                      disabled={dirtyDetecting}
+                      className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-muted hover:text-amber-400 hover:bg-amber-500/10 transition-colors"
+                      title="检测脏数据"
+                    >
+                      {dirtyDetecting ? <Loader2 className="h-3 w-3 animate-spin" /> : <AlertTriangle className="h-3 w-3" />}
+                      <span className="hidden sm:inline">检测</span>
+                    </button>
+                    <button
                       onClick={() => loadScraperGroups()}
                       disabled={scraperGroupsLoading}
                       className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-muted hover:text-foreground hover:bg-white/5 transition-colors"
@@ -2833,6 +2855,122 @@ export default function ScraperPage() {
                     >
                       <X className="h-3 w-3" />
                     </button>
+                  </div>
+                )}
+                {/* 脏数据检测结果 */}
+                {dirtyStats && dirtyIssues.length > 0 && (
+                  <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-2.5 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-medium text-amber-400 flex items-center gap-1.5">
+                        <AlertTriangle className="h-3 w-3" />
+                        发现 {dirtyIssues.length} 个数据问题
+                      </span>
+                      <button
+                        onClick={() => clearDirtyIssues()}
+                        className="rounded p-0.5 text-muted hover:text-foreground"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                    {/* 问题统计 */}
+                    <div className="flex flex-wrap gap-1.5">
+                      {(dirtyStats.empty_group ?? 0) > 0 && (
+                        <span className="rounded-md bg-red-500/10 px-2 py-0.5 text-[10px] text-red-400">
+                          空系列 {dirtyStats.empty_group}
+                        </span>
+                      )}
+                      {(dirtyStats.orphan_link ?? 0) > 0 && (
+                        <span className="rounded-md bg-orange-500/10 px-2 py-0.5 text-[10px] text-orange-400">
+                          孤立关联 {dirtyStats.orphan_link}
+                        </span>
+                      )}
+                      {(dirtyStats.dirty_name ?? 0) > 0 && (
+                        <span className="rounded-md bg-yellow-500/10 px-2 py-0.5 text-[10px] text-yellow-400">
+                          脏名称 {dirtyStats.dirty_name}
+                        </span>
+                      )}
+                      {(dirtyStats.duplicate_name ?? 0) > 0 && (
+                        <span className="rounded-md bg-purple-500/10 px-2 py-0.5 text-[10px] text-purple-400">
+                          疑似重复 {dirtyStats.duplicate_name}
+                        </span>
+                      )}
+                    </div>
+                    {/* 问题详情列表 */}
+                    <div className="max-h-[200px] overflow-y-auto space-y-1">
+                      {dirtyIssues.map((issue, idx) => (
+                        <div key={idx} className="rounded-md bg-card/50 p-2 text-[10px] space-y-1">
+                          <div className="flex items-start justify-between gap-2">
+                            <span className="text-foreground/80 leading-relaxed">{issue.description}</span>
+                            {issue.type === "dirty_name" && issue.cleanedName && (
+                              <button
+                                onClick={() => fixGroupName(issue.groupId, issue.cleanedName!)}
+                                className="flex-shrink-0 rounded px-1.5 py-0.5 text-[9px] bg-amber-500/20 text-amber-400 hover:bg-amber-500/30 transition-colors"
+                              >
+                                修复
+                              </button>
+                            )}
+                          </div>
+                          <div className="text-muted/50">{issue.suggestion}</div>
+                        </div>
+                      ))}
+                    </div>
+                    {/* 一键清理按钮 */}
+                    {dirtyIssues.some((i) => i.autoFixable) && (
+                      <button
+                        onClick={() => runCleanup(["full"])}
+                        disabled={dirtyCleaning}
+                        className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-amber-500/20 px-3 py-1.5 text-[11px] font-medium text-amber-400 hover:bg-amber-500/30 transition-colors disabled:opacity-50"
+                      >
+                        {dirtyCleaning ? (
+                          <><Loader2 className="h-3 w-3 animate-spin" /> 清理中...</>
+                        ) : (
+                          <><Trash2 className="h-3 w-3" /> 一键清理可自动修复的问题</>
+                        )}
+                      </button>
+                    )}
+                  </div>
+                )}
+                {/* 脏数据无问题 */}
+                {dirtyStats && dirtyIssues.length === 0 && (
+                  <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 p-2.5 flex items-center justify-between">
+                    <span className="text-[11px] text-emerald-400 flex items-center gap-1.5">
+                      <CheckCircle className="h-3 w-3" />
+                      数据质量良好，未发现问题
+                    </span>
+                    <button
+                      onClick={() => clearDirtyIssues()}
+                      className="rounded p-0.5 text-muted hover:text-foreground"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                )}
+                {/* 清理完成结果 */}
+                {cleanupResult && (
+                  <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 p-2.5 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-medium text-emerald-400">✓ 清理完成</span>
+                      <button
+                        onClick={() => clearCleanupResult()}
+                        className="rounded p-0.5 text-muted hover:text-foreground"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5 text-[10px]">
+                      {cleanupResult.emptyGroupsDeleted > 0 && (
+                        <span className="text-emerald-400">删除空系列 {cleanupResult.emptyGroupsDeleted}</span>
+                      )}
+                      {cleanupResult.orphanLinksRemoved > 0 && (
+                        <span className="text-emerald-400">清理孤立关联 {cleanupResult.orphanLinksRemoved}</span>
+                      )}
+                      {cleanupResult.dirtyNamesFixed > 0 && (
+                        <span className="text-emerald-400">修复名称 {cleanupResult.dirtyNamesFixed}</span>
+                      )}
+                      {cleanupResult.emptyGroupsDeleted === 0 && cleanupResult.orphanLinksRemoved === 0 && cleanupResult.dirtyNamesFixed === 0 && (
+                        <span className="text-muted/60">没有需要清理的数据</span>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>

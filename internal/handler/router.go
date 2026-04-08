@@ -476,6 +476,10 @@ func SetupRoutes(r *gin.Engine) {
 		groupWrite.POST("/batch-delete", group.BatchDelete)
 		groupWrite.POST("/merge", group.MergeGroups)
 		groupWrite.POST("/export", group.ExportGroups)
+		// 脏数据检测与清理
+		groupWrite.POST("/detect-dirty", group.DetectDirty)
+		groupWrite.POST("/cleanup", group.Cleanup)
+		groupWrite.POST("/fix-name", group.FixName)
 	}
 
 	// ============================================================
