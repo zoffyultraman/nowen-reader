@@ -2,6 +2,7 @@ package service
 
 import (
 	"bufio"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -16,6 +17,8 @@ import (
 
 	"github.com/nowen-reader/nowen-reader/internal/config"
 )
+
+var base64Std = base64.StdEncoding
 
 // ============================================================
 // AI Configuration
@@ -1052,7 +1055,7 @@ func AIRecognizeComicContent(cfg AIConfig, coverData []byte, pageImages [][]byte
 
 	systemPrompt := fmt.Sprintf(`You are an expert manga/comic content analyst with deep knowledge of manga, comics, manhwa, manhua and related media.
 
-Your task: Identify the comic/manga by analyzing its cover image and sample pages. DO NOT rely on any filename information.
+Your task: Identify the comic/manga by analyzing the attached images (cover and sample pages). The images are provided as part of this message — do NOT say images are missing.
 
 Analysis strategy:
 1. **Cover image**: Look for title text (any language), author/artist name, publisher logo, volume/issue number, art style
@@ -1060,7 +1063,7 @@ Analysis strategy:
 3. **Visual recognition**: Use art style, character design, and visual elements to identify well-known series
 4. **Text extraction**: Read any visible text in the images (Japanese, Chinese, Korean, English, etc.)
 
-Return ONLY a valid JSON object:
+You MUST return ONLY a valid JSON object (no markdown, no explanation, no extra text):
 {
   "title": "the official/clean title of the manga/comic (no volume numbers)",
   "author": "author/artist name if identifiable",
@@ -1075,9 +1078,11 @@ Rules:
 - If you recognize a well-known series, use its most commonly known title in %s
 - For unknown series, extract the title text exactly as shown on the cover/title page
 - If you cannot determine a field with reasonable confidence, omit it
-- Do NOT guess randomly — only include information you can actually see or confidently recognize`, langName)
+- Do NOT guess randomly — only include information you can actually see or confidently recognize
+- ALWAYS respond with a JSON object, even if you can only fill in partial fields
+- NEVER respond with plain text or ask for more information — just do your best with what you see`, langName)
 
-	userPrompt := "Analyze these comic/manga images and identify the work. The first image is the cover, followed by sample interior pages. Return a JSON object with title, author, language, genre, year, tags."
+	userPrompt := "I have attached comic/manga images below. The first image is the cover, followed by sample interior pages. Please analyze them and return a JSON object with title, author, language, genre, year, tags. Remember: respond with ONLY a JSON object."
 
 	// 构建图片列表
 	var images []ImageContent
@@ -1098,6 +1103,11 @@ Rules:
 
 	if len(images) == 0 {
 		return nil, fmt.Errorf("no images provided for content recognition")
+	}
+
+	// 记录图片信息，方便调试
+	for i, img := range images {
+		log.Printf("[AI] recognize_content image[%d]: mimeType=%s base64Len=%d", i, img.MimeType, len(img.Base64))
 	}
 
 	content, err := CallCloudLLM(cfg, systemPrompt, userPrompt, &LLMCallOptions{
@@ -1144,11 +1154,18 @@ Rules:
 
 // detectImageMimeType 检测图片 MIME 类型
 func detectImageMimeType(data []byte) string {
-	if len(data) > 4 {
-		if data[0] == 0x89 && data[1] == 0x50 {
-			return "image/png"
-		}
-		if data[0] == 0x52 && data[1] == 0x49 {
+	if len(data) < 4 {
+		return "image/jpeg"
+	}
+	// 使用标准库检测
+	ct := http.DetectContentType(data)
+	// http.DetectContentType 对图片返回 image/jpeg, image/png, image/gif, image/webp 等
+	if strings.HasPrefix(ct, "image/") {
+		return ct
+	}
+	// 手动检测 WebP（标准库某些版本可能不识别）
+	if data[0] == 0x52 && data[1] == 0x49 && data[2] == 0x46 && data[3] == 0x46 {
+		if len(data) > 11 && string(data[8:12]) == "WEBP" {
 			return "image/webp"
 		}
 	}
@@ -1624,32 +1641,7 @@ Return ONLY a valid JSON object with these fields:
 
 // encodeBase64 将字节数组编码为 base64 字符串
 func encodeBase64(data []byte) string {
-	const base64chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
-	var result strings.Builder
-	result.Grow((len(data)/3 + 1) * 4)
-	for i := 0; i < len(data); i += 3 {
-		var b0, b1, b2 byte
-		b0 = data[i]
-		if i+1 < len(data) {
-			b1 = data[i+1]
-		}
-		if i+2 < len(data) {
-			b2 = data[i+2]
-		}
-		result.WriteByte(base64chars[b0>>2])
-		result.WriteByte(base64chars[((b0&0x03)<<4)|(b1>>4)])
-		if i+1 < len(data) {
-			result.WriteByte(base64chars[((b1&0x0F)<<2)|(b2>>6)])
-		} else {
-			result.WriteByte('=')
-		}
-		if i+2 < len(data) {
-			result.WriteByte(base64chars[b2&0x3F])
-		} else {
-			result.WriteByte('=')
-		}
-	}
-	return result.String()
+	return base64Std.EncodeToString(data)
 }
 
 // ============================================================

@@ -1020,18 +1020,32 @@ func (h *GroupHandler) AIRecognize(c *gin.Context) {
 	}
 
 	firstComic := group.Comics[0]
+	log.Printf("[AI-Recognize] group=%d firstComic=%s filename=%s", id, firstComic.ComicID, firstComic.Filename)
+
 	var coverData []byte
 	coverBytes, _, coverErr := service.GetComicThumbnail(firstComic.ComicID)
-	if coverErr == nil && len(coverBytes) > 0 {
+	if coverErr != nil {
+		log.Printf("[AI-Recognize] GetComicThumbnail failed: %v", coverErr)
+	} else if len(coverBytes) > 0 {
 		coverData = coverBytes
+		log.Printf("[AI-Recognize] cover loaded: %d bytes", len(coverData))
 	}
 
 	var pageImages [][]byte
 	for pi := 0; pi < 2; pi++ {
 		pageImg, err := service.GetPageImage(firstComic.ComicID, pi)
-		if err == nil && pageImg != nil && len(pageImg.Data) > 0 {
+		if err != nil {
+			log.Printf("[AI-Recognize] GetPageImage(%d) failed: %v", pi, err)
+		} else if pageImg != nil && len(pageImg.Data) > 0 {
 			pageImages = append(pageImages, pageImg.Data)
+			log.Printf("[AI-Recognize] page %d loaded: %d bytes", pi, len(pageImg.Data))
 		}
+	}
+
+	// 如果没有获取到任何图片，提前返回明确错误
+	if len(coverData) == 0 && len(pageImages) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无法获取漫画图片数据，请确认漫画文件是否存在且可读"})
+		return
 	}
 
 	recognized, err := service.AIRecognizeComicContent(cfg, coverData, pageImages, lang)
