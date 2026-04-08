@@ -467,6 +467,47 @@ export default function Home() {
     return displayComics;
   }, [displayComics]);
 
+  // ── 滚动位置保存 & 恢复 ──
+  // 离开页面时保存滚动位置
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      sessionStorage.setItem("homeScrollY", String(window.scrollY));
+    };
+    // 使用 visibilitychange 和 beforeunload 双重保存
+    const handleVisibility = () => {
+      if (document.visibilityState === "hidden") {
+        sessionStorage.setItem("homeScrollY", String(window.scrollY));
+      }
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      // 组件卸载时保存（SPA 内部导航）
+      sessionStorage.setItem("homeScrollY", String(window.scrollY));
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, []);
+
+  // 数据加载完成后恢复滚动位置（仅首次加载时恢复一次）
+  const scrollRestoredRef = useRef(false);
+  useEffect(() => {
+    if (scrollRestoredRef.current) return;
+    if (loading || fetching) return;
+    // 数据已加载完成，尝试恢复滚动位置
+    const savedY = sessionStorage.getItem("homeScrollY");
+    if (savedY) {
+      const y = parseInt(savedY, 10);
+      if (!isNaN(y) && y > 0) {
+        // 延迟恢复，确保 DOM 已渲染
+        requestAnimationFrame(() => {
+          window.scrollTo(0, y);
+        });
+      }
+    }
+    scrollRestoredRef.current = true;
+  }, [loading, fetching]);
+
   // Sort comics (server-side sorting is primary)
   const sortedComics = useMemo(() => {
     return filteredComics;

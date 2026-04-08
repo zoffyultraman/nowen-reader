@@ -375,13 +375,13 @@ const ComicCard = memo(function ComicCard({
             </div>
           )}
 
-          <Link
-            href={getReaderUrl(comic)}
-            className="block"
-            onClick={() => onClick?.(comic)}
-          >
-            <div className="relative overflow-hidden rounded-xl bg-card transition-all duration-300 ease-out group-hover:scale-[1.03] group-hover:shadow-2xl group-hover:shadow-accent/10">
-              {/* Cover Image */}
+          <div className="relative overflow-hidden rounded-xl bg-card transition-all duration-300 ease-out group-hover:scale-[1.03] group-hover:shadow-2xl group-hover:shadow-accent/10">
+            {/* Cover Image — 点击进入阅读 */}
+            <Link
+              href={getReaderUrl(comic)}
+              className="block"
+              onClick={() => onClick?.(comic)}
+            >
               <div className={`relative ${coverAspectClass} w-full overflow-hidden ${isLandscape ? "bg-black/5 dark:bg-white/5" : ""}`}>
                 {/* 骨架屏加载占位 */}
                 {!coverLoaded && (
@@ -427,29 +427,31 @@ const ComicCard = memo(function ComicCard({
                   </div>
                 )}
               </div>
+            </Link>
 
-              <div className="p-3">
-                <h3 className="mb-2 truncate text-sm font-medium text-foreground/90 group-hover:text-foreground">{comic.title}</h3>
-<div className="flex flex-wrap items-center gap-1.5">
-                  {(comic.tags || []).slice(0, 3).map((tag) => (
-                    <TagChip key={tag} tag={tag} tagObj={tagMap.get(tag)} />
-                  ))}
-                </div>
+            {/* 底部信息区 — 名字点击进入详情 */}
+            <div className="p-3">
+              {isReal ? (
+                <Link
+                  href={`/comic/${comic.id}`}
+                  className="mb-2 block truncate text-sm font-medium text-foreground/90 transition-colors hover:text-accent"
+                  onClick={(e) => e.stopPropagation()}
+                  title={comic.title}
+                >
+                  {comic.title}
+                </Link>
+              ) : (
+                <h3 className="mb-2 truncate text-sm font-medium text-foreground/90">{comic.title}</h3>
+              )}
+              <div className="flex flex-wrap items-center gap-1.5">
+                {(comic.tags || []).slice(0, 3).map((tag) => (
+                  <TagChip key={tag} tag={tag} tagObj={tagMap.get(tag)} />
+                ))}
               </div>
             </div>
-          </Link>
+          </div>
 
-          {/* Detail button (grid) */}
-          {isReal && (
-            <Link
-              href={`/comic/${comic.id}`}
-              className="absolute top-2 right-2 z-20 rounded-lg bg-black/40 p-1.5 text-white/60 opacity-0 backdrop-blur-sm transition-all hover:text-white group-hover:opacity-100"
-              title={t.comicCard.detail}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <Info className="h-3.5 w-3.5" />
-            </Link>
-          )}
+
         </>
       )}
     </div>

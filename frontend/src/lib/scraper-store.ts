@@ -164,7 +164,7 @@ export interface GuideStep {
 
 /* ── 文件夹模式相关类型 ── */
 
-export type ViewMode = "list" | "folder";
+export type ViewMode = "list" | "folder" | "group";
 
 export interface MetadataFolderFile {
   id: string;
@@ -263,6 +263,22 @@ export interface ScraperState {
   folderScrapeRunning: boolean;                // 文件夹刮削是否进行中
   folderScrapeProgress: { current: number; total: number; status: string; filename: string } | null;
   folderScrapeDone: { total: number; success: number; failed: number } | null;
+
+  // 系列模式
+  scraperGroups: ScraperGroup[];
+  scraperGroupsLoading: boolean;
+  scraperGroupFocusedId: number | null;
+}
+
+/* ── 系列模式相关类型 ── */
+export interface ScraperGroup {
+  id: number;
+  name: string;
+  coverUrl: string;
+  comicCount: number;
+  author?: string;
+  description?: string;
+  hasMetadata: boolean;
 }
 
 /* ── 模块级状态 ── */
@@ -336,6 +352,11 @@ let state: ScraperState = {
   folderScrapeRunning: false,
   folderScrapeProgress: null,
   folderScrapeDone: null,
+
+  // 系列模式
+  scraperGroups: [],
+  scraperGroupsLoading: false,
+  scraperGroupFocusedId: null,
 };
 
 let abortController: AbortController | null = null;
@@ -1662,6 +1683,10 @@ export function setViewMode(mode: ViewMode) {
   if (mode === "folder" && !state.folderTree && !state.folderTreeLoading) {
     loadFolderTree();
   }
+  // 切换到系列模式时自动加载系列列表
+  if (mode === "group" && state.scraperGroups.length === 0 && !state.scraperGroupsLoading) {
+    loadScraperGroups();
+  }
   notify();
 }
 
@@ -1793,5 +1818,36 @@ export async function startFolderScrape(folderPath: string, scope: "missing" | "
 export function cancelFolderScrape() {
   folderScrapeAbort?.abort();
   state.folderScrapeRunning = false;
+  notify();
+}
+
+/* ── 系列模式 Actions ── */
+
+export async function loadScraperGroups() {
+  state.scraperGroupsLoading = true;
+  notify();
+  try {
+    const res = await fetch("/api/groups");
+    if (!res.ok) throw new Error("Failed to load groups");
+    const data = await res.json();
+    state.scraperGroups = (data || []).map((g: Record<string, unknown>) => ({
+      id: g.id as number,
+      name: g.name as string,
+      coverUrl: g.coverUrl as string || "",
+      comicCount: g.comicCount as number || 0,
+      author: g.author as string || "",
+      description: g.description as string || "",
+      hasMetadata: !!(g.author || g.description),
+    }));
+  } catch {
+    state.scraperGroups = [];
+  } finally {
+    state.scraperGroupsLoading = false;
+    notify();
+  }
+}
+
+export function setScraperGroupFocusedId(id: number | null) {
+  state.scraperGroupFocusedId = id;
   notify();
 }
