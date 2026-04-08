@@ -19,6 +19,7 @@ import {
   User,
   Calendar,
   Globe,
+  ImagePlus,
   Tag,
   Layers,
   MoreHorizontal,
@@ -137,6 +138,13 @@ export default function GroupDetailPage() {
   // 标签覆盖状态
   const [overrideConfirm, setOverrideConfirm] = useState(false);
   const [overrideLoading, setOverrideLoading] = useState(false);
+
+  // 系列封面更换状态
+  const [showCoverMenu, setShowCoverMenu] = useState(false);
+  const [showCoverUrlInput, setShowCoverUrlInput] = useState(false);
+  const [coverUrlInput, setCoverUrlInput] = useState("");
+  const [coverLoading, setCoverLoading] = useState(false);
+  const coverFileRef = useRef<HTMLInputElement>(null);
 
   // 元数据编辑状态
   const [showMetadataEdit, setShowMetadataEdit] = useState(false);
@@ -327,6 +335,77 @@ export default function GroupDetailPage() {
     } finally {
       setOverrideLoading(false);
       setOverrideConfirm(false);
+    }
+  }, [group, toast]);
+
+  // 系列封面更换：通过URL
+  const handleGroupCoverFromUrl = useCallback(async () => {
+    if (!group || !coverUrlInput.trim()) return;
+    setCoverLoading(true);
+    try {
+      const ok = await updateGroupMetadata(group.id, { coverUrl: coverUrlInput.trim() });
+      if (ok) {
+        setGroup((prev) => prev ? { ...prev, coverUrl: coverUrlInput.trim() } : prev);
+        setCoverUrlInput("");
+        setShowCoverUrlInput(false);
+        setShowCoverMenu(false);
+        toast.success("封面已更新");
+      } else {
+        toast.error("封面更新失败");
+      }
+    } catch {
+      toast.error("封面更新失败");
+    } finally {
+      setCoverLoading(false);
+    }
+  }, [group, coverUrlInput, toast]);
+
+  // 系列封面更换：上传本地图片（转为base64后通过metadata API保存）
+  const handleGroupCoverUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !group) return;
+    setCoverLoading(true);
+    try {
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const dataUrl = reader.result as string;
+        const ok = await updateGroupMetadata(group.id, { coverUrl: dataUrl });
+        if (ok) {
+          setGroup((prev) => prev ? { ...prev, coverUrl: dataUrl } : prev);
+          setShowCoverMenu(false);
+          toast.success("封面已更新");
+        } else {
+          toast.error("封面更新失败");
+        }
+        setCoverLoading(false);
+      };
+      reader.readAsDataURL(file);
+    } catch {
+      toast.error("封面更新失败");
+      setCoverLoading(false);
+    } finally {
+      if (coverFileRef.current) coverFileRef.current.value = "";
+    }
+  }, [group, toast]);
+
+  // 系列封面重置：清除自定义封面，回退到首卷封面
+  const handleGroupCoverReset = useCallback(async () => {
+    if (!group) return;
+    setCoverLoading(true);
+    try {
+      const ok = await updateGroupMetadata(group.id, { coverUrl: "" });
+      if (ok) {
+        // 重置后使用首卷封面
+        const firstComic = group.comics[0];
+        const fallbackCover = firstComic ? `/api/comics/${firstComic.id}/thumbnail` : "";
+        setGroup((prev) => prev ? { ...prev, coverUrl: fallbackCover } : prev);
+        setShowCoverMenu(false);
+        toast.success("已恢复默认封面");
+      }
+    } catch {
+      toast.error("重置封面失败");
+    } finally {
+      setCoverLoading(false);
     }
   }, [group, toast]);
 
@@ -674,7 +753,7 @@ export default function GroupDetailPage() {
           <div className="flex flex-col sm:flex-row gap-5 sm:gap-6">
             {/* 系列封面 */}
             <div className="flex-shrink-0 self-center sm:self-start">
-              <div className="relative h-[280px] w-[200px] overflow-hidden rounded-xl shadow-lg shadow-black/20">
+              <div className="group/cover relative h-[280px] w-[200px] overflow-hidden rounded-xl shadow-lg shadow-black/20">
                 {group.coverUrl ? (
                   <Image
                     src={group.coverUrl}
@@ -691,10 +770,99 @@ export default function GroupDetailPage() {
                   </div>
                 )}
                 {/* 卷数角标 */}
-                <div className="absolute top-2 right-2 rounded-lg bg-accent px-2 py-1 text-xs font-bold text-white shadow-lg">
+                <div className="absolute top-2 right-2 rounded-lg bg-accent px-2 py-1 text-xs font-bold text-white shadow-lg z-10">
                   {group.comicCount}
                 </div>
+
+                {/* 管理员：封面更换按钮 */}
+                {isAdmin && (
+                  <div className="absolute inset-0 flex items-end justify-center bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-100 sm:opacity-0 transition-opacity sm:group-hover/cover:opacity-100">
+                    <button
+                      onClick={() => setShowCoverMenu(!showCoverMenu)}
+                      disabled={coverLoading}
+                      className="mb-3 flex items-center gap-1.5 rounded-lg bg-white/20 px-3 py-1.5 text-xs font-medium text-white backdrop-blur-sm transition-colors hover:bg-white/30"
+                    >
+                      {coverLoading ? (
+                        <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <ImagePlus className="h-3.5 w-3.5" />
+                      )}
+                      更换封面
+                    </button>
+                  </div>
+                )}
+
+                {/* 封面更换菜单 */}
+                {showCoverMenu && (
+                  <div className="absolute bottom-0 left-0 right-0 z-20 rounded-b-xl bg-zinc-900/95 p-3 backdrop-blur-sm">
+                    <div className="space-y-1.5">
+                      {/* 上传本地图片 */}
+                      <button
+                        onClick={() => coverFileRef.current?.click()}
+                        disabled={coverLoading}
+                        className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs text-zinc-200 transition-colors hover:bg-zinc-700/60"
+                      >
+                        <ImagePlus className="h-3.5 w-3.5" />
+                        上传本地图片
+                      </button>
+
+                      {/* 输入图片URL */}
+                      <button
+                        onClick={() => setShowCoverUrlInput(!showCoverUrlInput)}
+                        disabled={coverLoading}
+                        className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs text-zinc-200 transition-colors hover:bg-zinc-700/60"
+                      >
+                        <Globe className="h-3.5 w-3.5" />
+                        输入图片URL
+                      </button>
+
+                      {showCoverUrlInput && (
+                        <div className="flex gap-1.5 px-1">
+                          <input
+                            type="text"
+                            value={coverUrlInput}
+                            onChange={(e) => setCoverUrlInput(e.target.value)}
+                            placeholder="https://..."
+                            className="flex-1 rounded-md bg-zinc-800 px-2 py-1.5 text-xs text-white placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-accent"
+                            onKeyDown={(e) => e.key === "Enter" && handleGroupCoverFromUrl()}
+                          />
+                          <button
+                            onClick={handleGroupCoverFromUrl}
+                            disabled={coverLoading || !coverUrlInput.trim()}
+                            className="rounded-md bg-accent px-2 py-1.5 text-xs text-white disabled:opacity-50"
+                          >
+                            OK
+                          </button>
+                        </div>
+                      )}
+
+                      {/* 恢复默认封面 */}
+                      <button
+                        onClick={handleGroupCoverReset}
+                        disabled={coverLoading}
+                        className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs text-zinc-200 transition-colors hover:bg-zinc-700/60"
+                      >
+                        <RefreshCw className="h-3.5 w-3.5" />
+                        恢复默认封面
+                      </button>
+                    </div>
+                    <button
+                      onClick={() => { setShowCoverMenu(false); setShowCoverUrlInput(false); }}
+                      className="mt-2 w-full rounded-lg py-1.5 text-xs text-zinc-400 transition-colors hover:text-zinc-200"
+                    >
+                      取消
+                    </button>
+                  </div>
+                )}
               </div>
+              {/* 隐藏的文件上传input */}
+              <input
+                ref={coverFileRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleGroupCoverUpload}
+              />
             </div>
 
             {/* 系列信息 */}

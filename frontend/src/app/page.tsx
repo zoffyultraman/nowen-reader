@@ -323,10 +323,13 @@ export default function Home() {
 
   // 加载分组数据（按 contentType 过滤）
   const loadGroups = useCallback(async () => {
-    const [grps, gmap] = await Promise.all([fetchGroups(contentType || undefined), fetchGroupedComicMap()]);
+    const [grps, gmap] = await Promise.all([
+      fetchGroups(contentType || undefined, selectedCategory || undefined, selectedTags.length > 0 ? selectedTags : undefined),
+      fetchGroupedComicMap(),
+    ]);
     setGroups(grps);
     setGroupedComicMap(gmap);
-  }, [contentType]);
+  }, [contentType, selectedCategory, selectedTags]);
 
   // 分组视图分页计算
   const groupTotalPages = Math.max(1, Math.ceil(groups.length / GROUP_PAGE_SIZE));

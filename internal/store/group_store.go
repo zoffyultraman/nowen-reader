@@ -80,8 +80,10 @@ type GroupComicItem struct {
 
 // GroupListOptions 分组列表查询选项。
 type GroupListOptions struct {
-	UserID      string // 用户ID过滤
-	ContentType string // 内容类型过滤: "comic" | "novel" | "" (全部)
+	UserID      string   // 用户ID过滤
+	ContentType string   // 内容类型过滤: "comic" | "novel" | "" (全部)
+	Category    string   // 分类过滤（slug）
+	Tags        []string // 标签过滤（标签名列表，AND 逻辑）
 }
 
 // GetAllGroups 获取所有分组（带漫画数量）。
@@ -109,6 +111,30 @@ func GetAllGroupsWithOptions(opts GroupListOptions) ([]ComicGroupWithCount, erro
 			WHERE c2."type" = ?
 		)`)
 		args = append(args, opts.ContentType)
+	}
+
+	// 分类过滤：只返回至少包含一本属于指定分类的漫画的分组
+	if opts.Category != "" {
+		conditions = append(conditions, `g."id" IN (
+			SELECT DISTINCT gi3."groupId" FROM "ComicGroupItem" gi3
+			JOIN "ComicCategory" cc ON cc."comicId" = gi3."comicId"
+			JOIN "Category" cat ON cat."id" = cc."categoryId"
+			WHERE cat."slug" = ?
+		)`)
+		args = append(args, opts.Category)
+	}
+
+	// 标签过滤：只返回至少包含一本拥有所有指定标签的漫画的分组（AND 逻辑）
+	if len(opts.Tags) > 0 {
+		for _, tagName := range opts.Tags {
+			conditions = append(conditions, `g."id" IN (
+				SELECT DISTINCT gi4."groupId" FROM "ComicGroupItem" gi4
+				JOIN "ComicTag" ct2 ON ct2."comicId" = gi4."comicId"
+				JOIN "Tag" t ON t."id" = ct2."tagId"
+				WHERE t."name" = ?
+			)`)
+			args = append(args, tagName)
+		}
 	}
 
 	whereClause := ""

@@ -23,9 +23,22 @@ func NewGroupHandler() *GroupHandler {
 // ============================================================
 
 func (h *GroupHandler) ListGroups(c *gin.Context) {
+	// 解析标签参数（逗号分隔）
+	var tags []string
+	if tagsParam := c.Query("tags"); tagsParam != "" {
+		for _, t := range strings.Split(tagsParam, ",") {
+			t = strings.TrimSpace(t)
+			if t != "" {
+				tags = append(tags, t)
+			}
+		}
+	}
+
 	groups, err := store.GetAllGroupsWithOptions(store.GroupListOptions{
 		UserID:      getUserID(c),
 		ContentType: c.Query("contentType"),
+		Category:    c.Query("category"),
+		Tags:        tags,
 	})
 	if err != nil {
 		log.Printf("[API] ListGroups error: %v", err)
