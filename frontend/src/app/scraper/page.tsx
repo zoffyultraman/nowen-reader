@@ -3630,6 +3630,7 @@ export default function ScraperPage() {
                     从 AniList、Bangumi 等在线数据库搜索系列信息，或使用 AI 智能识别。支持选择性应用字段和标签同步。
                   </p>
                   <GroupMetadataSearch
+                    key={focusedGroup.id}
                     groupId={focusedGroup.id}
                     groupName={focusedGroup.name}
                     onApplied={async (success) => {
