@@ -48,11 +48,15 @@ import {
   syncGroupTags,
   overrideGroupTagsToVolumes,
   aiSuggestGroupTags,
+  fetchGroupCategories,
+  setGroupCategories as setGroupCategoriesApi,
+  syncGroupCategories,
+  aiSuggestGroupCategories,
 } from "@/api/groups";
 import type { ComicGroupDetail, GroupComicItem } from "@/hooks/useComicTypes";
-import type { InheritPreview, GroupTag } from "@/api/groups";
+import type { InheritPreview, GroupTag, GroupCategory } from "@/api/groups";
 import { GroupMetadataSearch } from "@/components/GroupMetadataSearch";
-import { Sparkles, Brain } from "lucide-react";
+import { Sparkles, Brain, FolderOpen } from "lucide-react";
 import { useAIStatus } from "@/hooks/useAIStatus";
 import { useLocale } from "@/lib/i18n/context";
 
@@ -139,6 +143,15 @@ export default function GroupDetailPage() {
   const [overrideConfirm, setOverrideConfirm] = useState(false);
   const [overrideLoading, setOverrideLoading] = useState(false);
 
+  // 系列级分类管理状态
+  const [groupCategories, setGroupCategories] = useState<GroupCategory[]>([]);
+  const [allCategories, setAllCategories] = useState<GroupCategory[]>([]);
+  const [categorySaving, setCategorySaving] = useState(false);
+  const [categorySyncing, setCategorySyncing] = useState(false);
+  const [showCategoryPicker, setShowCategoryPicker] = useState(false);
+  const [aiCategoryLoading, setAiCategoryLoading] = useState(false);
+  const [aiSuggestedCategories, setAiSuggestedCategories] = useState<string[]>([]);
+
   // 系列封面更换状态
   const [showCoverMenu, setShowCoverMenu] = useState(false);
   const [showCoverUrlInput, setShowCoverUrlInput] = useState(false);
@@ -220,6 +233,105 @@ export default function GroupDetailPage() {
   useEffect(() => {
     loadGroupTags();
   }, [loadGroupTags]);
+
+  // 加载系列分类
+  const loadGroupCategories = useCallback(async () => {
+    if (!groupId) return;
+    const cats = await fetchGroupCategories(groupId);
+    setGroupCategories(cats);
+  }, [groupId]);
+
+  // 加载所有可用分类
+  const loadAllCategories = useCallback(async () => {
+    try {
+      const res = await fetch("/api/categories");
+      if (res.ok) {
+        const data = await res.json();
+        setAllCategories((data.categories || []).map((c: Record<string, unknown>) => ({
+          id: c.id as number,
+          name: c.name as string,
+          slug: c.slug as string,
+          icon: c.icon as string,
+        })));
+      }
+    } catch { /* ignore */ }
+  }, []);
+
+  useEffect(() => {
+    loadGroupCategories();
+    loadAllCategories();
+  }, [loadGroupCategories, loadAllCategories]);
+
+  // 添加/移除系列分类
+  const handleToggleCategory = useCallback(async (slug: string) => {
+    if (!group) return;
+    setCategorySaving(true);
+    const currentSlugs = groupCategories.map(c => c.slug);
+    const isRemoving = currentSlugs.includes(slug);
+    const newSlugs = isRemoving
+      ? currentSlugs.filter(s => s !== slug)
+      : [...currentSlugs, slug];
+
+    const result = await setGroupCategoriesApi(group.id, newSlugs);
+    if (result?.success) {
+      const cat = allCategories.find(c => c.slug === slug);
+      const catName = cat?.name || slug;
+      toast.success(
+        isRemoving
+          ? `已移除分类「${catName}」`
+          : `已添加分类「${catName}」${result.syncedTo > 0 ? `，已同步到 ${result.syncedTo} 卷` : ""}`
+      );
+      await loadGroupCategories();
+    }
+    setCategorySaving(false);
+  }, [group, groupCategories, allCategories, toast, loadGroupCategories]);
+
+  // 同步分类到所有卷
+  const handleSyncCategoriesToVolumes = useCallback(async () => {
+    if (!group) return;
+    setCategorySyncing(true);
+    const result = await syncGroupCategories(group.id);
+    if (result?.success) {
+      toast.success(`同步完成：${result.syncedVolumes}/${result.totalVolumes} 卷已更新`);
+    } else {
+      toast.error("同步分类失败");
+    }
+    setCategorySyncing(false);
+  }, [group, toast]);
+
+  // AI 建议分类
+  const handleAiSuggestCategories = useCallback(async () => {
+    if (!group) return;
+    setAiCategoryLoading(true);
+    setAiSuggestedCategories([]);
+    try {
+      const result = await aiSuggestGroupCategories(group.id, locale === "en" ? "en" : "zh");
+      if (result?.success && result.suggestedCategories?.length > 0) {
+        setAiSuggestedCategories(result.suggestedCategories);
+      } else {
+        toast.info("AI 未生成新分类建议");
+      }
+    } catch {
+      toast.error("AI 分类建议失败");
+    }
+    setAiCategoryLoading(false);
+  }, [group, locale, toast]);
+
+  // 应用 AI 建议的分类
+  const handleApplyAiCategories = useCallback(async (slugs: string[]) => {
+    if (!group || slugs.length === 0) return;
+    setCategorySaving(true);
+    const currentSlugs = groupCategories.map(c => c.slug);
+    const newSlugs = [...new Set([...currentSlugs, ...slugs])];
+    const result = await setGroupCategoriesApi(group.id, newSlugs);
+    if (result?.success) {
+      const addedCount = newSlugs.length - currentSlugs.length;
+      toast.success(`已添加 ${addedCount} 个分类${result.syncedTo > 0 ? `，已同步到 ${result.syncedTo} 卷` : ""}`);
+      await loadGroupCategories();
+      setAiSuggestedCategories([]);
+    }
+    setCategorySaving(false);
+  }, [group, groupCategories, toast, loadGroupCategories]);
 
   // 添加系列标签
   const handleAddGroupTag = useCallback(async () => {
@@ -1128,6 +1240,169 @@ export default function GroupDetailPage() {
                         </button>
                       </div>
                     </div>
+                  )}
+                </div>
+              )}
+
+              {/* 系列分类管理 */}
+              {(groupCategories.length > 0 || isAdmin) && (
+                <div className="mb-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="text-xs font-medium uppercase tracking-wider text-muted flex items-center gap-1.5">
+                      <FolderOpen className="h-3 w-3" />
+                      分类
+                      {groupCategories.length > 0 && (
+                        <span className="text-[10px] text-muted/60">({groupCategories.length})</span>
+                      )}
+                    </h4>
+                    {isAdmin && groupCategories.length > 0 && (
+                      <button
+                        onClick={handleSyncCategoriesToVolumes}
+                        disabled={categorySyncing}
+                        className="flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] text-accent/80 transition-colors hover:bg-accent/10"
+                        title="将系列分类同步到所有卷"
+                      >
+                        {categorySyncing ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <RefreshCw className="h-3 w-3" />
+                        )}
+                        <span>同步到所有卷</span>
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {groupCategories.map((cat) => (
+                      <span
+                        key={cat.id}
+                        className="group flex items-center gap-1 rounded-lg bg-blue-500/10 px-2.5 py-1 text-xs text-blue-400"
+                      >
+                        <span className="text-sm">{cat.icon}</span>
+                        {cat.name}
+                        {isAdmin && (
+                          <button
+                            onClick={() => handleToggleCategory(cat.slug)}
+                            disabled={categorySaving}
+                            className="ml-0.5 rounded-full p-0.5 opacity-0 transition-all group-hover:opacity-100 hover:bg-white/10"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        )}
+                      </span>
+                    ))}
+                    {groupCategories.length === 0 && !isAdmin && (
+                      <span className="text-xs text-muted/50">暂无分类</span>
+                    )}
+                  </div>
+                  {isAdmin && (
+                    <div className="mt-2 flex gap-2">
+                      <button
+                        onClick={() => setShowCategoryPicker(!showCategoryPicker)}
+                        className="flex items-center gap-1.5 rounded-lg bg-blue-500/15 px-2.5 py-1.5 text-xs font-medium text-blue-400 transition-colors hover:bg-blue-500/25"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        <span>选择分类</span>
+                      </button>
+                      {aiConfigured && (
+                        <button
+                          onClick={handleAiSuggestCategories}
+                          disabled={aiCategoryLoading}
+                          className="flex items-center gap-1.5 rounded-lg bg-purple-500/15 px-2.5 py-1.5 text-xs font-medium text-purple-400 transition-colors hover:bg-purple-500/25 disabled:opacity-50"
+                          title="AI 智能分类"
+                        >
+                          {aiCategoryLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Brain className="h-3.5 w-3.5" />}
+                          <span className="hidden sm:inline">{aiCategoryLoading ? "AI 分析中..." : "AI 分类"}</span>
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {/* 分类选择器 */}
+                  {showCategoryPicker && (
+                    <div className="mt-3 rounded-lg border border-blue-500/20 bg-blue-500/5 p-3">
+                      <div className="mb-2 flex items-center justify-between">
+                        <span className="text-xs font-medium text-blue-400 flex items-center gap-1.5">
+                          <FolderOpen className="h-3.5 w-3.5" />
+                          选择分类
+                        </span>
+                        <button
+                          onClick={() => setShowCategoryPicker(false)}
+                          className="rounded-md p-0.5 text-muted hover:text-foreground"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {allCategories.length === 0 ? (
+                          <span className="text-xs text-muted/50">暂无可用分类，请先在设置中初始化分类</span>
+                        ) : (
+                          allCategories.map((cat) => {
+                            const isSelected = groupCategories.some(gc => gc.slug === cat.slug);
+                            return (
+                              <button
+                                key={cat.slug}
+                                onClick={() => handleToggleCategory(cat.slug)}
+                                disabled={categorySaving}
+                                className={`rounded-md px-2 py-1 text-xs transition-all ${
+                                  isSelected
+                                    ? "bg-blue-500/20 text-blue-300 ring-1 ring-blue-500/40"
+                                    : "bg-card text-muted hover:text-foreground hover:bg-card-hover"
+                                }`}
+                              >
+                                <span className="mr-1">{cat.icon}</span>
+                                {cat.name}
+                                {isSelected && <Check className="ml-1 inline h-3 w-3" />}
+                              </button>
+                            );
+                          })
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* AI 建议分类展示 */}
+                  {aiSuggestedCategories.length > 0 && (
+                    <div className="mt-3 rounded-lg border border-purple-500/20 bg-purple-500/5 p-3">
+                      <div className="mb-2 flex items-center gap-2 text-xs text-purple-400">
+                        <Sparkles className="h-3.5 w-3.5" />
+                        <span>AI 建议分类</span>
+                      </div>
+                      <div className="mb-3 flex flex-wrap gap-1.5">
+                        {aiSuggestedCategories.map((slug) => {
+                          const cat = allCategories.find(c => c.slug === slug);
+                          return (
+                            <span
+                              key={slug}
+                              className="rounded-md bg-purple-500/20 px-2 py-1 text-xs text-purple-300 ring-1 ring-purple-500/40"
+                            >
+                              {cat ? `${cat.icon} ${cat.name}` : slug}
+                            </span>
+                          );
+                        })}
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleApplyAiCategories(aiSuggestedCategories)}
+                          disabled={categorySaving}
+                          className="rounded-md bg-purple-500/20 px-3 py-1 text-xs font-medium text-purple-300 transition-colors hover:bg-purple-500/30 disabled:opacity-40"
+                        >
+                          全部添加 ({aiSuggestedCategories.length})
+                        </button>
+                        <button
+                          onClick={() => setAiSuggestedCategories([])}
+                          className="rounded-md px-2 py-1 text-xs text-muted hover:text-foreground"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {isAdmin && groupCategories.length > 0 && (
+                    <p className="mt-1.5 text-[10px] text-muted/50 flex items-center gap-1">
+                      <ArrowDownToLine className="h-3 w-3" />
+                      添加/删除分类时自动同步到系列内所有卷
+                    </p>
                   )}
                 </div>
               )}

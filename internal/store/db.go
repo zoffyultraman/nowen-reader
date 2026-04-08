@@ -310,6 +310,20 @@ func createTables() error {
 		`CREATE INDEX IF NOT EXISTS "ComicGroupItem_comicId_idx" ON "ComicGroupItem"("comicId")`,
 
 		// ============================================================
+		// GroupCategory (系列-分类多对多关联)
+		// ============================================================
+		`CREATE TABLE IF NOT EXISTS "GroupCategory" (
+			"groupId"    INTEGER NOT NULL,
+			"categoryId" INTEGER NOT NULL,
+			PRIMARY KEY ("groupId", "categoryId"),
+			CONSTRAINT "GroupCategory_groupId_fkey" FOREIGN KEY ("groupId")
+				REFERENCES "ComicGroup" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+			CONSTRAINT "GroupCategory_categoryId_fkey" FOREIGN KEY ("categoryId")
+				REFERENCES "Category" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+		)`,
+		`CREATE INDEX IF NOT EXISTS "GroupCategory_categoryId_idx" ON "GroupCategory"("categoryId")`,
+
+		// ============================================================
 		// UserComicState (用户个人漫画状态)
 		// ============================================================
 		`CREATE TABLE IF NOT EXISTS "UserComicState" (

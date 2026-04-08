@@ -433,6 +433,80 @@ export async function aiSuggestGroupTags(groupId: number, targetLang: string = "
 }
 
 // ============================================================
+// P5: 系列级分类管理
+// ============================================================
+
+/** 系列分类 */
+export interface GroupCategory {
+  id: number;
+  name: string;
+  slug: string;
+  icon: string;
+}
+
+/** 获取系列分类 */
+export async function fetchGroupCategories(groupId: number): Promise<GroupCategory[]> {
+  try {
+    const res = await fetch(`/api/groups/${groupId}/categories`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.categories || [];
+  } catch {
+    return [];
+  }
+}
+
+/** 设置系列分类（替换所有，可选自动同步到所有卷） */
+export async function setGroupCategories(
+  groupId: number,
+  categorySlugs: string[],
+  autoSync: boolean = true
+): Promise<{ success: boolean; syncedTo: number } | null> {
+  try {
+    const res = await fetch(`/api/groups/${groupId}/categories`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ categorySlugs, autoSync }),
+    });
+    if (res.ok) return await res.json();
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/** 将系列分类同步到所有卷 */
+export async function syncGroupCategories(groupId: number): Promise<{ success: boolean; totalVolumes: number; syncedVolumes: number } | null> {
+  try {
+    const res = await fetch(`/api/groups/${groupId}/sync-categories`, {
+      method: "POST",
+    });
+    if (res.ok) return await res.json();
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/** AI 建议系列分类 */
+export async function aiSuggestGroupCategories(
+  groupId: number,
+  targetLang: string = "zh"
+): Promise<{ success: boolean; suggestedCategories: string[] } | null> {
+  try {
+    const res = await fetch(`/api/groups/${groupId}/ai-suggest-categories`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ targetLang }),
+    });
+    if (res.ok) return await res.json();
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+// ============================================================
 // P3: 按话/卷自动分组
 // ============================================================
 

@@ -1404,6 +1404,98 @@ Requirements:
 	return newTags, nil
 }
 
+// SuggestGroupCategories AI 智能建议系列分类。
+// availableCategories: 可选分类列表，格式为 "slug:name"。
+func SuggestGroupCategories(cfg AIConfig, groupName, author, genre, description string, volumeTitles []string, contentType, targetLang string, existingTags []string, availableCategories []string) ([]string, error) {
+	if !cfg.EnableCloudAI || cfg.CloudAPIKey == "" {
+		return nil, fmt.Errorf("cloud AI not configured")
+	}
+
+	systemPrompt := fmt.Sprintf(`You are an expert %s librarian. Based on the given series metadata, suggest the most appropriate categories from the provided list.
+
+Requirements:
+- Select 1-5 categories that best describe this series
+- Only choose from the provided available categories
+- Consider the series name, author, genre, description, tags, and volume titles
+- Return ONLY a JSON array of category slug strings (not names), no extra text or markdown`, contentType)
+
+	// 构建上下文
+	var parts []string
+	if groupName != "" {
+		parts = append(parts, fmt.Sprintf("Series Name: %s", groupName))
+	}
+	if author != "" {
+		parts = append(parts, fmt.Sprintf("Author: %s", author))
+	}
+	if genre != "" {
+		parts = append(parts, fmt.Sprintf("Genre: %s", genre))
+	}
+	if description != "" {
+		desc := description
+		if len(desc) > 500 {
+			desc = desc[:500] + "..."
+		}
+		parts = append(parts, fmt.Sprintf("Description: %s", desc))
+	}
+	if len(existingTags) > 0 {
+		parts = append(parts, fmt.Sprintf("Tags: %s", strings.Join(existingTags, ", ")))
+	}
+	if len(volumeTitles) > 0 {
+		titles := volumeTitles
+		if len(titles) > 10 {
+			titles = titles[:10]
+		}
+		parts = append(parts, fmt.Sprintf("Volume titles:\n%s", strings.Join(titles, "\n")))
+	}
+	parts = append(parts, fmt.Sprintf("\nAvailable categories (slug:name):\n%s", strings.Join(availableCategories, "\n")))
+
+	userPrompt := fmt.Sprintf("Select the most appropriate categories for this %s series:\n\n%s\n\nReturn a JSON array of category slug strings.", contentType, strings.Join(parts, "\n"))
+
+	content, err := CallCloudLLM(cfg, systemPrompt, userPrompt, &LLMCallOptions{
+		Scenario:  "suggest_categories",
+		MaxTokens: 200,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// 清理
+	content = strings.ReplaceAll(content, "```json", "")
+	content = strings.ReplaceAll(content, "```", "")
+	content = strings.TrimSpace(content)
+
+	// 提取 JSON 数组
+	start := strings.Index(content, "[")
+	end := strings.LastIndex(content, "]")
+	if start >= 0 && end > start {
+		content = content[start : end+1]
+	}
+
+	var slugs []string
+	if err := json.Unmarshal([]byte(content), &slugs); err != nil {
+		return nil, fmt.Errorf("failed to parse AI response: %w", err)
+	}
+
+	// 验证 slug 是否在可选列表中
+	validSlugs := make(map[string]bool)
+	for _, cat := range availableCategories {
+		parts := strings.SplitN(cat, ":", 2)
+		if len(parts) > 0 {
+			validSlugs[parts[0]] = true
+		}
+	}
+
+	var validResults []string
+	for _, slug := range slugs {
+		slug = strings.TrimSpace(slug)
+		if slug != "" && validSlugs[slug] {
+			validResults = append(validResults, slug)
+		}
+	}
+
+	return validResults, nil
+}
+
 // ============================================================
 // Phase 2-1: Vision 封面分析
 // ============================================================

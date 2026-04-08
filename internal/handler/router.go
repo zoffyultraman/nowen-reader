@@ -460,6 +460,11 @@ func SetupRoutes(r *gin.Engine) {
 		groupWrite.POST("/:id/sync-tags", group.SyncGroupTags)
 		groupWrite.POST("/:id/override-tags", group.OverrideGroupTags)
 		groupWrite.POST("/:id/ai-suggest-tags", group.AISuggestTags)
+		// P5: 系列级分类管理
+		groupWrite.GET("/:id/categories", group.GetGroupCategories)
+		groupWrite.PUT("/:id/categories", group.SetGroupCategories)
+		groupWrite.POST("/:id/sync-categories", group.SyncGroupCategories)
+		groupWrite.POST("/:id/ai-suggest-categories", group.AISuggestCategories)
 		// P4: 系列级元数据刮削 & AI 识别
 		groupWrite.POST("/:id/scrape-metadata", group.ScrapeMetadata)
 		groupWrite.POST("/:id/apply-metadata", group.ApplyScrapedMetadata)
