@@ -1,32 +1,7 @@
 package service
 
 import (
-	"encoding/json"
-	"fmt"
-	"regexp"
 	"strings"
-)
-
-package service
-
-import (
-	"encoding/json"
-	"fmt"
-	"io"
-	"log"
-	"math"
-	"net/http"
-	"net/url"
-	"os"
-	"path/filepath"
-	"regexp"
-	"strconv"
-	"strings"
-	"time"
-
-	"github.com/nowen-reader/nowen-reader/internal/archive"
-	"github.com/nowen-reader/nowen-reader/internal/config"
-	"github.com/nowen-reader/nowen-reader/internal/store"
 )
 
 // ComicMetadata holds metadata from various sources.
