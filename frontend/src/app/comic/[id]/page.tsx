@@ -70,37 +70,7 @@ import {
   emitCategoriesUpdated,
   emitScrapeApplied,
 } from "@/lib/sync-event";
-
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function isNovelFile(filename?: string): boolean {
-  if (!filename) return false;
-  const ext = filename.toLowerCase();
-  return ext.endsWith(".txt") || ext.endsWith(".epub") || ext.endsWith(".mobi") || ext.endsWith(".azw3") || ext.endsWith(".html") || ext.endsWith(".htm");
-}
-
-// 优先使用数据库 type 字段判断是否为小说，fallback 到文件后缀
-function getReaderUrl(comic: { id: string; filename?: string; type?: string }): string {
-  if (comic.type === "comic") return `/reader/${comic.id}`;
-  if (comic.type === "novel") return `/novel/${comic.id}`;
-  return isNovelFile(comic.filename) ? `/novel/${comic.id}` : `/reader/${comic.id}`;
-}
-
-function getDetailUrl(comic: { id: string; filename?: string; type?: string }): string {
-  if (comic.type === "comic") return `/comic/${comic.id}`;
-  if (comic.type === "novel") return `/novel/${comic.id}`;
-  return isNovelFile(comic.filename) ? `/novel/${comic.id}` : `/comic/${comic.id}`;
-}
-
-function isNovelComic(comic: { filename?: string; type?: string }): boolean {
-  if (comic.type === "comic") return false;
-  if (comic.type === "novel") return true;
-  return isNovelFile(comic.filename);
-}
+import { formatFileSize, isNovelFile, getReaderUrl, getDetailUrl, isNovelComic } from "@/lib/comic-utils";
 
 export default function ComicDetailPage() {
   const params = useParams();
@@ -800,7 +770,7 @@ export default function ComicDetailPage() {
       </div>
 
       <main className="mx-auto max-w-5xl px-3 sm:px-6 py-4 sm:py-8 pb-20 sm:pb-8">
-        <div className="grid gap-5 sm:gap-8 md:grid-cols-[280px_1fr]">
+        <div className="grid gap-5 sm:gap-8 md:grid-cols-[280px_1fr] overflow-hidden">
           {/* Cover */}
           <div className="space-y-3 sm:space-y-4 mx-auto w-full max-w-[240px] md:max-w-none">
             <div className="group relative aspect-[5/7] w-full overflow-hidden rounded-xl bg-card shadow-2xl">
@@ -944,7 +914,7 @@ export default function ComicDetailPage() {
           </div>
 
           {/* Info */}
-          <div className="space-y-6">
+          <div className="space-y-6 min-w-0">
             {/* Title & Favorite */}
               <div className="flex items-start justify-between gap-2 sm:gap-4">
               <div className="flex-1 min-w-0">
@@ -1117,7 +1087,7 @@ export default function ComicDetailPage() {
               const nextUnread = group.comics.find(c => c.id !== comicId && c.pageCount > 0 && c.lastReadPage < c.pageCount);
 
               return (
-                <div key={group.id} className="rounded-xl border border-border/40 bg-card/50 overflow-hidden">
+                <div key={group.id} className="rounded-xl border border-border/40 bg-card/50 overflow-hidden min-w-0">
                   {/* 合集头部 */}
                   <Link
                     href={`/group/${group.id}${comic?.type ? `?contentType=${comic.type}` : ''}`}
@@ -1186,7 +1156,7 @@ export default function ComicDetailPage() {
                         className="flex items-center gap-2 text-xs text-accent transition-colors hover:text-accent-hover"
                       >
                         <Play className="h-3 w-3" />
-                        <span>{t.comicGroup?.continueReading || "继续阅读"}: {nextUnread.title}</span>
+                        <span className="truncate">{t.comicGroup?.continueReading || "继续阅读"}: {nextUnread.title}</span>
                       </Link>
                     </div>
                   )}

@@ -687,9 +687,35 @@ func (p *pdfReader) Close() {
 // PDF utilities (page count + rendering via external tools)
 // ============================================================
 
+// PDF页数缓存，避免重复解析同一个PDF文件
+var (
+	pdfPageCountCache   = make(map[string]int)
+	pdfPageCountCacheMu sync.RWMutex
+)
+
+// ClearPdfPageCountCache 清除指定文件的PDF页数缓存，文件变更时调用。
+// 如果 fp 为空，则清除所有缓存。
+func ClearPdfPageCountCache(fp string) {
+	pdfPageCountCacheMu.Lock()
+	defer pdfPageCountCacheMu.Unlock()
+	if fp == "" {
+		pdfPageCountCache = make(map[string]int)
+	} else {
+		delete(pdfPageCountCache, fp)
+	}
+}
+
 // GetPdfPageCount returns the number of pages in a PDF file.
-// Uses a lightweight approach: counts "endobj" or parses trailer.
+// 结果会被缓存，避免重复解析。
 func GetPdfPageCount(fp string) (int, error) {
+	// 先查缓存
+	pdfPageCountCacheMu.RLock()
+	if count, ok := pdfPageCountCache[fp]; ok {
+		pdfPageCountCacheMu.RUnlock()
+		return count, nil
+	}
+	pdfPageCountCacheMu.RUnlock()
+
 	// Method 1: Use 7z to list PDF — it reports pages as entries
 	bin := find7za()
 	if bin != "" {
@@ -711,16 +737,32 @@ func GetPdfPageCount(fp string) (int, error) {
 				}
 			}
 			if count > 0 {
+				// 写入缓存
+				pdfPageCountCacheMu.Lock()
+				pdfPageCountCache[fp] = count
+				pdfPageCountCacheMu.Unlock()
 				return count, nil
 			}
 		}
 	}
 
 	// Method 2: Parse the PDF directly for page count
-	return countPdfPages(fp)
+	count, err := countPdfPages(fp)
+	if err != nil {
+		return 0, err
+	}
+
+	// 写入缓存
+	pdfPageCountCacheMu.Lock()
+	pdfPageCountCache[fp] = count
+	pdfPageCountCacheMu.Unlock()
+
+	return count, nil
 }
 
-// countPdfPages reads the PDF and counts pages using a simple trailer parse.
+// countPdfPages 解析PDF文件获取页数。
+// 优化策略：先读取文件末尾部分（PDF交叉引用表和页面树通常在末尾），
+// 避免将整个文件读入内存，大幅降低内存和CPU占用。
 func countPdfPages(fp string) (int, error) {
 	f, err := os.Open(fp)
 	if err != nil {
@@ -728,16 +770,71 @@ func countPdfPages(fp string) (int, error) {
 	}
 	defer f.Close()
 
+	fi, err := f.Stat()
+	if err != nil {
+		return 0, err
+	}
+	fileSize := fi.Size()
+
+	// 分段读取策略：先读末尾小块，逐步扩大，最后兜底全量读取
+	// PDF 的 /Type /Pages 和 /Count 通常在文件末尾附近
+	chunkSizes := []int64{64 * 1024, 256 * 1024, 1 * 1024 * 1024, 4 * 1024 * 1024}
+
+	for _, chunkSize := range chunkSizes {
+		if chunkSize > fileSize {
+			chunkSize = fileSize
+		}
+		offset := fileSize - chunkSize
+		if offset < 0 {
+			offset = 0
+		}
+
+		buf := make([]byte, chunkSize)
+		n, err := f.ReadAt(buf, offset)
+		if err != nil && err != io.EOF {
+			continue
+		}
+		content := string(buf[:n])
+
+		// 尝试用 /Type /Pages + /Count 方式解析
+		if count := parsePdfPageCount(content); count > 0 {
+			return count, nil
+		}
+
+		// 如果已经读取了整个文件，不再继续扩大
+		if chunkSize >= fileSize {
+			break
+		}
+	}
+
+	// 兜底：全量读取后用 /Type /Page 逐个计数
+	// 仅对极少数结构异常的PDF文件触发
+	log.Printf("[pdf] 分段读取未找到页数信息，尝试全量扫描: %s", fp)
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
+		return 0, err
+	}
 	all, err := io.ReadAll(f)
 	if err != nil {
 		return 0, err
 	}
-
 	content := string(all)
+	all = nil // 尽早释放 []byte，减少内存峰值
 
-	// Method 1: 查找 /Type /Pages 中的 /Count N（页面树根节点的总页数）
-	// 这是最可靠的方法，大多数 PDF 都有这个结构
-	// 查找所有 /Type /Pages 对象，取其中的 /Count 值
+	if count := parsePdfPageCount(content); count > 0 {
+		return count, nil
+	}
+
+	if count := countPdfPageObjects(content); count > 0 {
+		return count, nil
+	}
+
+	log.Printf("[pdf] Could not determine page count for %s, defaulting to 1", fp)
+	return 1, nil
+}
+
+// parsePdfPageCount 从PDF内容片段中查找 /Type /Pages 对象的 /Count 值。
+// 返回找到的最大页数，未找到则返回0。
+func parsePdfPageCount(content string) int {
 	maxCount := 0
 	searchStr := content
 	for {
@@ -773,14 +870,14 @@ func countPdfPages(fp string) (int, error) {
 		searchStr = searchStr[pagesIdx+12:]
 	}
 
-	if maxCount > 0 {
-		return maxCount, nil
-	}
+	return maxCount
+}
 
-	// Method 2: 计算 /Type /Page 出现的次数（排除 /Type /Pages）
-	// 逐个对象计数
+// countPdfPageObjects 通过计算 /Type /Page（非 /Pages）出现次数来统计页数。
+// 这是兜底方法，仅在 parsePdfPageCount 无法获取时使用。
+func countPdfPageObjects(content string) int {
 	count := 0
-	searchStr = content
+	searchStr := content
 	for {
 		idx := strings.Index(searchStr, "/Type /Page")
 		if idx < 0 {
@@ -809,12 +906,7 @@ func countPdfPages(fp string) (int, error) {
 		searchStr = searchStr[after:]
 	}
 
-	if count > 0 {
-		return count, nil
-	}
-
-	log.Printf("[pdf] Could not determine page count for %s, defaulting to 1", fp)
-	return 1, nil
+	return count
 }
 
 // RenderPdfPage renders a single PDF page to a PNG image.

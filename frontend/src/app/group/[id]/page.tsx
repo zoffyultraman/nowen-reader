@@ -29,7 +29,7 @@ import {
   AlertTriangle,
   Copy,
 } from "lucide-react";
-import { useTranslation } from "@/lib/i18n";
+import { useTranslation, useLocale } from "@/lib/i18n";
 import { useToast } from "@/components/Toast";
 import { useAuth } from "@/lib/auth-context";
 import {
@@ -58,48 +58,10 @@ import type { InheritPreview, GroupTag, GroupCategory } from "@/api/groups";
 import { GroupMetadataSearch } from "@/components/GroupMetadataSearch";
 import { Sparkles, Brain, FolderOpen } from "lucide-react";
 import { useAIStatus } from "@/hooks/useAIStatus";
-import { useLocale } from "@/lib/i18n/context";
+import { useGlobalSyncEvent } from "@/hooks/useSyncEvent";
+import { formatFileSize, formatDuration, isNovelFile, getReaderUrl, naturalSortKey } from "@/lib/comic-utils";
 
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function formatDuration(seconds: number): string {
-  if (seconds < 60) return `${seconds}s`;
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  return m > 0 ? `${h}h${m}m` : `${h}h`;
-}
-
-// 判断是否为小说文件
-function isNovelFile(filename?: string): boolean {
-  if (!filename) return false;
-  const ext = filename.toLowerCase();
-  return (
-    ext.endsWith(".txt") ||
-    ext.endsWith(".epub") ||
-    ext.endsWith(".mobi") ||
-    ext.endsWith(".azw3")
-  );
-}
-
-// 优先使用数据库 type 字段判断，fallback 到文件后缀
-function getReaderUrl(comic: { id: string; filename?: string; type?: string }): string {
-  if (comic.type === "comic") return `/reader/${comic.id}`;
-  if (comic.type === "novel") return `/novel/${comic.id}`;
-  return isNovelFile(comic.filename) ? `/novel/${comic.id}` : `/reader/${comic.id}`;
-}
-
-// 自然排序键：将字符串中的数字部分补零对齐，实现数字感知排序
-function naturalSortKey(s: string): string {
-  return s.replace(/\d+/g, (match) => match.padStart(20, "0")).toLowerCase();
-}
-
-export default function GroupDetailPage() {
-  const params = useParams();
+export default function GroupDetailPage() {  const params = useParams();
   const router = useRouter();
   const t = useTranslation();
   const toast = useToast();
