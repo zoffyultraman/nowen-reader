@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
 	"github.com/gin-gonic/gin"
 	"github.com/nowen-reader/nowen-reader/internal/service"
 	"github.com/nowen-reader/nowen-reader/internal/store"
@@ -362,4 +363,3 @@ func (h *MetadataHandler) AIChat(c *gin.Context) {
 		c.Writer.Flush()
 	}
 }
-

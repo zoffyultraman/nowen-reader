@@ -3,10 +3,8 @@ package handler
 import (
 	"encoding/json"
 	"fmt"
-	"io"
-	"log"
-	"strconv"
 	"strings"
+
 	"github.com/gin-gonic/gin"
 	"github.com/nowen-reader/nowen-reader/internal/service"
 	"github.com/nowen-reader/nowen-reader/internal/store"
@@ -307,4 +305,3 @@ func (h *AIHandler) BatchSuggestCategory(c *gin.Context) {
 	fmt.Fprintf(c.Writer, "data: %s\n\n", doneData)
 	c.Writer.Flush()
 }
-

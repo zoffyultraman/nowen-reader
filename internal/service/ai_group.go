@@ -160,4 +160,3 @@ func repairTruncatedJSONArray(s string) string {
 	}
 	return result
 }
-

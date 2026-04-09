@@ -2,8 +2,9 @@ package handler
 
 import (
 	"fmt"
-	"strings"
+
 	"github.com/gin-gonic/gin"
+	"github.com/nowen-reader/nowen-reader/internal/service"
 	"github.com/nowen-reader/nowen-reader/internal/store"
 )
 

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+
 	"github.com/nowen-reader/nowen-reader/internal/config"
 )
 
@@ -84,4 +85,3 @@ func GetDefaultPromptTemplates() PromptTemplates {
 		},
 	}
 }
-

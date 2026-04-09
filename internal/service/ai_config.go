@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+
 	"github.com/nowen-reader/nowen-reader/internal/config"
 )
 
@@ -88,4 +89,3 @@ func SaveAIConfig(cfg AIConfig) error {
 	data, _ := json.MarshalIndent(cfg, "", "  ")
 	return os.WriteFile(aiConfigPath(), data, 0644)
 }
-

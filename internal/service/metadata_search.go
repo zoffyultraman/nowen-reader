@@ -108,4 +108,3 @@ func mergeResults(primary, extra []ComicMetadata) []ComicMetadata {
 	}
 	return merged
 }
-

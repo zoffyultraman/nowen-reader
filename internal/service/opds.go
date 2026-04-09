@@ -12,11 +12,11 @@ import (
 // ============================================================
 
 const (
-	opdsNS             = "http://www.w3.org/2005/Atom"
-	opdsCatalogNS      = "http://opds-spec.org/2010/catalog"
-	opdsMIME           = "application/atom+xml;profile=opds-catalog;kind=navigation"
+	opdsNS              = "http://www.w3.org/2005/Atom"
+	opdsCatalogNS       = "http://opds-spec.org/2010/catalog"
+	opdsMIME            = "application/atom+xml;profile=opds-catalog;kind=navigation"
 	opdsAcquisitionMIME = "application/atom+xml;profile=opds-catalog;kind=acquisition"
-	dcNS               = "http://purl.org/dc/elements/1.1/"
+	dcNS                = "http://purl.org/dc/elements/1.1/"
 )
 
 // OPDSComic holds comic data for OPDS feed generation.
@@ -41,13 +41,13 @@ type OPDSComic struct {
 // ============================================================
 
 type atomFeed struct {
-	XMLName xml.Name   `xml:"feed"`
-	XMLNS   string     `xml:"xmlns,attr"`
-	OPDS    string     `xml:"xmlns:opds,attr,omitempty"`
-	DC      string     `xml:"xmlns:dc,attr,omitempty"`
-	ID      string     `xml:"id"`
-	Title   string     `xml:"title"`
-	Updated string     `xml:"updated"`
+	XMLName xml.Name    `xml:"feed"`
+	XMLNS   string      `xml:"xmlns,attr"`
+	OPDS    string      `xml:"xmlns:opds,attr,omitempty"`
+	DC      string      `xml:"xmlns:dc,attr,omitempty"`
+	ID      string      `xml:"id"`
+	Title   string      `xml:"title"`
+	Updated string      `xml:"updated"`
 	Author  *atomAuthor `xml:"author,omitempty"`
 	Links   []atomLink  `xml:"link"`
 	Entries []atomEntry `xml:"entry"`
@@ -94,12 +94,12 @@ func GenerateRootCatalog(baseURL string) string {
 	now := time.Now().UTC().Format(time.RFC3339)
 
 	feed := atomFeed{
-		XMLNS: opdsNS,
-		OPDS:  opdsCatalogNS,
-		ID:    baseURL + "/api/opds",
-		Title: "NowenReader OPDS Catalog",
+		XMLNS:   opdsNS,
+		OPDS:    opdsCatalogNS,
+		ID:      baseURL + "/api/opds",
+		Title:   "NowenReader OPDS Catalog",
 		Updated: now,
-		Author: &atomAuthor{Name: "NowenReader", URI: baseURL},
+		Author:  &atomAuthor{Name: "NowenReader", URI: baseURL},
 		Links: []atomLink{
 			{Rel: "self", Href: "/api/opds", Type: opdsMIME},
 			{Rel: "start", Href: "/api/opds", Type: opdsMIME},

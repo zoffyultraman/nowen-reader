@@ -3,9 +3,9 @@ package handler
 import (
 	"encoding/json"
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
+
 	"github.com/gin-gonic/gin"
 	"github.com/nowen-reader/nowen-reader/internal/service"
 	"github.com/nowen-reader/nowen-reader/internal/store"
@@ -169,4 +169,3 @@ func (h *AIHandler) GenerateReadingInsight(c *gin.Context) {
 func currentYear() int {
 	return time.Now().Year()
 }
-

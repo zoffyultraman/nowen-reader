@@ -3,11 +3,8 @@ package handler
 import (
 	"encoding/json"
 	"fmt"
-	"io"
-	"log"
-	"regexp"
-	"strconv"
 	"strings"
+
 	"github.com/gin-gonic/gin"
 	"github.com/nowen-reader/nowen-reader/internal/service"
 	"github.com/nowen-reader/nowen-reader/internal/store"
@@ -259,4 +256,3 @@ func stripHTMLTags(s string) string {
 	}
 	return strings.TrimSpace(text)
 }
-
