@@ -200,9 +200,8 @@ func GetComicPagesEx(comicID string) (*PagesResult, error) {
 				isNovel = false // 数据库中标记为漫画，覆盖默认的小说判断
 			} else if comic.ComicType == "novel" && (archiveType == archive.TypeMobi || archiveType == archive.TypeAzw3) {
 				// MOBI/AZW3 文件默认被标记为 novel，但可能实际是图片为主的漫画
-				// 在首次打开时进行实时检测，如果是图片为主则自动修正类型
-				epubPath, convErr := archive.ConvertToEpub(fp)
-				if convErr == nil && epubPath != "" && archive.IsImageHeavyEpub(epubPath) {
+				// 在首次打开时进行实时检测，如果是图片为主则自动修正类型（纯 Go，无需 Calibre）
+				if archive.IsMobiImageHeavy(fp) {
 					log.Printf("[pages] Auto-detected image-heavy %s, reclassifying as comic: %s", archiveType, comic.Filename)
 					_ = store.UpdateComicType(comicID, "comic")
 					isNovel = false
@@ -291,7 +290,14 @@ func getChapterTitles(r archive.Reader, archiveType archive.ArchiveType) []strin
 	switch archiveType {
 	case archive.TypeTxt:
 		return archive.GetTxtChapterTitles(r)
-	case archive.TypeEpub, archive.TypeMobi, archive.TypeAzw3:
+	case archive.TypeEpub:
+		return archive.GetEpubChapterTitles(r)
+	case archive.TypeMobi, archive.TypeAzw3:
+		// 优先尝试 MOBI 原生解析器的章节标题
+		if titles := archive.GetMobiChapterTitles(r); titles != nil {
+			return titles
+		}
+		// 回退到 EPUB 解析器（Calibre 转换后的情况）
 		return archive.GetEpubChapterTitles(r)
 	case archive.TypeHtml:
 		return archive.GetHtmlChapterTitles(r)

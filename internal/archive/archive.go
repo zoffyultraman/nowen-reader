@@ -471,10 +471,11 @@ func IsEbookConvertAvailable() bool {
 
 // ConvertToEpub converts a MOBI/AZW3 file to EPUB using Calibre ebook-convert.
 // Returns the path to the converted EPUB file (stored in cache directory).
+// Note: This is now a fallback method. The primary method is the native Go MOBI parser.
 func ConvertToEpub(inputPath string) (string, error) {
 	bin := findEbookConvert()
 	if bin == "" {
-		return "", fmt.Errorf("ebook-convert (Calibre) not found — install Calibre to read MOBI/AZW3 files: https://calibre-ebook.com")
+		return "", fmt.Errorf("ebook-convert (Calibre) not available — this is optional, native Go parser should be used instead")
 	}
 
 	// 生成缓存路径：.cache/converted/<md5>.epub
@@ -514,11 +515,22 @@ func ConvertToEpub(inputPath string) (string, error) {
 	return epubPath, nil
 }
 
-// newMobiReader converts a MOBI/AZW3 file to EPUB and returns an EPUB reader.
+// newMobiReader 使用纯 Go 解析器读取 MOBI/AZW3 文件，无需外部依赖。
+// 如果纯 Go 解析失败且 Calibre ebook-convert 可用，则回退到 Calibre 转换。
 func newMobiReader(fp string) (Reader, error) {
-	epubPath, err := ConvertToEpub(fp)
-	if err != nil {
-		return nil, err
+	// 优先使用纯 Go 解析器（无需 Calibre）
+	reader, err := newNativeMobiReader(fp)
+	if err == nil {
+		return reader, nil
+	}
+
+	log.Printf("[mobi] Native Go parser failed for %s: %v, trying Calibre fallback...", path.Base(fp), err)
+
+	// 回退：尝试使用 Calibre ebook-convert
+	epubPath, convErr := ConvertToEpub(fp)
+	if convErr != nil {
+		// 两种方式都失败，返回原始错误（纯 Go 解析器的错误更有意义）
+		return nil, fmt.Errorf("parse MOBI/AZW3 failed: %v (Calibre fallback also failed: %v)", err, convErr)
 	}
 	return newEpubReader(epubPath)
 }

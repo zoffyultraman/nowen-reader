@@ -454,15 +454,10 @@ func fullSync() {
 								_ = store.UpdateComicType(item.ID, "comic")
 							}
 						} else if archiveType == archive.TypeMobi || archiveType == archive.TypeAzw3 {
-							// mobi/azw3 需要先通过 Calibre 转换为 epub，再检测内容类型
-							epubPath, convErr := archive.ConvertToEpub(item.Path)
-							if convErr == nil && epubPath != "" {
-								if archive.IsImageHeavyEpub(epubPath) {
-									log.Printf("[full-sync] Detected image-heavy %s (via EPUB conversion), marking as comic: %s", archiveType, item.Filename)
-									_ = store.UpdateComicType(item.ID, "comic")
-								}
-							} else if convErr != nil {
-								log.Printf("[full-sync] Cannot detect content type for %s (conversion failed): %v", item.Filename, convErr)
+							// mobi/azw3 使用纯 Go 解析器直接检测内容类型（无需 Calibre）
+							if archive.IsMobiImageHeavy(item.Path) {
+								log.Printf("[full-sync] Detected image-heavy %s, marking as comic: %s", archiveType, item.Filename)
+								_ = store.UpdateComicType(item.ID, "comic")
 							}
 						}
 					}
@@ -637,19 +632,9 @@ func RedetectEbookTypes() int {
 			continue
 		}
 
-		// 通过 Calibre 转换为 epub，再检测内容类型
-		epubPath, convErr := archive.ConvertToEpub(foundPath)
-		if convErr != nil {
-			log.Printf("[redetect] Cannot convert %s: %v", c.Filename, convErr)
-			continue
-		}
-		if epubPath == "" {
-			log.Printf("[redetect] Empty epub path for %s", c.Filename)
-			continue
-		}
-
-		log.Printf("[redetect] Checking converted epub: %s", epubPath)
-		if archive.IsImageHeavyEpub(epubPath) {
+		// 使用纯 Go 解析器直接检测内容类型（无需 Calibre）
+		log.Printf("[redetect] Checking mobi/azw3 content type: %s", c.Filename)
+		if archive.IsMobiImageHeavy(foundPath) {
 			log.Printf("[redetect] ✓ Detected image-heavy %s, reclassifying as comic: %s", archiveType, c.Filename)
 			_ = store.UpdateComicType(c.ID, "comic")
 			reclassified++

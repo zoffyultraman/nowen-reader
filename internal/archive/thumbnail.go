@@ -59,16 +59,31 @@ func GenerateThumbnail(archivePath, comicID string) ([]byte, float64, error) {
 		pageBuffer = buf
 
 	case archiveType == TypeEpub || archiveType == TypeMobi || archiveType == TypeAzw3:
-		// EPUB/MOBI/AZW3: try to extract cover image (MOBI/AZW3 auto-converted to EPUB)
+		// EPUB/MOBI/AZW3: try to extract cover image
+		// 对于 MOBI/AZW3，优先使用纯 Go 解析器直接提取封面
+		if archiveType == TypeMobi || archiveType == TypeAzw3 {
+			coverData, err := ExtractMobiCoverImage(archivePath)
+			if err == nil && len(coverData) > 0 {
+				pageBuffer = coverData
+				break
+			}
+			log.Printf("[thumbnail] Native MOBI cover extraction failed for %s: %v, trying via reader", comicID, err)
+		}
+
 		reader, err := NewReader(archivePath)
 		if err != nil {
 			return nil, 0, err
 		}
 		defer reader.Close()
 
+		// 尝试从 EPUB reader 获取封面
 		coverData, err := GetEpubCoverImage(reader)
 		if err != nil {
-			log.Printf("[thumbnail] EPUB cover extraction failed for %s: %v, generating text cover", comicID, err)
+			// 尝试从 MOBI reader 获取封面
+			coverData, err = GetMobiCoverImage(reader)
+		}
+		if err != nil {
+			log.Printf("[thumbnail] Cover extraction failed for %s: %v, generating text cover", comicID, err)
 			// Fallback: generate a text-based cover
 			data, err := generateTextCover(archivePath, comicID, thumbDir, cachePath)
 			return data, 0, err
