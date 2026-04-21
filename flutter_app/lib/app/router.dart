@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../data/providers/auth_provider.dart';
 import '../features/auth/login_screen.dart';
 import '../features/detail/comic_detail_screen.dart';
+import '../features/favorites/favorites_screen.dart';
 import '../features/home/home_screen.dart';
 import '../features/reader/comic_reader_screen.dart';
 import '../features/reader/novel_reader_screen.dart';
@@ -14,6 +15,7 @@ import '../features/shell/app_shell.dart';
 import '../features/stats/stats_screen.dart';
 import '../features/groups/group_detail_screen.dart';
 import '../features/metadata/metadata_screen.dart';
+import '../features/tag_manager/tag_manager_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authProvider);
@@ -105,6 +107,16 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/metadata/:id',
         builder: (_, state) => MetadataScreen(comicId: state.pathParameters['id']!),
+      ),
+      // 标签与分类管理
+      GoRoute(
+        path: '/tag-manager',
+        builder: (_, __) => const TagManagerScreen(),
+      ),
+      // 收藏管理
+      GoRoute(
+        path: '/favorites',
+        builder: (_, __) => const FavoritesScreen(),
       ),
     ],
   );

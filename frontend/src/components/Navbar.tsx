@@ -54,13 +54,13 @@ export default function Navbar({
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 border-b border-border/50 bg-background/70 backdrop-blur-xl backdrop-saturate-150">
-      <div className="mx-auto flex h-14 sm:h-16 max-w-[1800px] items-center justify-between px-3 sm:px-6">
+      <div className="mx-auto flex h-12 sm:h-14 max-w-[1800px] items-center justify-between px-3 sm:px-6">
         {/* Logo */}
-        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-          <div className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg bg-accent">
-            <BookMarked className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
+        <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
+          <div className="flex h-6 w-6 sm:h-7 sm:w-7 items-center justify-center rounded-lg bg-accent">
+            <BookMarked className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-white" />
           </div>
-          <span className="hidden sm:inline text-lg font-bold tracking-tight text-foreground">
+          <span className="hidden sm:inline text-xs font-bold tracking-tight text-foreground">
             NowenReader
           </span>
         </div>
@@ -109,12 +109,12 @@ export default function Navbar({
 
         {/* Right Actions */}
         <div className="flex items-center gap-1 sm:gap-2 shrink-0">
-          {/* Upload — 仅管理员可见 */}
+          {/* Upload — 仅管理员可见（移动端隐藏） */}
           {isAdmin && (
           <button
             onClick={onUpload}
             disabled={uploading}
-            className="flex h-8 sm:h-9 items-center gap-1.5 sm:gap-2 rounded-xl bg-accent px-2.5 sm:px-4 text-sm font-medium text-white transition-all duration-200 hover:bg-accent-hover hover:shadow-lg hover:shadow-accent/25 disabled:opacity-50"
+            className="hidden sm:flex h-8 sm:h-9 items-center gap-1.5 sm:gap-2 rounded-xl bg-accent px-2.5 sm:px-4 text-sm font-medium text-white transition-all duration-200 hover:bg-accent-hover hover:shadow-lg hover:shadow-accent/25 disabled:opacity-50"
           >
             {uploading ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -125,30 +125,30 @@ export default function Navbar({
           </button>
           )}
 
-          {/* Scan Library — 手动扫描文库（仅管理员可见） */}
+          {/* Scan Library — 手动扫描文库（仅管理员可见，移动端保留） */}
           {isAdmin && onScanLibrary && (
             <button
               onClick={onScanLibrary}
               disabled={scanning}
-              className="flex h-8 sm:h-9 w-8 sm:w-9 items-center justify-center rounded-xl border border-border/60 text-muted transition-colors duration-200 hover:border-accent/40 hover:text-accent hover:bg-accent/5 disabled:opacity-50"
+              className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-xl border border-border/60 text-muted transition-colors duration-200 hover:border-accent/40 hover:text-accent hover:bg-accent/5 disabled:opacity-50"
               title={t.navbar?.scanLibrary || "扫描文库"}
             >
               <RefreshCw className={`h-4 w-4 ${scanning ? "animate-spin" : ""}`} />
             </button>
           )}
 
-          {/* Collections — 合集管理（仅管理员可见） */}
+          {/* Collections — 合集管理（仅管理员可见，移动端保留） */}
           {isAdmin && (
           <Link
             href="/collections"
-            className="hidden sm:flex h-9 w-9 items-center justify-center rounded-xl border border-border/60 text-muted transition-colors duration-200 hover:border-accent/40 hover:text-accent hover:bg-accent/5"
+            className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-xl border border-border/60 text-muted transition-colors duration-200 hover:border-accent/40 hover:text-accent hover:bg-accent/5"
             title={((t as any).collections?.title) || "合集管理"}
           >
             <Layers className="h-4 w-4" />
           </Link>
           )}
 
-          {/* Tag & Category Manager — 标签与分类管理（仅管理员可见） */}
+          {/* Tag & Category Manager — 标签与分类管理（仅管理员可见，移动端隐藏） */}
           {isAdmin && (
           <Link
             href="/tag-manager"
@@ -159,7 +159,7 @@ export default function Navbar({
           </Link>
           )}
 
-          {/* Metadata Scraper — 仅管理员可见 */}
+          {/* Metadata Scraper — 仅管理员可见（移动端隐藏） */}
           {isAdmin && (
             <Link
               href="/scraper"
@@ -180,10 +180,10 @@ export default function Navbar({
             </Link>
           )}
 
-          {/* Theme Toggle */}
+          {/* Theme Toggle — 日夜间模式（移动端保留） */}
           <button
             onClick={toggleTheme}
-            className="hidden sm:flex h-9 w-9 items-center justify-center rounded-xl border border-border/60 text-muted transition-colors duration-200 hover:border-border hover:text-foreground"
+            className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-xl border border-border/60 text-muted transition-colors duration-200 hover:border-border hover:text-foreground"
             title={theme === "dark" ? (t.readerToolbar?.dayMode || "Day") : (t.readerToolbar?.nightMode || "Night")}
           >
             {theme === "dark" ? (
@@ -193,7 +193,7 @@ export default function Navbar({
             )}
           </button>
 
-          {/* Language Switcher */}
+          {/* Language Switcher — 移动端隐藏 */}
           <div className="hidden sm:block">
             <LanguageSwitcher />
           </div>
