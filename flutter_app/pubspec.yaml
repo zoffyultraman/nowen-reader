@@ -9,6 +9,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_localizations:
+    sdk: flutter
   # 网络请求
   dio: ^5.4.0
   dio_cookie_manager: ^3.1.1
@@ -27,7 +29,7 @@ dependencies:
   shimmer: ^3.0.0
   photo_view: ^0.15.0
   # 工具
-  intl: ^0.19.0
+  intl: ^0.20.2
   timeago: ^3.6.1
   url_launcher: ^6.2.5
   path_provider: ^2.1.5
