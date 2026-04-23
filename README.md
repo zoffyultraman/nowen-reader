@@ -13,7 +13,7 @@
   <strong>高性能自托管漫画 & 小说管理阅读平台</strong><br>
   Go 单二进制构建 · 轻量极速 · AI 智能辅助 · NAS 友好
 </p>
-> **问题反馈 QQ 群 / Support QQ Group：`1093473044`**
+
 <p align="center">
   <a href="#-为什么选择-nowenreader">为什么选择</a> •
   <a href="#-核心特性">核心特性</a> •
@@ -27,6 +27,8 @@
 </p>
 
 ---
+
+> **问题反馈 QQ 群 / Support QQ Group：`1093473044`**
 
 <!-- 
 ## 📸 界面预览
