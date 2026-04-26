@@ -140,7 +140,7 @@ func TestDatabaseURL(t *testing.T) {
 }
 
 func TestSupportedExtensions(t *testing.T) {
-	supported := []string{"test.zip", "test.cbz", "test.cbr", "test.rar", "test.7z", "test.cb7", "test.pdf"}
+	supported := []string{"test.zip", "test.cbz", "test.cbr", "test.rar", "test.7z", "test.cb7", "test.pdf", "test.azw3"}
 	for _, f := range supported {
 		if !IsSupportedArchive(f) {
 			t.Errorf("Expected %s to be supported", f)

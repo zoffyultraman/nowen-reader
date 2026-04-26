@@ -176,14 +176,40 @@ func newNativeMobiReader(fp string) (*mobiReader, error) {
 		book: book,
 	}
 
-	// 构建章节列表
-	r.chapters = book.chapters
-	r.entries = make([]Entry, 0, len(r.chapters))
-	for i := range r.chapters {
-		r.entries = append(r.entries, Entry{
-			Name:        fmt.Sprintf("chapter-%04d.html", i+1),
-			IsDirectory: false,
-		})
+	// 判断是否为漫画模式（图片为主）
+	// 图片数量多于章节数量且图片 >= 5 张时，按图片模式构建条目列表
+	isImageMode := len(book.images) >= 5 && len(book.images) > len(book.chapters)
+
+	if isImageMode {
+		// 漫画模式：每张图片作为一页
+		r.entries = make([]Entry, 0, len(book.images))
+		for _, img := range book.images {
+			ext := ".jpg"
+			switch img.mimeType {
+			case "image/png":
+				ext = ".png"
+			case "image/gif":
+				ext = ".gif"
+			case "image/webp":
+				ext = ".webp"
+			case "image/bmp":
+				ext = ".bmp"
+			}
+			r.entries = append(r.entries, Entry{
+				Name:        fmt.Sprintf("page-%04d%s", img.index+1, ext),
+				IsDirectory: false,
+			})
+		}
+	} else {
+		// 小说模式：每个章节作为一页
+		r.chapters = book.chapters
+		r.entries = make([]Entry, 0, len(r.chapters))
+		for i := range r.chapters {
+			r.entries = append(r.entries, Entry{
+				Name:        fmt.Sprintf("chapter-%04d.html", i+1),
+				IsDirectory: false,
+			})
+		}
 	}
 
 	return r, nil
@@ -196,11 +222,18 @@ func (r *mobiReader) ListEntries() []Entry {
 func (r *mobiReader) ExtractEntry(entryName string) ([]byte, error) {
 	for i, e := range r.entries {
 		if e.Name == entryName {
-			ch := r.chapters[i]
-			if ch.htmlContent != "" {
-				return []byte(ch.htmlContent), nil
+			// 漫画模式：条目是图片页
+			if strings.HasPrefix(e.Name, "page-") && i < len(r.book.images) {
+				return r.book.images[i].data, nil
 			}
-			return []byte(ch.textContent), nil
+			// 小说模式：条目是章节
+			if i < len(r.chapters) {
+				ch := r.chapters[i]
+				if ch.htmlContent != "" {
+					return []byte(ch.htmlContent), nil
+				}
+				return []byte(ch.textContent), nil
+			}
 		}
 	}
 
@@ -294,6 +327,19 @@ func parseMobi(data []byte, filePath string) (*mobiBook, error) {
 	// 6. 分割章节
 	book.splitChapters()
 
+	// 7. 如果标题是 Calibre 内部 ID（如 "CR!6HCD1AS3010MFE8P4K8H6Q9D2QQ0"），
+	//    尝试从 HTML 的 <title> 或 <dc:title> 标签提取真实标题
+	if book.title == "" || isCalibreInternalID(book.title) {
+		if extracted := extractTitleFromHTML(book.htmlContent); extracted != "" {
+			book.title = extracted
+		} else {
+			// 最后回退：使用文件名（去除扩展名）
+			base := path.Base(filePath)
+			ext := path.Ext(base)
+			book.title = strings.TrimSuffix(base, ext)
+		}
+	}
+
 	log.Printf("[mobi] Parsed %s: type=%d, encoding=%d, chapters=%d, images=%d, title=%q",
 		path.Base(filePath), book.mobiType, book.encoding, len(book.chapters), len(book.images), book.title)
 
@@ -307,6 +353,32 @@ func (book *mobiBook) parsePDBHeader() error {
 		return fmt.Errorf("read PDB header: %w", err)
 	}
 	return nil
+}
+
+// isCalibreInternalID 检测字符串是否为 Calibre 生成的内部 ID
+// Calibre 内部 ID 格式：CR!XXXXXXXXXXXXXXX（以 "CR!" 开头，后跟字母数字）
+func isCalibreInternalID(s string) bool {
+	return strings.HasPrefix(s, "CR!") && len(s) > 3
+}
+
+// extractTitleFromHTML 从 HTML 内容中提取 <title> 标签文本
+func extractTitleFromHTML(html string) string {
+	// 尝试匹配 <title>...</title>
+	re := regexp.MustCompile(`(?i)<title[^>]*>(.*?)</title>`)
+	matches := re.FindStringSubmatch(html)
+	if len(matches) >= 2 {
+		title := strings.TrimSpace(matches[1])
+		// 去除 HTML 实体
+		title = strings.ReplaceAll(title, "&amp;", "&")
+		title = strings.ReplaceAll(title, "&lt;", "<")
+		title = strings.ReplaceAll(title, "&gt;", ">")
+		title = strings.ReplaceAll(title, "&quot;", `"`)
+		title = strings.ReplaceAll(title, "&#39;", "'")
+		if title != "" && !isCalibreInternalID(title) {
+			return title
+		}
+	}
+	return ""
 }
 
 // parsePDBRecords 解析 PalmDB 记录偏移表
@@ -661,7 +733,17 @@ func latin1ToUTF8(data []byte) string {
 // ============================================================
 
 func (book *mobiBook) extractImages() {
-	if book.firstImageIdx == 0 || int(book.firstImageIdx) >= len(book.records) {
+	// 确定图片记录的起始索引
+	startIdx := -1
+	if book.firstImageIdx > 0 && int(book.firstImageIdx) < len(book.records) {
+		startIdx = int(book.firstImageIdx)
+	} else if book.firstResIdx > 0 && int(book.firstResIdx) < len(book.records) {
+		startIdx = int(book.firstResIdx)
+	} else if book.textRecCount > 0 && int(book.textRecCount)+1 < len(book.records) {
+		startIdx = int(book.textRecCount) + 1
+	}
+
+	if startIdx <= 0 {
 		return
 	}
 
@@ -671,7 +753,7 @@ func (book *mobiBook) extractImages() {
 	}
 
 	imgIndex := 0
-	for i := int(book.firstImageIdx); i < endIdx; i++ {
+	for i := startIdx; i < endIdx; i++ {
 		recData, err := book.getRecordData(i)
 		if err != nil {
 			continue
@@ -931,12 +1013,25 @@ func IsMobiImageHeavy(filePath string) bool {
 
 	// 统计图片记录数量
 	imageCount := 0
+
+	// 确定图片记录的起始索引
+	startIdx := -1
 	if book.firstImageIdx > 0 && int(book.firstImageIdx) < len(book.records) {
+		startIdx = int(book.firstImageIdx)
+	} else if book.firstResIdx > 0 && int(book.firstResIdx) < len(book.records) {
+		// AZW3/KF8: 使用 first non-book record index
+		startIdx = int(book.firstResIdx)
+	} else if book.textRecCount > 0 && int(book.textRecCount)+1 < len(book.records) {
+		// 回退: 文本记录之后即为资源记录
+		startIdx = int(book.textRecCount) + 1
+	}
+
+	if startIdx > 0 {
 		endIdx := len(book.records)
 		if book.kf8Boundary > 0 && book.kf8Boundary < endIdx {
 			endIdx = book.kf8Boundary
 		}
-		for i := int(book.firstImageIdx); i < endIdx; i++ {
+		for i := startIdx; i < endIdx; i++ {
 			recData, err := book.getRecordData(i)
 			if err != nil {
 				continue
@@ -950,17 +1045,36 @@ func IsMobiImageHeavy(filePath string) bool {
 	// 提取文本长度
 	textLen := int(book.textLength)
 
-	log.Printf("[mobi] Image-heavy check for %s: images=%d, textLength=%d", path.Base(filePath), imageCount, textLen)
+	// 补充检测：如果通过记录扫描未检测到图片，尝试提取 HTML 内容并统计 <img> 标签
+	if imageCount == 0 {
+		if err := book.extractText(); err == nil && book.htmlContent != "" {
+			imgTagCount := strings.Count(strings.ToLower(book.htmlContent), "<img")
+			if imgTagCount > 0 {
+				imageCount = imgTagCount
+				// HTML 中有 <img> 标签但未提取到实际图片数据，
+				// 说明图片确实存在，使用标签数作为图片计数
+			}
+		}
+	}
 
-	// 如果图片数量 >= 5 且文本很少（每张图片平均不到 200 字符），判定为漫画
-	if imageCount >= 5 {
-		avgTextPerImage := 0
-		if imageCount > 0 {
-			avgTextPerImage = textLen / imageCount
-		}
-		if avgTextPerImage < 200 {
-			return true
-		}
+	log.Printf("[mobi] Image-heavy check for %s: images=%d, textLength=%d (startIdx=%d, firstImageIdx=%d, firstResIdx=%d, textRecCount=%d)",
+		path.Base(filePath), imageCount, textLen, startIdx, book.firstImageIdx, book.firstResIdx, book.textRecCount)
+
+	// textLength 包含 HTML 标记（<div><img src="..."/></div> 等），会大幅膨胀实际文本长度。
+	// 漫画 AZW3 的 HTML 主要是 <img> 标签及少量包裹标签，每张图片约 300-600 字节 HTML；
+	// 小说 AZW3 的 HTML 是大量段落文本，每张配图对应数千字符正文。
+	// 因此使用分层阈值：
+	//   - 图片数 >= 100：几乎一定是漫画卷（漫画通常 150-300 页）
+	//   - 图片数 >= 20：每图平均文本 < 800 字符视为漫画
+	//   - 图片数 >= 5：每图平均文本 < 200 字符视为漫画（严格模式，纯文字+少量插图）
+	if imageCount >= 100 {
+		return true
+	}
+	if imageCount >= 20 && textLen/imageCount < 800 {
+		return true
+	}
+	if imageCount >= 5 && textLen/imageCount < 200 {
+		return true
 	}
 
 	return false
@@ -1045,13 +1159,29 @@ func ExtractMobiCoverImage(filePath string) ([]byte, error) {
 	}
 
 	// 提取第一张图片作为封面
+	// 尝试多种起始索引
+	coverStartIdx := -1
 	if book.firstImageIdx > 0 && int(book.firstImageIdx) < len(book.records) {
-		recData, err := book.getRecordData(int(book.firstImageIdx))
-		if err != nil {
-			return nil, fmt.Errorf("read cover record: %w", err)
+		coverStartIdx = int(book.firstImageIdx)
+	} else if book.firstResIdx > 0 && int(book.firstResIdx) < len(book.records) {
+		coverStartIdx = int(book.firstResIdx)
+	} else if book.textRecCount > 0 && int(book.textRecCount)+1 < len(book.records) {
+		coverStartIdx = int(book.textRecCount) + 1
+	}
+
+	if coverStartIdx > 0 {
+		endIdx := len(book.records)
+		if book.kf8Boundary > 0 && book.kf8Boundary < endIdx {
+			endIdx = book.kf8Boundary
 		}
-		if detectImageType(recData) != "" {
-			return recData, nil
+		for i := coverStartIdx; i < endIdx; i++ {
+			recData, err := book.getRecordData(i)
+			if err != nil {
+				continue
+			}
+			if detectImageType(recData) != "" {
+				return recData, nil
+			}
 		}
 	}
 

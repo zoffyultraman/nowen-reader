@@ -310,7 +310,7 @@ function AboutPanel() {
     { icon: <Server className="h-4 w-4" />, label: "Backend", value: "Go (Gin)" },
     { icon: <Monitor className="h-4 w-4" />, label: "Frontend", value: "Vite + React 19" },
     { icon: <Database className="h-4 w-4" />, label: "Database", value: "SQLite (WAL)" },
-    { icon: <FileText className="h-4 w-4" />, label: "Comics", value: "ZIP/CBZ/RAR/CBR/7Z/PDF" },
+    { icon: <FileText className="h-4 w-4" />, label: "Comics", value: "ZIP/CBZ/RAR/CBR/7Z/PDF/AZW3" },
     { icon: <BookOpen className="h-4 w-4" />, label: "Novels", value: "TXT/EPUB/MOBI/AZW3" },
     { icon: <Sparkles className="h-4 w-4" />, label: "AI", value: "OpenAI / 国内大模型" },
     { icon: <Globe className="h-4 w-4" />, label: "i18n", value: "中文 / English / 日本語" },

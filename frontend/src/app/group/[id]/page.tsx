@@ -1531,13 +1531,17 @@ export default function GroupDetailPage() {  const params = useParams();
                         )}
                         {/* Hover 阅读按钮 */}
                         <div className="absolute inset-0 flex items-center justify-center opacity-0 transition-all duration-300 group-hover:opacity-100">
-                          <Link
-                            href={readerUrl}
+                          <button
+                            type="button"
                             className="flex h-12 w-12 items-center justify-center rounded-full bg-accent/90 shadow-lg shadow-accent/30 backdrop-blur-sm transition-transform duration-300 hover:scale-110"
-                            onClick={(e) => e.stopPropagation()}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              router.push(readerUrl);
+                            }}
                           >
                             <BookOpen className="h-5 w-5 text-white" />
-                          </Link>
+                          </button>
                         </div>
                       </div>
                       <div className="p-2.5">

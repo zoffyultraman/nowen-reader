@@ -196,7 +196,7 @@ function AboutPanel() {
         </div>
         <div className="flex items-center justify-between text-sm">
           <span className="text-muted">Comics</span>
-          <span className="text-foreground">ZIP/CBZ/RAR/CBR/7Z/CB7/PDF</span>
+          <span className="text-foreground">ZIP/CBZ/RAR/CBR/7Z/CB7/PDF/AZW3</span>
         </div>
         <div className="flex items-center justify-between text-sm">
           <span className="text-muted">Novels</span>

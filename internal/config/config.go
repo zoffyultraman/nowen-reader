@@ -270,7 +270,7 @@ func DatabaseURL() string {
 
 // Supported file extensions
 var (
-	SupportedExtensions = []string{".zip", ".cbz", ".cbr", ".rar", ".7z", ".cb7", ".pdf"}
+	SupportedExtensions = []string{".zip", ".cbz", ".cbr", ".rar", ".7z", ".cb7", ".pdf", ".azw3"}
 	NovelExtensions     = []string{".txt", ".epub", ".mobi", ".azw3", ".html", ".htm"}
 	ImageExtensions     = []string{".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".avif"}
 )
