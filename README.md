@@ -360,7 +360,7 @@ nowen-reader-windows-amd64.exe
 
 | 类型 | 格式 |
 |:---|:---|
-| 漫画 / 压缩包 | `.zip` `.cbz` `.cbr` `.rar` `.7z` `.cb7` `.pdf` |
+| 漫画 / 压缩包 | `.zip` `.cbz` `.cbr` `.rar` `.7z` `.cb7` `.pdf` `.azw3` |
 | 小说 / 电子书 | `.txt` `.epub` `.mobi` `.azw3` `.html` `.htm` |
 | 图片（压缩包内） | `.jpg` `.jpeg` `.png` `.gif` `.webp` `.bmp` `.avif` |
 

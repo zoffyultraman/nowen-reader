@@ -209,10 +209,11 @@ func BulkCreateComics(comics []struct {
 func detectComicType(filename string) string {
 	lower := strings.ToLower(filename)
 	if strings.HasSuffix(lower, ".txt") || strings.HasSuffix(lower, ".epub") ||
-		strings.HasSuffix(lower, ".mobi") || strings.HasSuffix(lower, ".azw3") ||
+		strings.HasSuffix(lower, ".mobi") ||
 		strings.HasSuffix(lower, ".html") || strings.HasSuffix(lower, ".htm") {
 		return "novel"
 	}
+	// .azw3 不再硬编码为 novel，由扫描器根据内容检测自动分类
 	return "comic"
 }
 
