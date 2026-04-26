@@ -20,29 +20,12 @@ RUN npm config set registry https://registry.npmmirror.com && \
     npm ci --production=false
 
 COPY frontend/ ./
-#RUN npm run build && \
-#    echo "[frontend] Build succeeded" && \
-#    ls -la /frontend/dist/ && \
-#    test -f /frontend/dist/index.html && echo "[frontend] index.html found ✅" || \
-#    (echo "[frontend] ERROR: index.html not found in dist/" && exit 1)
-# 👇 先检查文件有没有正确 COPY 进来
-RUN echo "==== CHECK FRONTEND FILES ====" && \
-    ls -la /frontend && \
-    echo "==== CHECK index.html ====" && \
-    ls -la /frontend/index.html || echo "NO INDEX.HTML" && \
-    echo "==== CHECK src ====" && \
-    ls -la /frontend/src || echo "NO SRC"
-
-# 👇 再执行 build + 校验
-RUN npm run build || (echo "[frontend] BUILD FAILED ❌" && exit 1)
-
-RUN echo "[frontend] Build succeeded" && \
-    echo "==== DIST CONTENT ====" && \
-    ls -la /frontend/dist || echo "NO DIST" && \
-    echo "==== SEARCH index.html ====" && \
-    find /frontend -name index.html && \
+RUN npm run build && \
+    echo "[frontend] Build succeeded" && \
+    ls -la /frontend/dist/ && \
     test -f /frontend/dist/index.html && echo "[frontend] index.html found ✅" || \
     (echo "[frontend] ERROR: index.html not found in dist/" && exit 1)
+
 
 
 
