@@ -68,6 +68,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       appBar: AppBar(
         title: const Text('NowenReader'),
         actions: [
+          // 合集入口
+          IconButton(
+            icon: const Icon(Icons.layers_outlined),
+            tooltip: '合集',
+            onPressed: () => context.push('/collections'),
+          ),
           // 视图模式切换按钮
           IconButton(
             icon: Icon(

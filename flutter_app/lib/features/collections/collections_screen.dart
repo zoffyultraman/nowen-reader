@@ -5,7 +5,6 @@ import '../../data/api/comic_api.dart';
 import '../../data/models/comic.dart';
 import '../../data/providers/auth_provider.dart';
 import '../../widgets/authenticated_image.dart';
-import '../../l10n/app_localizations.dart';
 
 /// 排序字段
 enum CollectionSortField { name, comicCount, updatedAt, createdAt }
@@ -282,8 +281,6 @@ class _CollectionsScreenState extends ConsumerState<CollectionsScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
             child: Row(
               children: [
-                _buildFilterChip('全部', ''),
-                const SizedBox(width: 8),
                 _buildFilterChip('漫画', 'comic'),
                 const SizedBox(width: 8),
                 _buildFilterChip('小说', 'novel'),
@@ -323,7 +320,7 @@ class _CollectionsScreenState extends ConsumerState<CollectionsScreen> {
       label: Text(label),
       selected: isSelected,
       onSelected: (_) {
-        setState(() => _contentFilter = value);
+        setState(() => _contentFilter = isSelected ? '' : value);
         _loadGroups();
       },
       visualDensity: VisualDensity.compact,
