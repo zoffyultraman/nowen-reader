@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../data/api/api_client.dart';
 import '../../widgets/authenticated_image.dart';
+import '../../widgets/comic_list_tile.dart';
 import '../../data/models/comic.dart';
 import '../../data/providers/auth_provider.dart';
 import '../../data/providers/comic_provider.dart';
@@ -84,9 +85,25 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   Widget build(BuildContext context) {
     final serverUrl = ref.watch(authProvider).serverUrl;
     final cs = Theme.of(context).colorScheme;
+    final viewMode = ref.watch(viewModeProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('搜索')),
+      appBar: AppBar(
+        title: const Text('搜索'),
+        actions: [
+          // 视图模式切换按钮
+          IconButton(
+            icon: Icon(
+              viewMode == ViewMode.grid ? Icons.view_list : Icons.grid_view,
+            ),
+            tooltip: viewMode == ViewMode.grid ? '切换列表模式' : '切换网格模式',
+            onPressed: () {
+              ref.read(viewModeProvider.notifier).state =
+                  viewMode == ViewMode.grid ? ViewMode.list : ViewMode.grid;
+            },
+          ),
+        ],
+      ),
       body: Column(
         children: [
           // 搜索栏
@@ -192,30 +209,64 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                       style: TextStyle(color: cs.onSurfaceVariant),
                     ),
                   )
-                : ListView.builder(
-                    itemCount: _results.length,
-                    itemBuilder: (context, index) {
-                      final comic = _results[index];
-                      return _SearchResultItem(
-                        comic: comic,
-                        serverUrl: serverUrl,
-                        onTap: () => context.push('/comic/${comic.id}'),
-                      );
-                    },
-                  ),
+                : viewMode == ViewMode.list
+                    ? ListView.builder(
+                        itemCount: _results.length,
+                        itemBuilder: (context, index) {
+                          final comic = _results[index];
+                          return ComicListTile(
+                            comic: comic,
+                            serverUrl: serverUrl,
+                            onTap: () => context.push('/comic/${comic.id}'),
+                          );
+                        },
+                      )
+                    : _buildSearchGrid(context, serverUrl),
           ),
         ],
       ),
     );
   }
+
+  /// 搜索结果网格视图
+  Widget _buildSearchGrid(BuildContext context, String serverUrl) {
+    final width = MediaQuery.of(context).size.width;
+    final crossAxisCount = width > 900
+        ? 6
+        : width > 600
+            ? 4
+            : width > 400
+                ? 3
+                : 2;
+
+    return GridView.builder(
+      padding: const EdgeInsets.all(8),
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: crossAxisCount,
+        childAspectRatio: 0.65,
+        crossAxisSpacing: 8,
+        mainAxisSpacing: 8,
+      ),
+      itemCount: _results.length,
+      itemBuilder: (context, index) {
+        final comic = _results[index];
+        return _SearchGridCard(
+          comic: comic,
+          serverUrl: serverUrl,
+          onTap: () => context.push('/comic/${comic.id}'),
+        );
+      },
+    );
+  }
 }
 
-class _SearchResultItem extends StatelessWidget {
+/// 搜索结果网格卡片
+class _SearchGridCard extends StatelessWidget {
   final Comic comic;
   final String serverUrl;
   final VoidCallback onTap;
 
-  const _SearchResultItem({
+  const _SearchGridCard({
     required this.comic,
     required this.serverUrl,
     required this.onTap,
@@ -223,38 +274,89 @@ class _SearchResultItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final thumbUrl = getImageUrl(serverUrl, comic.id, thumbnail: true);
     final cs = Theme.of(context).colorScheme;
+    final thumbUrl = getImageUrl(serverUrl, comic.id, thumbnail: true);
 
-    return ListTile(
-      leading: ClipRRect(
-        borderRadius: BorderRadius.circular(6),
-        child: SizedBox(
-          width: 48,
-          height: 64,
-          child: AuthenticatedImage(
-            imageUrl: thumbUrl,
-            fit: BoxFit.cover,
-            errorWidget: Container(
-              color: cs.surfaceContainerHighest,
-              child: const Icon(Icons.image, size: 20),
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  AuthenticatedImage(
+                    imageUrl: thumbUrl,
+                    fit: BoxFit.cover,
+                    placeholder: Container(
+                      color: cs.surfaceContainerHighest,
+                      child: const Center(
+                        child: Icon(Icons.image_outlined, size: 32),
+                      ),
+                    ),
+                    errorWidget: Container(
+                      color: cs.surfaceContainerHighest,
+                      child: Center(
+                        child: Icon(Icons.broken_image_outlined,
+                            size: 32, color: cs.onSurfaceVariant),
+                      ),
+                    ),
+                  ),
+                  if (comic.isFavorite)
+                    Positioned(
+                      top: 4,
+                      right: 4,
+                      child: Icon(
+                        Icons.favorite,
+                        color: Colors.red,
+                        size: 18,
+                        shadows: const [
+                          Shadow(blurRadius: 4, color: Colors.black54),
+                        ],
+                      ),
+                    ),
+                  if (comic.isNovel)
+                    Positioned(
+                      top: 4,
+                      left: 4,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: cs.tertiary,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          '小说',
+                          style: TextStyle(
+                            color: cs.onTertiary,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
             ),
-          ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
+              child: Text(
+                comic.title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      fontWeight: FontWeight.w500,
+                    ),
+              ),
+            ),
+          ],
         ),
       ),
-      title: Text(comic.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-      subtitle: Text(
-        [
-          if (comic.author != null && comic.author!.isNotEmpty) comic.author!,
-          '${comic.pageCount}页',
-          if (comic.isNovel) '小说',
-        ].join(' · '),
-        style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
-      ),
-      trailing: comic.isFavorite
-          ? const Icon(Icons.favorite, color: Colors.red, size: 18)
-          : null,
-      onTap: onTap,
     );
   }
 }
+

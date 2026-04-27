@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../data/api/api_client.dart';
 import '../../widgets/authenticated_image.dart';
 import '../../widgets/continue_reading.dart';
+import '../../widgets/comic_list_tile.dart';
 import '../../data/models/comic.dart';
 import '../../data/providers/auth_provider.dart';
 import '../../data/providers/comic_provider.dart';
@@ -61,11 +62,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Widget build(BuildContext context) {
     final state = ref.watch(comicListProvider);
     final authState = ref.watch(authProvider);
+    final viewMode = ref.watch(viewModeProvider);
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('NowenReader'),
         actions: [
+          // 视图模式切换按钮
+          IconButton(
+            icon: Icon(
+              viewMode == ViewMode.grid ? Icons.view_list : Icons.grid_view,
+            ),
+            tooltip: viewMode == ViewMode.grid ? '切换列表模式' : '切换网格模式',
+            onPressed: () {
+              ref.read(viewModeProvider.notifier).state =
+                  viewMode == ViewMode.grid ? ViewMode.list : ViewMode.grid;
+            },
+          ),
           // 排序按钮
           PopupMenuButton<String>(
             icon: const Icon(Icons.sort),
@@ -149,6 +162,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Widget _buildContent(
       BuildContext context, ComicListState state, AuthState authState) {
     final serverUrl = authState.serverUrl;
+    final viewMode = ref.watch(viewModeProvider);
+
     // 根据屏幕宽度决定列数
     final width = MediaQuery.of(context).size.width;
     final crossAxisCount = width > 900
@@ -166,40 +181,69 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         const SliverToBoxAdapter(
           child: ContinueReading(),
         ),
-        // 漫画网格
-        SliverPadding(
-          padding: const EdgeInsets.all(8),
-          sliver: SliverGrid(
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: crossAxisCount,
-              childAspectRatio: 0.65,
-              crossAxisSpacing: 8,
-              mainAxisSpacing: 8,
-            ),
-            delegate: SliverChildBuilderDelegate(
-              (context, index) {
-                if (index >= state.comics.length) {
-                  return const Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(16),
-                      child: CircularProgressIndicator(),
-                    ),
+        // 根据视图模式切换网格/列表
+        if (viewMode == ViewMode.grid)
+          SliverPadding(
+            padding: const EdgeInsets.all(8),
+            sliver: SliverGrid(
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: crossAxisCount,
+                childAspectRatio: 0.65,
+                crossAxisSpacing: 8,
+                mainAxisSpacing: 8,
+              ),
+              delegate: SliverChildBuilderDelegate(
+                (context, index) {
+                  if (index >= state.comics.length) {
+                    return const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(16),
+                        child: CircularProgressIndicator(),
+                      ),
+                    );
+                  }
+                  return _ComicCard(
+                    comic: state.comics[index],
+                    serverUrl: serverUrl,
+                    onTap: () =>
+                        context.push('/comic/${state.comics[index].id}'),
+                    onFavoriteToggle: () => ref
+                        .read(comicListProvider.notifier)
+                        .toggleFavorite(state.comics[index].id),
                   );
-                }
-                return _ComicCard(
-                  comic: state.comics[index],
-                  serverUrl: serverUrl,
-                  onTap: () =>
-                      context.push('/comic/${state.comics[index].id}'),
-                  onFavoriteToggle: () => ref
-                      .read(comicListProvider.notifier)
-                      .toggleFavorite(state.comics[index].id),
-                );
-              },
-              childCount: state.comics.length + (state.hasMore ? 1 : 0),
+                },
+                childCount: state.comics.length + (state.hasMore ? 1 : 0),
+              ),
+            ),
+          )
+        else
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            sliver: SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (context, index) {
+                  if (index >= state.comics.length) {
+                    return const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(16),
+                        child: CircularProgressIndicator(),
+                      ),
+                    );
+                  }
+                  return ComicListTile(
+                    comic: state.comics[index],
+                    serverUrl: serverUrl,
+                    onTap: () =>
+                        context.push('/comic/${state.comics[index].id}'),
+                    onFavoriteToggle: () => ref
+                        .read(comicListProvider.notifier)
+                        .toggleFavorite(state.comics[index].id),
+                  );
+                },
+                childCount: state.comics.length + (state.hasMore ? 1 : 0),
+              ),
             ),
           ),
-        ),
       ],
     );
   }

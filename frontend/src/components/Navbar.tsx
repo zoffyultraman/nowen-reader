@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import {
   Search,
   Upload,
@@ -16,6 +16,7 @@ import {
   MoreVertical,
   Settings,
   LogOut,
+  Globe,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useTranslation } from "@/lib/i18n";
@@ -48,7 +49,7 @@ export default function Navbar({
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const t = useTranslation();
   const { theme, toggleTheme } = useTheme();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const isAdmin = user?.role === "admin";
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const scraperT = (t as any).scraper || {};
@@ -139,6 +140,8 @@ export default function Navbar({
             toggleTheme={toggleTheme}
             t={t}
             scraperT={scraperT}
+            user={user}
+            logout={logout}
           />
         </div>
       </div>
@@ -161,6 +164,8 @@ interface MoreMenuProps {
   toggleTheme: () => void;
   t: Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
   scraperT: Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+  user: { username: string; nickname?: string; role?: string } | null;
+  logout: () => void;
 }
 
 function MoreMenu({
@@ -174,27 +179,37 @@ function MoreMenu({
   toggleTheme,
   t,
   scraperT,
+  user,
+  logout,
 }: MoreMenuProps) {
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
-  const { user, logout } = useAuth();
 
-  // 点击外部关闭
+  // 点击外部关闭 & ESC 键关闭
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         setOpen(false);
       }
     }
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setOpen(false);
+      }
+    }
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
   }, []);
 
-  const handleAction = (fn?: () => void) => {
+  const handleAction = useCallback((fn?: () => void) => {
     setOpen(false);
     fn?.();
-  };
+  }, []);
 
   return (
     <div className="relative" ref={menuRef}>
@@ -202,12 +217,14 @@ function MoreMenu({
         onClick={() => setOpen(!open)}
         className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-xl border border-border/60 text-muted transition-colors duration-200 hover:border-border hover:text-foreground"
         title="Menu"
+        aria-expanded={open}
+        aria-haspopup="true"
       >
         <MoreVertical className="h-4 w-4" />
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-1.5 w-56 bg-card border border-border rounded-xl shadow-xl shadow-black/20 z-50 overflow-hidden backdrop-blur-xl">
+        <div className="absolute right-0 top-full mt-1.5 w-56 bg-card border border-border rounded-xl shadow-xl shadow-black/20 z-50 overflow-hidden backdrop-blur-xl" role="menu">
           {/* 管理员操作 */}
           {isAdmin && (
             <>
@@ -263,7 +280,7 @@ function MoreMenu({
                 <Database className={`h-4 w-4 ${batchRunning ? "animate-pulse" : ""}`} />
                 {scraperT.navEntry || "元数据刮削"}
                 {batchRunning && (
-                  <span className="ml-auto flex h-2.5 w-2.5">
+                  <span className="ml-auto relative flex h-2.5 w-2.5">
                     <span className="animate-ping absolute inline-flex h-2.5 w-2.5 rounded-full bg-purple-400 opacity-75" />
                     <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-purple-500" />
                   </span>
@@ -285,13 +302,9 @@ function MoreMenu({
           </button>
 
           {/* 语言切换 */}
-          <div className="px-3 py-2.5 flex items-center gap-2.5 text-sm text-muted">
-            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="10" />
-              <line x1="2" y1="12" x2="22" y2="12" />
-              <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-            </svg>
-            <LanguageSwitcher />
+          <div className="w-full px-3 py-2.5 flex items-center gap-2.5 text-sm text-muted">
+            <Globe className="h-4 w-4 shrink-0" />
+            <LanguageSwitcher variant="inline" />
           </div>
 
           {/* 分隔线 */}

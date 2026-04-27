@@ -207,6 +207,10 @@ func BulkCreateComics(comics []struct {
 
 // detectComicType 根据文件名后缀判断内容类型。
 func detectComicType(filename string) string {
+	// 图片文件夹漫画：filename 以 "/" 结尾
+	if strings.HasSuffix(filename, "/") {
+		return "comic"
+	}
 	lower := strings.ToLower(filename)
 	if strings.HasSuffix(lower, ".txt") || strings.HasSuffix(lower, ".epub") ||
 		strings.HasSuffix(lower, ".mobi") ||
@@ -246,10 +250,17 @@ func BulkCreateComicsWithSource(comics []struct {
 	defer stmt.Close()
 
 	for _, c := range comics {
-		// 来自电子书目录的文件强制标记为 novel，否则根据文件后缀判断
+		// 严格按来源目录决定类型：
+		// - 来自漫画库目录的文件 → 强制标记为 comic
+		// - 来自电子书目录的文件 → 强制标记为 novel
+		// - 无法确定来源时 → 根据文件后缀判断（兜底）
 		comicType := detectComicType(c.Filename)
-		if source, ok := fileSourceMap[c.ID]; ok && source == "novels" {
-			comicType = "novel"
+		if source, ok := fileSourceMap[c.ID]; ok {
+			if source == "novels" {
+				comicType = "novel"
+			} else if source == "comics" {
+				comicType = "comic"
+			}
 		}
 		if _, err := stmt.Exec(c.ID, c.Filename, c.Title, c.FileSize, comicType, now, now); err != nil {
 			return err
@@ -407,4 +418,70 @@ func GetNovelsNeedingTypeRedetect() ([]struct {
 		}
 	}
 	return result, nil
+}
+
+// FixComicTypesBySource 根据文件来源目录修正已有记录的 type 字段。
+// 漫画库目录的文件强制为 "comic"，电子书目录的文件强制为 "novel"。
+// 只修正类型不匹配的记录，避免不必要的写入。
+func FixComicTypesBySource(fileSourceMap map[string]string) {
+	if len(fileSourceMap) == 0 {
+		return
+	}
+
+	// 分两批：需要改为 comic 的和需要改为 novel 的
+	var toComic []string
+	var toNovel []string
+
+	// 查询所有记录的 id 和 type
+	rows, err := db.Query(`SELECT "id", "type" FROM "Comic"`)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var id, comicType string
+		if rows.Scan(&id, &comicType) != nil {
+			continue
+		}
+		source, ok := fileSourceMap[id]
+		if !ok {
+			continue
+		}
+		// 严格按来源目录决定类型
+		if source == "comics" && comicType != "comic" {
+			toComic = append(toComic, id)
+		} else if source == "novels" && comicType != "novel" {
+			toNovel = append(toNovel, id)
+		}
+	}
+
+	// 批量更新
+	if len(toComic) > 0 {
+		batchUpdateType(toComic, "comic")
+	}
+	if len(toNovel) > 0 {
+		batchUpdateType(toNovel, "novel")
+	}
+}
+
+// batchUpdateType 批量更新漫画的 type 字段。
+func batchUpdateType(ids []string, newType string) {
+	const batchSize = 500
+	for i := 0; i < len(ids); i += batchSize {
+		end := i + batchSize
+		if end > len(ids) {
+			end = len(ids)
+		}
+		batch := ids[i:end]
+		placeholders := make([]string, len(batch))
+		args := make([]interface{}, 0, len(batch)+1)
+		args = append(args, newType)
+		for j, id := range batch {
+			placeholders[j] = "?"
+			args = append(args, id)
+		}
+		query := fmt.Sprintf(`UPDATE "Comic" SET "type" = ? WHERE "id" IN (%s)`, strings.Join(placeholders, ","))
+		db.Exec(query, args...)
+	}
 }

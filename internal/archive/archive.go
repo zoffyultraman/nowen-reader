@@ -49,20 +49,26 @@ type Reader interface {
 type ArchiveType string
 
 const (
-	TypeZip  ArchiveType = "zip"
-	TypeRar  ArchiveType = "rar"
-	Type7z   ArchiveType = "7z"
-	TypePdf  ArchiveType = "pdf"
-	TypeTxt  ArchiveType = "txt"
-	TypeEpub ArchiveType = "epub"
-	TypeMobi ArchiveType = "mobi"
-	TypeAzw3 ArchiveType = "azw3"
-	TypeHtml ArchiveType = "html"
+	TypeZip         ArchiveType = "zip"
+	TypeRar         ArchiveType = "rar"
+	Type7z          ArchiveType = "7z"
+	TypePdf         ArchiveType = "pdf"
+	TypeTxt         ArchiveType = "txt"
+	TypeEpub        ArchiveType = "epub"
+	TypeMobi        ArchiveType = "mobi"
+	TypeAzw3        ArchiveType = "azw3"
+	TypeHtml        ArchiveType = "html"
+	TypeImageFolder ArchiveType = "imagefolder"
 )
 
 // DetectType returns the archive type based on file extension.
-func DetectType(filepath string) ArchiveType {
-	ext := strings.ToLower(path.Ext(filepath))
+// 对于图片文件夹漫画，filepath 以 "/" 结尾或通过 DetectTypeWithStat 判断。
+func DetectType(fp string) ArchiveType {
+	// 图片文件夹漫画：路径以 "/" 结尾表示文件夹
+	if strings.HasSuffix(fp, "/") || strings.HasSuffix(fp, "\\") {
+		return TypeImageFolder
+	}
+	ext := strings.ToLower(path.Ext(fp))
 	switch ext {
 	case ".zip", ".cbz":
 		return TypeZip
@@ -83,6 +89,12 @@ func DetectType(filepath string) ArchiveType {
 	case ".html", ".htm":
 		return TypeHtml
 	default:
+		// 没有扩展名时，检查是否为目录（图片文件夹漫画）
+		if ext == "" {
+			if info, err := os.Stat(fp); err == nil && info.IsDir() {
+				return TypeImageFolder
+			}
+		}
 		return ""
 	}
 }
@@ -105,33 +117,35 @@ func IsEbookType(t ArchiveType) bool {
 // ============================================================
 
 // NewReader creates a Reader for the given archive file.
-func NewReader(filepath string) (Reader, error) {
-	t := DetectType(filepath)
+func NewReader(fp string) (Reader, error) {
+	t := DetectType(fp)
 	switch t {
 	case TypeZip:
-		return newZipReader(filepath)
+		return newZipReader(fp)
 	case TypeRar:
 		// Try pure Go RAR reader first, fall back to 7za
-		r, err := newRarReader(filepath)
+		r, err := newRarReader(fp)
 		if err != nil {
-			log.Printf("[archive] Pure Go RAR reader failed for %s: %v, trying 7za fallback", filepath, err)
-			return newSevenZipReader(filepath)
+			log.Printf("[archive] Pure Go RAR reader failed for %s: %v, trying 7za fallback", fp, err)
+			return newSevenZipReader(fp)
 		}
 		return r, nil
 	case Type7z:
-		return newSevenZipReader(filepath)
+		return newSevenZipReader(fp)
 	case TypePdf:
-		return newPdfReader(filepath)
+		return newPdfReader(fp)
 	case TypeTxt:
-		return newTxtReader(filepath)
+		return newTxtReader(fp)
 	case TypeEpub:
-		return newEpubReader(filepath)
+		return newEpubReader(fp)
 	case TypeMobi, TypeAzw3:
-		return newMobiReader(filepath)
+		return newMobiReader(fp)
 	case TypeHtml:
-		return newHtmlReader(filepath)
+		return newHtmlReader(fp)
+	case TypeImageFolder:
+		return newImageFolderReader(fp)
 	default:
-		return nil, fmt.Errorf("unsupported archive type: %s", filepath)
+		return nil, fmt.Errorf("unsupported archive type: %s", fp)
 	}
 }
 
