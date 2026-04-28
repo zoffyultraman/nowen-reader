@@ -433,8 +433,8 @@ export default function Home() {
     }
   }, [showGroupView, contentType, refetchGroupCategories]);
 
-  // 系列级分类：只显示有关联系列的分类（count > 0）
-  const effectiveCategories = showGroupView ? groupCategories.filter(c => c.count > 0) : categories;
+  // 只显示有内容的分类（count > 0）
+  const effectiveCategories = showGroupView ? groupCategories.filter(c => c.count > 0) : categories.filter(c => c.count > 0);
 
   // 根据当前 contentType 决定分页总页数
   const effectiveTotalPages = showGroupView ? groupTotalPages : totalPages;

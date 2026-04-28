@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../data/api/api_client.dart';
@@ -7,8 +8,9 @@ import '../../data/api/comic_api.dart';
 import '../../data/models/comic.dart';
 import '../../data/providers/auth_provider.dart';
 import '../reader/novel_reader_screen.dart';
+import '../../widgets/animations.dart';
 
-/// 漫画详情页
+/// 漫画详情页 — 沉浸式优雅设计
 class ComicDetailScreen extends ConsumerStatefulWidget {
   final String comicId;
   const ComicDetailScreen({super.key, required this.comicId});
@@ -43,6 +45,7 @@ class _ComicDetailScreenState extends ConsumerState<ComicDetailScreen> {
 
   Future<void> _toggleFavorite() async {
     if (_comic == null) return;
+    HapticFeedback.lightImpact();
     try {
       final api = ref.read(comicApiProvider);
       final data = await api.toggleFavorite(widget.comicId);
@@ -54,6 +57,7 @@ class _ComicDetailScreenState extends ConsumerState<ComicDetailScreen> {
 
   Future<void> _updateRating(int rating) async {
     if (_comic == null) return;
+    HapticFeedback.selectionClick();
     try {
       final api = ref.read(comicApiProvider);
       await api.updateRating(widget.comicId, rating);
@@ -65,6 +69,7 @@ class _ComicDetailScreenState extends ConsumerState<ComicDetailScreen> {
 
   Future<void> _setReadingStatus(String status) async {
     if (_comic == null) return;
+    HapticFeedback.selectionClick();
     try {
       final api = ref.read(comicApiProvider);
       await api.setReadingStatus(widget.comicId, status);
@@ -82,7 +87,13 @@ class _ComicDetailScreenState extends ConsumerState<ComicDetailScreen> {
     if (_loading) {
       return Scaffold(
         appBar: AppBar(),
-        body: const Center(child: CircularProgressIndicator()),
+        body: const Center(
+          child: SizedBox(
+            width: 28,
+            height: 28,
+            child: CircularProgressIndicator(strokeWidth: 2.5),
+          ),
+        ),
       );
     }
 
@@ -90,7 +101,17 @@ class _ComicDetailScreenState extends ConsumerState<ComicDetailScreen> {
     if (comic == null) {
       return Scaffold(
         appBar: AppBar(),
-        body: const Center(child: Text('加载失败')),
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.error_outline_rounded,
+                  size: 48, color: cs.error.withOpacity(0.5)),
+              const SizedBox(height: 16),
+              Text('加载失败', style: TextStyle(color: cs.onSurfaceVariant)),
+            ],
+          ),
+        ),
       );
     }
 
@@ -99,65 +120,125 @@ class _ComicDetailScreenState extends ConsumerState<ComicDetailScreen> {
     return Scaffold(
       body: CustomScrollView(
         slivers: [
-          // 折叠式AppBar + 封面
+          // ─── 沉浸式封面 AppBar ───
           SliverAppBar(
-            expandedHeight: 300,
+            expandedHeight: 320,
             pinned: true,
-            actions: [
-              IconButton(
-                icon: Icon(
-                  comic.isFavorite ? Icons.favorite : Icons.favorite_border,
-                  color: comic.isFavorite ? Colors.red : null,
+            stretch: true,
+            backgroundColor: cs.surface,
+            leading: Padding(
+              padding: const EdgeInsets.all(8),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                onPressed: _toggleFavorite,
+                child: IconButton(
+                  icon: const Icon(Icons.arrow_back_rounded, color: Colors.white, size: 20),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ),
+            ),
+            actions: [
+              Padding(
+                padding: const EdgeInsets.all(8),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.3),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: IconButton(
+                    icon: HeartBounce(
+                      trigger: comic.isFavorite,
+                      child: Icon(
+                        comic.isFavorite
+                            ? Icons.favorite_rounded
+                            : Icons.favorite_border_rounded,
+                        color: comic.isFavorite
+                            ? const Color(0xFFFF6B6B)
+                            : Colors.white,
+                        size: 20,
+                      ),
+                    ),
+                    onPressed: _toggleFavorite,
+                  ),
+                ),
               ),
             ],
             flexibleSpace: FlexibleSpaceBar(
               background: Stack(
                 fit: StackFit.expand,
                 children: [
+                  // 封面图片
                   AuthenticatedImage(
                     imageUrl: thumbUrl,
                     fit: BoxFit.cover,
-                    errorWidget: Container(
-                      color: cs.surfaceContainerHighest,
-                    ),
+                    errorWidget: Container(color: cs.surfaceContainerHighest),
                   ),
                   // 渐变遮罩
-                  const DecoratedBox(
+                  Container(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
-                        colors: [Colors.transparent, Colors.black87],
+                        stops: const [0.0, 0.4, 1.0],
+                        colors: [
+                          Colors.black.withOpacity(0.3),
+                          Colors.transparent,
+                          Colors.black.withOpacity(0.85),
+                        ],
                       ),
                     ),
                   ),
                   // 底部信息
                   Positioned(
-                    bottom: 16,
-                    left: 16,
-                    right: 16,
+                    bottom: 20,
+                    left: 20,
+                    right: 20,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        // 类型标签
+                        if (comic.isNovel)
+                          Container(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Text(
+                              '小说',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
                         Text(
                           comic.title,
                           style: const TextStyle(
                             color: Colors.white,
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
+                            fontSize: 24,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.5,
+                            height: 1.2,
                           ),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
                         if (comic.author != null && comic.author!.isNotEmpty)
                           Padding(
-                            padding: const EdgeInsets.only(top: 4),
+                            padding: const EdgeInsets.only(top: 6),
                             child: Text(
                               comic.author!,
-                              style: const TextStyle(
-                                  color: Colors.white70, fontSize: 14),
+                              style: TextStyle(
+                                color: Colors.white.withOpacity(0.7),
+                                fontSize: 14,
+                                fontWeight: FontWeight.w400,
+                              ),
                             ),
                           ),
                       ],
@@ -168,17 +249,36 @@ class _ComicDetailScreenState extends ConsumerState<ComicDetailScreen> {
             ),
           ),
 
-          // 内容
+          // ─── 内容区域 ───
           SliverPadding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
             sliver: SliverList(
               delegate: SliverChildListDelegate([
-                // 操作按钮行
-                Row(
-                  children: [
-                    Expanded(
-                      child: FilledButton.icon(
-                        onPressed: () {
+                // 开始阅读按钮
+                SlideAndFade(
+                  delay: const Duration(milliseconds: 100),
+                  child: Container(
+                    height: 52,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [cs.primary, cs.primary.withOpacity(0.8)],
+                      ),
+                      borderRadius: BorderRadius.circular(14),
+                      boxShadow: [
+                        BoxShadow(
+                          color: cs.primary.withOpacity(0.25),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Material(
+                      color: Colors.transparent,
+                      borderRadius: BorderRadius.circular(14),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(14),
+                        onTap: () {
+                          HapticFeedback.lightImpact();
                           if (comic.isNovel) {
                             Navigator.of(context).push(
                               MaterialPageRoute(
@@ -194,98 +294,243 @@ class _ComicDetailScreenState extends ConsumerState<ComicDetailScreen> {
                             );
                           }
                         },
-                        icon: Icon(comic.isNovel ? Icons.menu_book : Icons.auto_stories),
-                        label: Text(comic.lastReadPage > 0
-                            ? '继续阅读 (${comic.lastReadPage + 1}/${comic.pageCount})'
-                            : '开始阅读'),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              comic.isNovel
+                                  ? Icons.menu_book_rounded
+                                  : Icons.play_arrow_rounded,
+                              color: Colors.white,
+                              size: 22,
+                            ),
+                            const SizedBox(width: 10),
+                            Text(
+                              comic.lastReadPage > 0
+                                  ? '继续阅读 (${comic.lastReadPage + 1}/${comic.pageCount})'
+                                  : '开始阅读',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  ],
+                  ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 24),
 
-                // 评分
-                Row(
-                  children: [
-                    const Text('评分：'),
-                    ...List.generate(5, (i) {
-                      return IconButton(
-                        icon: Icon(
-                          i < (comic.rating ?? 0)
-                              ? Icons.star
-                              : Icons.star_border,
-                          color: Colors.amber,
+                // ─── 元数据信息 ───
+                SlideAndFade(
+                  delay: const Duration(milliseconds: 200),
+                  child: _buildInfoCards(context, comic),
+                ),
+                const SizedBox(height: 20),
+
+                // ─── 评分 ───
+                SlideAndFade(
+                  delay: const Duration(milliseconds: 300),
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).cardTheme.color,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '评分',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: cs.onSurfaceVariant.withOpacity(0.6),
+                          ),
                         ),
-                        onPressed: () => _updateRating(i + 1),
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(
-                            minWidth: 36, minHeight: 36),
-                      );
-                    }),
-                  ],
+                        const SizedBox(height: 10),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: List.generate(5, (i) {
+                          final filled = i < (comic.rating ?? 0);
+                          return GestureDetector(
+                            onTap: () => _updateRating(i + 1),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 6),
+                              child: TweenAnimationBuilder<double>(
+                                tween: Tween(begin: 0.0, end: 1.0),
+                                duration: Duration(milliseconds: 300 + i * 80),
+                                curve: Curves.elasticOut,
+                                builder: (context, val, child) => Transform.scale(
+                                  scale: val,
+                                  child: child,
+                                ),
+                                child: Icon(
+                                  filled ? Icons.star_rounded : Icons.star_outline_rounded,
+                                  color: filled ? Colors.amber.shade600 : cs.onSurfaceVariant.withOpacity(0.2),
+                                  size: 32,
+                                ),
+                              ),
+                            ),
+                          );
+                        }),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-                const SizedBox(height: 8),
-
-                // 阅读状态
-                Wrap(
-                  spacing: 8,
-                  children: [
-                    _StatusChip('想读', 'want', comic.readingStatus, _setReadingStatus),
-                    _StatusChip('在读', 'reading', comic.readingStatus, _setReadingStatus),
-                    _StatusChip('读完', 'finished', comic.readingStatus, _setReadingStatus),
-                    _StatusChip('搁置', 'shelved', comic.readingStatus, _setReadingStatus),
-                  ],
-                ),
-                const SizedBox(height: 16),
-
-                // 元数据信息
-                _buildInfoSection(context, comic),
                 const SizedBox(height: 12),
 
-                // 元数据刮削入口
-                OutlinedButton.icon(
-                  onPressed: () {
-                    context.push('/metadata/${comic.id}').then((_) {
-                      _loadDetail(); // 返回后刷新
-                    });
-                  },
-                  icon: const Icon(Icons.auto_fix_high, size: 18),
-                  label: Text(
-                    comic.metadataSource != null && comic.metadataSource!.isNotEmpty
-                        ? '重新刮削元数据'
-                        : '刮削元数据',
+                // ─── 阅读状态 ───
+                SlideAndFade(
+                  delay: const Duration(milliseconds: 400),
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).cardTheme.color,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '阅读状态',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: cs.onSurfaceVariant.withOpacity(0.6),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            _StatusPill('想读', 'want', comic.readingStatus, _setReadingStatus, cs),
+                            const SizedBox(width: 8),
+                            _StatusPill('在读', 'reading', comic.readingStatus, _setReadingStatus, cs),
+                            const SizedBox(width: 8),
+                            _StatusPill('读完', 'finished', comic.readingStatus, _setReadingStatus, cs),
+                            const SizedBox(width: 8),
+                            _StatusPill('搁置', 'shelved', comic.readingStatus, _setReadingStatus, cs),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
-                  style: OutlinedButton.styleFrom(
-                    minimumSize: const Size(double.infinity, 42),
+                ),
+                const SizedBox(height: 12),
+
+                // ─── 元数据刮削入口 ───
+                SlideAndFade(
+                  delay: const Duration(milliseconds: 500),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).cardTheme.color,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Material(
+                      color: Colors.transparent,
+                      borderRadius: BorderRadius.circular(14),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(14),
+                        onTap: () {
+                          context.push('/metadata/${comic.id}').then((_) {
+                            _loadDetail();
+                          });
+                        },
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 34,
+                                height: 34,
+                                decoration: BoxDecoration(
+                                  color: Colors.purple.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(9),
+                                ),
+                                child: const Icon(Icons.auto_fix_high_rounded,
+                                    size: 18, color: Colors.purple),
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Text(
+                                  comic.metadataSource != null && comic.metadataSource!.isNotEmpty
+                                      ? '重新刮削元数据'
+                                      : '刮削元数据',
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w500,
+                                    color: cs.onSurface,
+                                  ),
+                                ),
+                              ),
+                              Icon(Icons.chevron_right_rounded,
+                                  size: 20, color: cs.onSurfaceVariant.withOpacity(0.3)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
                 ),
 
-                // 标签
+                // ─── 标签 ───
                 if (comic.tags.isNotEmpty) ...[
-                  const SizedBox(height: 16),
-                  Text('标签', style: Theme.of(context).textTheme.titleSmall),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 20),
+                  Text(
+                    '标签',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: cs.onSurfaceVariant.withOpacity(0.6),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
                   Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
+                    spacing: 8,
+                    runSpacing: 8,
                     children: comic.tags.map((t) {
-                      return Chip(
-                        label: Text(t.name, style: const TextStyle(fontSize: 12)),
-                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        visualDensity: VisualDensity.compact,
+                      return Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: cs.primaryContainer.withOpacity(0.3),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          t.name,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: cs.primary,
+                          ),
+                        ),
                       );
                     }).toList(),
                   ),
                 ],
 
-                // 简介
+                // ─── 简介 ───
                 if (comic.description != null && comic.description!.isNotEmpty) ...[
-                  const SizedBox(height: 16),
-                  Text('简介', style: Theme.of(context).textTheme.titleSmall),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 20),
+                  Text(
+                    '简介',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: cs.onSurfaceVariant.withOpacity(0.6),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
                   Text(
                     comic.description!,
-                    style: TextStyle(color: cs.onSurfaceVariant),
+                    style: TextStyle(
+                      color: cs.onSurfaceVariant.withOpacity(0.7),
+                      fontSize: 14,
+                      height: 1.6,
+                    ),
                   ),
                 ],
               ]),
@@ -296,63 +541,135 @@ class _ComicDetailScreenState extends ConsumerState<ComicDetailScreen> {
     );
   }
 
-  Widget _buildInfoSection(BuildContext context, Comic comic) {
-    final items = <MapEntry<String, String>>[];
-    items.add(MapEntry('页数', '${comic.pageCount}'));
+  /// 元数据信息卡片
+  Widget _buildInfoCards(BuildContext context, Comic comic) {
+    final cs = Theme.of(context).colorScheme;
+    final items = <_InfoItem>[];
+
+    items.add(_InfoItem(Icons.description_outlined, '页数', '${comic.pageCount}'));
     if (comic.fileSize > 0) {
       final mb = (comic.fileSize / 1024 / 1024).toStringAsFixed(1);
-      items.add(MapEntry('文件大小', '${mb}MB'));
+      items.add(_InfoItem(Icons.folder_outlined, '大小', '${mb}MB'));
     }
     if (comic.publisher != null && comic.publisher!.isNotEmpty) {
-      items.add(MapEntry('出版社', comic.publisher!));
+      items.add(_InfoItem(Icons.business_outlined, '出版社', comic.publisher!));
     }
     if (comic.year != null) {
-      items.add(MapEntry('年份', '${comic.year}'));
+      items.add(_InfoItem(Icons.calendar_today_outlined, '年份', '${comic.year}'));
     }
     if (comic.language != null && comic.language!.isNotEmpty) {
-      items.add(MapEntry('语言', comic.language!));
+      items.add(_InfoItem(Icons.language_rounded, '语言', comic.language!));
     }
     if (comic.totalReadTime > 0) {
       final hours = comic.totalReadTime ~/ 3600;
       final mins = (comic.totalReadTime % 3600) ~/ 60;
-      items.add(MapEntry('阅读时间', hours > 0 ? '${hours}h ${mins}m' : '${mins}m'));
+      items.add(_InfoItem(
+        Icons.timer_outlined,
+        '阅读时间',
+        hours > 0 ? '${hours}h ${mins}m' : '${mins}m',
+      ));
     }
 
-    return Wrap(
-      spacing: 16,
-      runSpacing: 8,
-      children: items.map((e) {
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(e.key,
-                style: TextStyle(
-                    fontSize: 12,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant)),
-            Text(e.value,
-                style: const TextStyle(fontWeight: FontWeight.w600)),
-          ],
-        );
-      }).toList(),
+    if (items.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardTheme.color,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Wrap(
+        spacing: 20,
+        runSpacing: 14,
+        children: items.map((item) {
+          return SizedBox(
+            width: (MediaQuery.of(context).size.width - 80) / 3,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(item.icon, size: 16, color: cs.primary.withOpacity(0.6)),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item.label,
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: cs.onSurfaceVariant.withOpacity(0.5),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      Text(
+                        item.value,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: cs.onSurface,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+        }).toList(),
+      ),
     );
   }
 }
 
-class _StatusChip extends StatelessWidget {
+class _InfoItem {
+  final IconData icon;
+  final String label;
+  final String value;
+  _InfoItem(this.icon, this.label, this.value);
+}
+
+/// 阅读状态胶囊
+class _StatusPill extends StatelessWidget {
   final String label;
   final String value;
   final String? current;
   final Function(String) onTap;
+  final ColorScheme cs;
 
-  const _StatusChip(this.label, this.value, this.current, this.onTap);
+  const _StatusPill(this.label, this.value, this.current, this.onTap, this.cs);
 
   @override
   Widget build(BuildContext context) {
     final isSelected = current == value;
-    return FilterChip(
-      label: Text(label),
-      selected: isSelected,
-      onSelected: (_) => onTap(isSelected ? '' : value),
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => onTap(isSelected ? '' : value),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? cs.primary.withOpacity(0.12)
+                : cs.surfaceContainerHighest.withOpacity(0.5),
+            borderRadius: BorderRadius.circular(10),
+            border: isSelected
+                ? Border.all(color: cs.primary.withOpacity(0.3), width: 1)
+                : null,
+          ),
+          child: Center(
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                color: isSelected ? cs.primary : cs.onSurfaceVariant.withOpacity(0.6),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

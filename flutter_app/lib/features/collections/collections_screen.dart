@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../data/api/comic_api.dart';
 import '../../data/models/comic.dart';
 import '../../data/providers/auth_provider.dart';
 import '../../widgets/authenticated_image.dart';
+import '../../widgets/animations.dart';
 
 /// 排序字段
 enum CollectionSortField { name, comicCount, updatedAt, createdAt }
 
-/// 合集管理页面
+/// 合集管理页面 — 极简优雅风格
 class CollectionsScreen extends ConsumerStatefulWidget {
   const CollectionsScreen({super.key});
 
@@ -22,12 +24,12 @@ class _CollectionsScreenState extends ConsumerState<CollectionsScreen> {
   bool _loading = true;
   bool _isGridView = true;
   String _searchQuery = '';
-  String _contentFilter = ''; // "" = 全部, "comic", "novel"
+  String _contentFilter = '';
   CollectionSortField _sortField = CollectionSortField.name;
   bool _sortAsc = true;
 
-  // 创建对话框
   final _createController = TextEditingController();
+  final _searchController = TextEditingController();
 
   @override
   void initState() {
@@ -38,6 +40,7 @@ class _CollectionsScreenState extends ConsumerState<CollectionsScreen> {
   @override
   void dispose() {
     _createController.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -55,17 +58,14 @@ class _CollectionsScreenState extends ConsumerState<CollectionsScreen> {
     }
   }
 
-  /// 过滤 + 排序后的列表
   List<ComicGroup> get _filteredAndSorted {
     var result = List<ComicGroup>.from(_groups);
 
-    // 搜索过滤
     if (_searchQuery.isNotEmpty) {
       final q = _searchQuery.toLowerCase();
       result = result.where((g) => g.name.toLowerCase().contains(q)).toList();
     }
 
-    // 排序
     result.sort((a, b) {
       int cmp;
       switch (_sortField) {
@@ -84,7 +84,6 @@ class _CollectionsScreenState extends ConsumerState<CollectionsScreen> {
     return result;
   }
 
-  /// 创建合集
   Future<void> _createCollection(String name) async {
     if (name.trim().isEmpty) return;
     try {
@@ -106,7 +105,6 @@ class _CollectionsScreenState extends ConsumerState<CollectionsScreen> {
     }
   }
 
-  /// 删除合集
   Future<void> _deleteCollection(int groupId, String name) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -143,7 +141,6 @@ class _CollectionsScreenState extends ConsumerState<CollectionsScreen> {
     }
   }
 
-  /// 显示创建对话框
   void _showCreateDialog() {
     _createController.clear();
     showDialog(
@@ -155,7 +152,6 @@ class _CollectionsScreenState extends ConsumerState<CollectionsScreen> {
           autofocus: true,
           decoration: const InputDecoration(
             hintText: '输入合集名称...',
-            border: OutlineInputBorder(),
           ),
           onSubmitted: (val) {
             Navigator.pop(ctx);
@@ -164,7 +160,7 @@ class _CollectionsScreenState extends ConsumerState<CollectionsScreen> {
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
-          TextButton(
+          FilledButton(
             onPressed: () {
               Navigator.pop(ctx);
               _createCollection(_createController.text);
@@ -176,31 +172,46 @@ class _CollectionsScreenState extends ConsumerState<CollectionsScreen> {
     );
   }
 
-  /// 显示排序选项
   void _showSortMenu() {
+    final cs = Theme.of(context).colorScheme;
     showModalBottomSheet(
       context: context,
       builder: (ctx) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Padding(
-              padding: EdgeInsets.all(16),
-              child: Text('排序方式', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+              child: Row(
+                children: [
+                  Text(
+                    '排序方式',
+                    style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                      color: cs.onSurface,
+                    ),
+                  ),
+                  const Spacer(),
+                  TextButton.icon(
+                    onPressed: () {
+                      setState(() => _sortAsc = !_sortAsc);
+                      Navigator.pop(ctx);
+                    },
+                    icon: Icon(
+                      _sortAsc ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
+                      size: 16,
+                    ),
+                    label: Text(_sortAsc ? '升序' : '降序'),
+                  ),
+                ],
+              ),
             ),
-            _buildSortOption('按名称', CollectionSortField.name),
-            _buildSortOption('按作品数', CollectionSortField.comicCount),
-            _buildSortOption('按更新时间', CollectionSortField.updatedAt),
-            _buildSortOption('按创建时间', CollectionSortField.createdAt),
-            const Divider(),
-            ListTile(
-              leading: Icon(_sortAsc ? Icons.arrow_upward : Icons.arrow_downward),
-              title: Text(_sortAsc ? '升序' : '降序'),
-              onTap: () {
-                setState(() => _sortAsc = !_sortAsc);
-                Navigator.pop(ctx);
-              },
-            ),
+            Divider(height: 0.5, color: cs.outlineVariant.withOpacity(0.3)),
+            _buildSortOption('按名称', CollectionSortField.name, Icons.sort_by_alpha_rounded),
+            _buildSortOption('按作品数', CollectionSortField.comicCount, Icons.library_books_outlined),
+            _buildSortOption('按更新时间', CollectionSortField.updatedAt, Icons.update_rounded),
+            _buildSortOption('按创建时间', CollectionSortField.createdAt, Icons.schedule_rounded),
             const SizedBox(height: 8),
           ],
         ),
@@ -208,14 +219,19 @@ class _CollectionsScreenState extends ConsumerState<CollectionsScreen> {
     );
   }
 
-  Widget _buildSortOption(String label, CollectionSortField field) {
+  Widget _buildSortOption(String label, CollectionSortField field, IconData icon) {
     final isSelected = _sortField == field;
+    final cs = Theme.of(context).colorScheme;
     return ListTile(
-      leading: Icon(
-        isSelected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
-        color: isSelected ? Theme.of(context).colorScheme.primary : null,
+      leading: Icon(icon, size: 20, color: isSelected ? cs.primary : cs.onSurfaceVariant.withOpacity(0.5)),
+      title: Text(
+        label,
+        style: TextStyle(
+          fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+          color: isSelected ? cs.primary : cs.onSurface,
+        ),
       ),
-      title: Text(label),
+      trailing: isSelected ? Icon(Icons.check_rounded, size: 18, color: cs.primary) : null,
       onTap: () {
         setState(() => _sortField = field);
         Navigator.pop(context);
@@ -231,75 +247,86 @@ class _CollectionsScreenState extends ConsumerState<CollectionsScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('合集管理'),
+        title: const Text('合集'),
         actions: [
-          // 视图切换
           IconButton(
-            icon: Icon(_isGridView ? Icons.view_list : Icons.grid_view),
+            icon: Icon(_isGridView ? Icons.view_agenda_outlined : Icons.grid_view_rounded),
             tooltip: _isGridView ? '列表视图' : '网格视图',
-            onPressed: () => setState(() => _isGridView = !_isGridView),
+            onPressed: () {
+              HapticFeedback.lightImpact();
+              setState(() => _isGridView = !_isGridView);
+            },
           ),
-          // 排序
           IconButton(
-            icon: const Icon(Icons.sort),
+            icon: const Icon(Icons.swap_vert_rounded),
             tooltip: '排序',
             onPressed: _showSortMenu,
           ),
-          // 创建
           IconButton(
-            icon: const Icon(Icons.add),
+            icon: const Icon(Icons.add_rounded),
             tooltip: '新建合集',
             onPressed: _showCreateDialog,
           ),
+          const SizedBox(width: 4),
         ],
       ),
       body: Column(
         children: [
-          // 搜索栏 + 内容类型筛选
+          // ─── 搜索栏 ───
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
             child: TextField(
+              controller: _searchController,
               decoration: InputDecoration(
                 hintText: '搜索合集...',
-                prefixIcon: const Icon(Icons.search),
+                prefixIcon: Icon(Icons.search_rounded,
+                    color: cs.onSurfaceVariant.withOpacity(0.5)),
                 suffixIcon: _searchQuery.isNotEmpty
                     ? IconButton(
-                        icon: const Icon(Icons.clear),
-                        onPressed: () => setState(() => _searchQuery = ''),
+                        icon: Icon(Icons.close_rounded,
+                            size: 20, color: cs.onSurfaceVariant.withOpacity(0.5)),
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() => _searchQuery = '');
+                        },
                       )
                     : null,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                isDense: true,
               ),
               onChanged: (val) => setState(() => _searchQuery = val),
             ),
           ),
 
-          // 内容类型筛选 Chips
+          // ─── 筛选 Chips ───
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
             child: Row(
               children: [
                 _buildFilterChip('漫画', 'comic'),
                 const SizedBox(width: 8),
                 _buildFilterChip('小说', 'novel'),
                 const Spacer(),
-                // 合集数量
                 Text(
                   '${filtered.length} 个合集',
-                  style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: cs.onSurfaceVariant.withOpacity(0.4),
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ],
             ),
           ),
 
-          const Divider(height: 1),
-
-          // 内容区域
+          // ─── 内容区域 ───
           Expanded(
             child: _loading
-                ? const Center(child: CircularProgressIndicator())
+                ? const Center(
+                    child: SizedBox(
+                      width: 28,
+                      height: 28,
+                      child: CircularProgressIndicator(strokeWidth: 2.5),
+                    ),
+                  )
                 : filtered.isEmpty
                     ? _buildEmptyState()
                     : RefreshIndicator(
@@ -316,156 +343,310 @@ class _CollectionsScreenState extends ConsumerState<CollectionsScreen> {
 
   Widget _buildFilterChip(String label, String value) {
     final isSelected = _contentFilter == value;
+    final cs = Theme.of(context).colorScheme;
     return FilterChip(
       label: Text(label),
       selected: isSelected,
       onSelected: (_) {
+        HapticFeedback.selectionClick();
         setState(() => _contentFilter = isSelected ? '' : value);
         _loadGroups();
       },
       visualDensity: VisualDensity.compact,
+      showCheckmark: false,
+      selectedColor: cs.primary.withOpacity(0.12),
+      labelStyle: TextStyle(
+        fontSize: 12,
+        color: isSelected ? cs.primary : cs.onSurfaceVariant,
+        fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+      ),
     );
   }
 
   Widget _buildEmptyState() {
+    final cs = Theme.of(context).colorScheme;
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.layers_outlined, size: 64, color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.5)),
-          const SizedBox(height: 16),
+          Container(
+            width: 72,
+            height: 72,
+            decoration: BoxDecoration(
+              color: cs.primaryContainer.withOpacity(0.3),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Icon(
+              Icons.collections_bookmark_outlined,
+              size: 32,
+              color: cs.primary.withOpacity(0.5),
+            ),
+          ),
+          const SizedBox(height: 20),
           Text(
             '还没有合集',
-            style: TextStyle(fontSize: 16, color: Theme.of(context).colorScheme.onSurfaceVariant),
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: cs.onSurfaceVariant,
+            ),
           ),
           const SizedBox(height: 8),
           Text(
-            '点击右上角 + 创建合集来整理你的书库',
-            style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.7)),
+            '点击右上角 + 创建合集来整理书库',
+            style: TextStyle(
+              fontSize: 13,
+              color: cs.onSurfaceVariant.withOpacity(0.5),
+            ),
           ),
         ],
       ),
     );
   }
 
-  /// 网格视图
   Widget _buildGridView(List<ComicGroup> groups, String serverUrl) {
     return GridView.builder(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
-        childAspectRatio: 0.75,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
+        childAspectRatio: 0.72,
+        crossAxisSpacing: 14,
+        mainAxisSpacing: 14,
       ),
       itemCount: groups.length,
-      itemBuilder: (context, index) => _buildGridItem(groups[index], serverUrl),
+      itemBuilder: (context, index) => StaggeredFadeSlide(
+        index: index,
+        child: _buildGridItem(groups[index], serverUrl),
+      ),
     );
   }
 
   Widget _buildGridItem(ComicGroup group, String serverUrl) {
     final cs = Theme.of(context).colorScheme;
-    return GestureDetector(
+    return PressableScale(
       onTap: () => context.push('/group/${group.id}'),
       onLongPress: () => _showGroupActions(group),
-      child: Card(
-        clipBehavior: Clip.antiAlias,
-        elevation: 2,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // 封面
-            Expanded(
-              child: group.coverUrl.isNotEmpty
-                  ? AuthenticatedImage(
-                      imageUrl: group.coverUrl.startsWith('http')
-                          ? group.coverUrl
-                          : '$serverUrl${group.coverUrl}',
-                      fit: BoxFit.cover,
-                    )
-                  : Container(
-                      color: cs.surfaceContainerHighest,
-                      child: Icon(Icons.layers, size: 48, color: cs.onSurfaceVariant.withOpacity(0.4)),
-                    ),
-            ),
-            // 信息
-            Padding(
-              padding: const EdgeInsets.all(8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    group.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    '${group.comicCount} 部作品',
-                    style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+      scaleDown: 0.95,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 封面
+          Expanded(
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.08),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
                   ),
                 ],
               ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    group.coverUrl.isNotEmpty
+                        ? AuthenticatedImage(
+                            imageUrl: group.coverUrl.startsWith('http')
+                                ? group.coverUrl
+                                : '$serverUrl${group.coverUrl}',
+                            fit: BoxFit.cover,
+                          )
+                        : Container(
+                            color: cs.surfaceContainerHighest,
+                            child: Icon(
+                              Icons.collections_bookmark_rounded,
+                              size: 40,
+                              color: cs.onSurfaceVariant.withOpacity(0.2),
+                            ),
+                          ),
+                    // 底部渐变
+                    Positioned(
+                      bottom: 0,
+                      left: 0,
+                      right: 0,
+                      height: 50,
+                      child: Container(
+                        decoration: const BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.bottomCenter,
+                            end: Alignment.topCenter,
+                            colors: [Colors.black54, Colors.transparent],
+                          ),
+                        ),
+                      ),
+                    ),
+                    // 作品数量
+                    Positioned(
+                      bottom: 8,
+                      right: 8,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.4),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          '${group.comicCount}',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
-          ],
-        ),
+          ),
+          // 信息
+          Padding(
+            padding: const EdgeInsets.fromLTRB(2, 10, 2, 0),
+            child: Text(
+              group.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: cs.onSurface,
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(2, 3, 2, 0),
+            child: Text(
+              '${group.comicCount} 部作品',
+              style: TextStyle(
+                fontSize: 11,
+                color: cs.onSurfaceVariant.withOpacity(0.5),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  /// 列表视图
   Widget _buildListView(List<ComicGroup> groups, String serverUrl) {
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+    return ListView.separated(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       itemCount: groups.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 6),
       itemBuilder: (context, index) => _buildListItem(groups[index], serverUrl),
     );
   }
 
   Widget _buildListItem(ComicGroup group, String serverUrl) {
     final cs = Theme.of(context).colorScheme;
-    return ListTile(
-      leading: ClipRRect(
-        borderRadius: BorderRadius.circular(8),
-        child: SizedBox(
-          width: 48,
-          height: 48,
-          child: group.coverUrl.isNotEmpty
-              ? AuthenticatedImage(
-                  imageUrl: group.coverUrl.startsWith('http')
-                      ? group.coverUrl
-                      : '$serverUrl${group.coverUrl}',
-                  fit: BoxFit.cover,
-                )
-              : Container(
-                  color: cs.surfaceContainerHighest,
-                  child: Icon(Icons.layers, size: 24, color: cs.onSurfaceVariant.withOpacity(0.4)),
+    return Material(
+      color: Theme.of(context).cardTheme.color ?? cs.surface,
+      borderRadius: BorderRadius.circular(14),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: () => context.push('/group/${group.id}'),
+        onLongPress: () => _showGroupActions(group),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(10),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.06),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
                 ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: SizedBox(
+                    width: 50,
+                    height: 50,
+                    child: group.coverUrl.isNotEmpty
+                        ? AuthenticatedImage(
+                            imageUrl: group.coverUrl.startsWith('http')
+                                ? group.coverUrl
+                                : '$serverUrl${group.coverUrl}',
+                            fit: BoxFit.cover,
+                          )
+                        : Container(
+                            color: cs.surfaceContainerHighest,
+                            child: Icon(
+                              Icons.collections_bookmark_rounded,
+                              size: 22,
+                              color: cs.onSurfaceVariant.withOpacity(0.3),
+                            ),
+                          ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      group.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: cs.onSurface,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      '${group.comicCount} 部作品${group.author.isNotEmpty ? ' · ${group.author}' : ''}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: cs.onSurfaceVariant.withOpacity(0.5),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right_rounded,
+                  size: 20, color: cs.onSurfaceVariant.withOpacity(0.3)),
+            ],
+          ),
         ),
       ),
-      title: Text(group.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-      subtitle: Text(
-        '${group.comicCount} 部作品${group.author.isNotEmpty ? ' · ${group.author}' : ''}',
-        style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
-      ),
-      trailing: const Icon(Icons.chevron_right),
-      onTap: () => context.push('/group/${group.id}'),
-      onLongPress: () => _showGroupActions(group),
     );
   }
 
-  /// 长按操作菜单
   void _showGroupActions(ComicGroup group) {
+    final cs = Theme.of(context).colorScheme;
     showModalBottomSheet(
       context: context,
       builder: (ctx) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+              child: Text(
+                group.name,
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                  color: cs.onSurface,
+                ),
+              ),
+            ),
+            Divider(height: 0.5, color: cs.outlineVariant.withOpacity(0.3)),
             ListTile(
-              leading: const Icon(Icons.open_in_new),
+              leading: Icon(Icons.open_in_new_rounded, color: cs.primary),
               title: const Text('查看详情'),
               onTap: () {
                 Navigator.pop(ctx);
@@ -473,13 +654,14 @@ class _CollectionsScreenState extends ConsumerState<CollectionsScreen> {
               },
             ),
             ListTile(
-              leading: const Icon(Icons.delete_outline, color: Colors.red),
-              title: const Text('删除合集', style: TextStyle(color: Colors.red)),
+              leading: const Icon(Icons.delete_outline_rounded, color: Color(0xFFFF6B6B)),
+              title: const Text('删除合集', style: TextStyle(color: Color(0xFFFF6B6B))),
               onTap: () {
                 Navigator.pop(ctx);
                 _deleteCollection(group.id, group.name);
               },
             ),
+            const SizedBox(height: 8),
           ],
         ),
       ),

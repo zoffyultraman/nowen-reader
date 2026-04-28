@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -7,8 +8,9 @@ import '../../data/api/api_client.dart';
 import '../../data/api/comic_api.dart';
 import '../../l10n/app_localizations.dart';
 import '../metadata/metadata_screen.dart';
+import '../../widgets/animations.dart';
 
-/// 设置页面
+/// 设置页面 — 极简优雅风格
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
@@ -23,174 +25,255 @@ class SettingsScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(title: Text(l10n.settings)),
       body: ListView(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
         children: [
-          // 用户信息
-          if (user != null) ...[
-            _buildSectionTitle(context, l10n.account),
-            ListTile(
-              leading: CircleAvatar(
-                backgroundColor: cs.primaryContainer,
-                child: Text(
-                  user.nickname.isNotEmpty
-                      ? user.nickname[0].toUpperCase()
-                      : user.username[0].toUpperCase(),
-                  style: TextStyle(color: cs.onPrimaryContainer),
+          const SizedBox(height: 8),
+
+          // ─── 用户信息卡片 ───
+          if (user != null)
+            SlideAndFade(
+              delay: const Duration(milliseconds: 100),
+              child: Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    cs.primary,
+                    cs.primary.withOpacity(0.75),
+                  ],
                 ),
+                borderRadius: BorderRadius.circular(18),
+                boxShadow: [
+                  BoxShadow(
+                    color: cs.primary.withOpacity(0.2),
+                    blurRadius: 16,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
               ),
-              title: Text(user.nickname.isNotEmpty ? user.nickname : user.username),
-              subtitle: Text(
-                [
-                  '@${user.username}',
-                  user.isAdmin ? l10n.admin : l10n.user,
-                ].join(' · '),
+              child: Row(
+                children: [
+                  // 头像
+                  Container(
+                    width: 52,
+                    height: 52,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Center(
+                      child: Text(
+                        user.nickname.isNotEmpty
+                            ? user.nickname[0].toUpperCase()
+                            : user.username[0].toUpperCase(),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          user.nickname.isNotEmpty ? user.nickname : user.username,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '@${user.username} · ${user.isAdmin ? l10n.admin : l10n.user}',
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.75),
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
+            ),
+          ),
+
+          const SizedBox(height: 24),
+
+          // ─── 服务器 ───
+          SlideAndFade(
+            delay: const Duration(milliseconds: 200),
+            child: _SectionHeader(title: l10n.serverInfo),
+          ),
+          const SizedBox(height: 8),
+          SlideAndFade(
+            delay: const Duration(milliseconds: 250),
+            child: _SettingsGroup(
+              children: [
+                _SettingsTile(
+                  icon: Icons.dns_outlined,
+                  iconColor: cs.primary,
+                  title: l10n.serverAddress,
+                  subtitle: authState.serverUrl,
+                  onTap: () => _showServerInfo(context, ref),
+                ),
+                _SettingsTile(
+                  icon: Icons.history_rounded,
+                  iconColor: cs.secondary,
+                  title: '服务器列表',
+                  subtitle: '切换到之前登录过的服务器',
+                  onTap: () => _showServerHistory(context, ref),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 24),
+
+          // ─── 数据管理 ───
+          SlideAndFade(
+            delay: const Duration(milliseconds: 300),
+            child: _SectionHeader(title: l10n.dataManagement),
+          ),
+          const SizedBox(height: 8),
+          SlideAndFade(
+            delay: const Duration(milliseconds: 350),
+            child: _SettingsGroup(
+              children: [
+                _SettingsTile(
+                  icon: Icons.favorite_rounded,
+                  iconColor: const Color(0xFFFF6B6B),
+                  title: l10n.favorites,
+                  subtitle: '查看和管理收藏的书籍',
+                  onTap: () => context.push('/favorites'),
+                ),
+                _SettingsTile(
+                  icon: Icons.collections_bookmark_rounded,
+                  iconColor: cs.tertiary,
+                  title: '合集管理',
+                  subtitle: '管理系列分组与合集',
+                  onTap: () => context.push('/collections'),
+                ),
+                if (isAdmin)
+                  _SettingsTile(
+                    icon: Icons.label_outlined,
+                    iconColor: Colors.orange,
+                    title: l10n.tagManager,
+                    subtitle: '管理标签和分类',
+                    onTap: () => context.push('/tag-manager'),
+                  ),
+              ],
+            ),
+          ),
+
+          // ─── 管理员工具 ───
+          if (isAdmin) ...[
+            const SizedBox(height: 24),
+            _SectionHeader(title: '管理工具'),
+            const SizedBox(height: 8),
+            _SettingsGroup(
+              children: [
+                _ScanLibraryTile(ref: ref),
+                _SettingsTile(
+                  icon: Icons.auto_fix_high_rounded,
+                  iconColor: Colors.purple,
+                  title: l10n.batchScrapeMetadata,
+                  subtitle: l10n.batchScrapeDesc,
+                  onTap: () {
+                    showDialog(
+                      context: context,
+                      builder: (_) => const BatchMetadataDialog(),
+                    );
+                  },
+                ),
+              ],
             ),
           ],
 
-          const Divider(),
-          _buildSectionTitle(context, l10n.serverInfo),
+          const SizedBox(height: 24),
 
-          // 服务器信息
-          ListTile(
-            leading: const Icon(Icons.dns_outlined),
-            title: Text(l10n.serverAddress),
-            subtitle: Text(authState.serverUrl),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => _showServerInfo(context, ref),
+          // ─── 关于 ───
+          _SectionHeader(title: l10n.about),
+          const SizedBox(height: 8),
+          _SettingsGroup(
+            children: [
+              _SettingsTile(
+                icon: Icons.info_outline_rounded,
+                iconColor: cs.onSurfaceVariant,
+                title: l10n.version,
+                subtitle: '1.0.0',
+                showArrow: false,
+              ),
+              _SettingsTile(
+                icon: Icons.auto_stories_rounded,
+                iconColor: cs.primary,
+                title: 'NowenReader',
+                subtitle: '漫画/小说阅读器',
+                showArrow: false,
+              ),
+            ],
           ),
 
-          // 服务器历史列表
-          ListTile(
-            leading: const Icon(Icons.history),
-            title: const Text('服务器列表'),
-            subtitle: const Text('切换到之前登录过的服务器'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => _showServerHistory(context, ref),
-          ),
+          const SizedBox(height: 24),
 
-          const Divider(),
-          _buildSectionTitle(context, l10n.dataManagement),
-
-          // 收藏管理
-          ListTile(
-            leading: const Icon(Icons.favorite_outlined),
-            title: Text(l10n.favorites),
-            subtitle: const Text('查看和管理收藏的书籍'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => context.push('/favorites'),
-          ),
-
-          // 合集管理
-          ListTile(
-            leading: const Icon(Icons.layers_outlined),
-            title: const Text('合集管理'),
-            subtitle: const Text('管理系列分组与合集'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => context.push('/collections'),
-          ),
-
-          // 标签与分类管理（管理员可见）
-          if (isAdmin)
-            ListTile(
-              leading: const Icon(Icons.label_outlined),
-              title: Text(l10n.tagManager),
-              subtitle: const Text('管理标签和分类'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => context.push('/tag-manager'),
-            ),
-
-          // 扫描文库（管理员可见）
-          if (isAdmin)
-            _ScanLibraryTile(ref: ref),
-
-          // 批量刮削元数据（管理员可见）
-          if (isAdmin)
-            ListTile(
-              leading: const Icon(Icons.auto_fix_high),
-              title: Text(l10n.batchScrapeMetadata),
-              subtitle: Text(l10n.batchScrapeDesc),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () {
-                showDialog(
-                  context: context,
-                  builder: (_) => const BatchMetadataDialog(),
-                );
-              },
-            ),
-
-          const Divider(),
-          _buildSectionTitle(context, l10n.about),
-
-          ListTile(
-            leading: const Icon(Icons.info_outline),
-            title: Text(l10n.version),
-            subtitle: const Text('1.0.0'),
-          ),
-
-          ListTile(
-            leading: const Icon(Icons.code_outlined),
-            title: const Text('NowenReader'),
-            subtitle: const Text('漫画/小说阅读器'),
-          ),
-
-          const Divider(),
-
-          // 退出登录
-          ListTile(
-            leading: Icon(Icons.logout, color: cs.error),
-            title: Text(l10n.logout, style: TextStyle(color: cs.error)),
-            onTap: () async {
-              final confirm = await showDialog<bool>(
-                context: context,
-                builder: (ctx) => AlertDialog(
-                  title: Text(l10n.logout),
-                  content: Text(l10n.logoutConfirm),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(ctx, false),
-                      child: Text(l10n.cancel),
+          // ─── 账户操作 ───
+          _SettingsGroup(
+            children: [
+              _SettingsTile(
+                icon: Icons.logout_rounded,
+                iconColor: cs.error,
+                title: l10n.logout,
+                titleColor: cs.error,
+                onTap: () async {
+                  final confirm = await showDialog<bool>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      title: Text(l10n.logout),
+                      content: Text(l10n.logoutConfirm),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx, false),
+                          child: Text(l10n.cancel),
+                        ),
+                        FilledButton(
+                          onPressed: () => Navigator.pop(ctx, true),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: cs.error,
+                          ),
+                          child: Text(l10n.logout),
+                        ),
+                      ],
                     ),
-                    FilledButton(
-                      onPressed: () => Navigator.pop(ctx, true),
-                      child: Text(l10n.logout),
-                    ),
-                  ],
-                ),
-              );
-              if (confirm == true) {
-                await ref.read(authProvider.notifier).logout();
-                if (context.mounted) context.go('/login');
-              }
-            },
+                  );
+                  if (confirm == true) {
+                    await ref.read(authProvider.notifier).logout();
+                    if (context.mounted) context.go('/login');
+                  }
+                },
+              ),
+              _SettingsTile(
+                icon: Icons.swap_horiz_rounded,
+                iconColor: cs.onSurfaceVariant,
+                title: l10n.switchServer,
+                onTap: () async {
+                  await ref.read(authProvider.notifier).logout();
+                  await saveServerUrl('');
+                  ref.invalidate(serverUrlProvider);
+                  if (context.mounted) context.go('/server');
+                },
+              ),
+            ],
           ),
 
-          // 切换服务器
-          ListTile(
-            leading: Icon(Icons.swap_horiz, color: cs.onSurfaceVariant),
-            title: Text(l10n.switchServer),
-            onTap: () async {
-              await ref.read(authProvider.notifier).logout();
-              await saveServerUrl('');
-              ref.invalidate(serverUrlProvider);
-              if (context.mounted) context.go('/server');
-            },
-          ),
-
-          const SizedBox(height: 32),
+          const SizedBox(height: 40),
         ],
-      ),
-    );
-  }
-
-  Widget _buildSectionTitle(BuildContext context, String title) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-      child: Text(
-        title,
-        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-              color: Theme.of(context).colorScheme.primary,
-              fontWeight: FontWeight.bold,
-            ),
       ),
     );
   }
@@ -221,15 +304,149 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 
-  /// 显示服务器历史列表弹窗
   void _showServerHistory(BuildContext context, WidgetRef ref) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
       builder: (ctx) => _ServerHistorySheet(parentRef: ref),
+    );
+  }
+}
+
+/// 区域标题
+class _SectionHeader extends StatelessWidget {
+  final String title;
+  const _SectionHeader({required this.title});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 4),
+      child: Text(
+        title,
+        style: TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+          color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.6),
+          letterSpacing: 0.3,
+        ),
+      ),
+    );
+  }
+}
+
+/// 设置项分组容器
+class _SettingsGroup extends StatelessWidget {
+  final List<Widget> children;
+  const _SettingsGroup({required this.children});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardTheme.color,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          for (int i = 0; i < children.length; i++) ...[
+            children[i],
+            if (i < children.length - 1)
+              Divider(
+                height: 0.5,
+                indent: 56,
+                color: Theme.of(context).dividerTheme.color?.withOpacity(0.3),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// 设置项
+class _SettingsTile extends StatelessWidget {
+  final IconData icon;
+  final Color iconColor;
+  final String title;
+  final String? subtitle;
+  final Color? titleColor;
+  final VoidCallback? onTap;
+  final bool showArrow;
+
+  const _SettingsTile({
+    required this.icon,
+    required this.iconColor,
+    required this.title,
+    this.subtitle,
+    this.titleColor,
+    this.onTap,
+    this.showArrow = true,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            children: [
+              // 图标
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: iconColor.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                child: Icon(icon, size: 18, color: iconColor),
+              ),
+              const SizedBox(width: 14),
+              // 文字
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w500,
+                        color: titleColor ?? cs.onSurface,
+                      ),
+                    ),
+                    if (subtitle != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle!,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: cs.onSurfaceVariant.withOpacity(0.6),
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              // 箭头
+              if (showArrow && onTap != null)
+                Icon(
+                  Icons.chevron_right_rounded,
+                  size: 20,
+                  color: cs.onSurfaceVariant.withOpacity(0.3),
+                ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -273,10 +490,7 @@ class _ServerHistorySheetState extends ConsumerState<_ServerHistorySheet> {
     }
 
     setState(() => _switching = true);
-
-    // 先退出当前登录
     await ref.read(authProvider.notifier).logout();
-    // 设置新的服务器地址
     final ok = await ref.read(authProvider.notifier).setServerUrl(record.url);
 
     if (!mounted) return;
@@ -284,14 +498,10 @@ class _ServerHistorySheetState extends ConsumerState<_ServerHistorySheet> {
 
     if (ok) {
       Navigator.pop(context);
-      // 跳转到登录页
       if (context.mounted) context.go('/login');
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('无法连接到 ${record.url}'),
-          behavior: SnackBarBehavior.floating,
-        ),
+        SnackBar(content: Text('无法连接到 ${record.url}')),
       );
     }
   }
@@ -314,66 +524,55 @@ class _ServerHistorySheetState extends ConsumerState<_ServerHistorySheet> {
       builder: (context, scrollController) {
         return Column(
           children: [
-            // 拖拽指示条
-            Container(
-              margin: const EdgeInsets.only(top: 12, bottom: 8),
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: cs.onSurfaceVariant.withOpacity(0.4),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
             // 标题
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding: const EdgeInsets.fromLTRB(20, 8, 16, 8),
               child: Row(
                 children: [
-                  Icon(Icons.dns_outlined, color: cs.primary),
-                  const SizedBox(width: 8),
                   Text(
                     '服务器列表',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
+                    style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                      color: cs.onSurface,
+                    ),
                   ),
                   const Spacer(),
-                  // 添加新服务器按钮
                   TextButton.icon(
                     onPressed: () {
                       Navigator.pop(context);
                       context.go('/server');
                     },
-                    icon: const Icon(Icons.add, size: 18),
+                    icon: const Icon(Icons.add_rounded, size: 18),
                     label: const Text('添加'),
                   ),
                 ],
               ),
             ),
-            const Divider(height: 1),
+            Divider(height: 0.5, color: cs.outlineVariant.withOpacity(0.3)),
             // 列表
             Expanded(
               child: _loading
-                  ? const Center(child: CircularProgressIndicator())
+                  ? const Center(
+                      child: SizedBox(
+                        width: 28,
+                        height: 28,
+                        child: CircularProgressIndicator(strokeWidth: 2.5),
+                      ),
+                    )
                   : _history.isEmpty
                       ? Center(
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Icon(Icons.dns_outlined,
-                                  size: 48, color: cs.onSurfaceVariant),
+                                  size: 40, color: cs.onSurfaceVariant.withOpacity(0.3)),
                               const SizedBox(height: 12),
                               Text(
                                 '暂无服务器记录',
-                                style:
-                                    TextStyle(color: cs.onSurfaceVariant),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                '登录后会自动保存服务器记录',
                                 style: TextStyle(
-                                  color: cs.onSurfaceVariant,
-                                  fontSize: 12,
+                                  color: cs.onSurfaceVariant.withOpacity(0.5),
+                                  fontSize: 14,
                                 ),
                               ),
                             ],
@@ -381,6 +580,7 @@ class _ServerHistorySheetState extends ConsumerState<_ServerHistorySheet> {
                         )
                       : ListView.builder(
                           controller: scrollController,
+                          padding: const EdgeInsets.symmetric(vertical: 8),
                           itemCount: _history.length,
                           itemBuilder: (context, index) {
                             final record = _history[index];
@@ -395,14 +595,6 @@ class _ServerHistorySheetState extends ConsumerState<_ServerHistorySheet> {
                           },
                         ),
             ),
-            // 加载遮罩
-            if (_switching)
-              Container(
-                color: Colors.black12,
-                child: const Center(
-                  child: CircularProgressIndicator(),
-                ),
-              ),
           ],
         );
       },
@@ -430,46 +622,91 @@ class _ServerRecordTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
-    return ListTile(
-      leading: CircleAvatar(
-        backgroundColor:
-            isCurrent ? cs.primaryContainer : cs.surfaceContainerHighest,
-        child: Icon(
-          isCurrent ? Icons.check : Icons.dns_outlined,
-          color: isCurrent ? cs.onPrimaryContainer : cs.onSurfaceVariant,
-          size: 20,
-        ),
-      ),
-      title: Text(
-        record.url,
-        style: TextStyle(
-          fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
-          color: isCurrent ? cs.primary : null,
-        ),
-      ),
-      subtitle: Text(
-        [
-          if (record.username != null) '@${record.username}',
-          if (record.nickname != null && record.nickname!.isNotEmpty)
-            record.nickname!,
-          _formatTime(record.lastUsed),
-        ].join(' · '),
-        style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
-      ),
-      trailing: isCurrent
-          ? Chip(
-              label: const Text('当前', style: TextStyle(fontSize: 11)),
-              backgroundColor: cs.primaryContainer,
-              side: BorderSide.none,
-              padding: EdgeInsets.zero,
-              visualDensity: VisualDensity.compact,
-            )
-          : IconButton(
-              icon: Icon(Icons.delete_outline,
-                  size: 20, color: cs.onSurfaceVariant),
-              onPressed: onDelete,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: Material(
+        color: isCurrent
+            ? cs.primary.withOpacity(0.06)
+            : Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: switching ? null : onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: isCurrent
+                        ? cs.primary.withOpacity(0.15)
+                        : cs.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    isCurrent ? Icons.check_rounded : Icons.dns_outlined,
+                    color: isCurrent ? cs.primary : cs.onSurfaceVariant.withOpacity(0.5),
+                    size: 18,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        record.url,
+                        style: TextStyle(
+                          fontWeight: isCurrent ? FontWeight.w600 : FontWeight.w500,
+                          color: isCurrent ? cs.primary : cs.onSurface,
+                          fontSize: 14,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        [
+                          if (record.username != null) '@${record.username}',
+                          if (record.nickname != null && record.nickname!.isNotEmpty)
+                            record.nickname!,
+                          _formatTime(record.lastUsed),
+                        ].join(' · '),
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: cs.onSurfaceVariant.withOpacity(0.5),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (isCurrent)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: cs.primary.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      '当前',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: cs.primary,
+                      ),
+                    ),
+                  )
+                else
+                  IconButton(
+                    icon: Icon(Icons.delete_outline_rounded,
+                        size: 18, color: cs.onSurfaceVariant.withOpacity(0.3)),
+                    onPressed: onDelete,
+                  ),
+              ],
             ),
-      onTap: switching ? null : onTap,
+          ),
+        ),
+      ),
     );
   }
 
@@ -484,7 +721,7 @@ class _ServerRecordTile extends StatelessWidget {
   }
 }
 
-/// 扫描文库按钮（带加载状态）
+/// 扫描文库按钮
 class _ScanLibraryTile extends ConsumerStatefulWidget {
   final WidgetRef ref;
   const _ScanLibraryTile({required this.ref});
@@ -504,20 +741,13 @@ class _ScanLibraryTileState extends ConsumerState<_ScanLibraryTile> {
       await api.triggerSync();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('扫描文库已触发，后台正在同步...'),
-            behavior: SnackBarBehavior.floating,
-            duration: Duration(seconds: 3),
-          ),
+          const SnackBar(content: Text('扫描文库已触发，后台正在同步...')),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('扫描失败: $e'),
-            behavior: SnackBarBehavior.floating,
-          ),
+          SnackBar(content: Text('扫描失败: $e')),
         );
       }
     } finally {
@@ -527,16 +757,11 @@ class _ScanLibraryTileState extends ConsumerState<_ScanLibraryTile> {
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      leading: _scanning
-          ? const SizedBox(
-              width: 24,
-              height: 24,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
-          : const Icon(Icons.refresh),
-      title: const Text('扫描文库'),
-      subtitle: const Text('重新扫描漫画和电子书目录'),
+    return _SettingsTile(
+      icon: _scanning ? Icons.sync_rounded : Icons.refresh_rounded,
+      iconColor: Colors.teal,
+      title: '扫描文库',
+      subtitle: '重新扫描漫画和电子书目录',
       onTap: _scanning ? null : _triggerScan,
     );
   }
