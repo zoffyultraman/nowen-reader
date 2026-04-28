@@ -156,6 +156,55 @@ export default function ScraperPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const scraperT = (t as any).scraper || {};
 
+  // 检查刮削功能是否启用
+  const [scraperEnabled, setScraperEnabled] = useState<boolean | null>(null);
+  useEffect(() => {
+    fetch("/api/site-settings")
+      .then(r => r.json())
+      .then(data => setScraperEnabled(data.scraperEnabled ?? false))
+      .catch(() => setScraperEnabled(false));
+  }, []);
+
+  // 刮削功能未启用时显示提示页面
+  if (scraperEnabled === false) {
+    return (
+      <div className="h-screen flex flex-col items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-4 max-w-md text-center px-6">
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted/20">
+            <Database className="h-8 w-8 text-muted" />
+          </div>
+          <h1 className="text-xl font-bold text-foreground">
+            {scraperT.title || "元数据刮削"}
+          </h1>
+          <p className="text-sm text-muted">
+            内容刮削功能当前已关闭。请在「设置 → 站点设置」中启用「内容刮削」开关后再使用。
+          </p>
+          <button
+            onClick={() => router.push("/settings?tab=site")}
+            className="mt-2 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent/90 transition-colors"
+          >
+            前往设置
+          </button>
+          <button
+            onClick={() => router.push("/")}
+            className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-muted hover:text-foreground hover:bg-card-hover transition-colors"
+          >
+            返回首页
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // 加载中
+  if (scraperEnabled === null) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-background">
+        <Loader2 className="h-6 w-6 animate-spin text-muted" />
+      </div>
+    );
+  }
+
   const {
     stats,
     statsLoading,

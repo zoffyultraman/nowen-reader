@@ -558,6 +558,8 @@ const zhCN = {
     modeWebtoon: "长条滚动",
     saved: "已保存",
     restartHint: "部分设置需要重启后生效",
+    scraperEnabled: "启用内容刮削",
+    scraperEnabledDesc: "开启后允许系统从在线数据源（AniList、Bangumi 等）自动获取封面、简介、标签等元数据。关闭时所有自动内容获取和更新操作将被禁止。",
   },
 
   // AI
@@ -1649,6 +1651,8 @@ export interface Translations {
     modeWebtoon: string;
     saved: string;
     restartHint: string;
+    scraperEnabled: string;
+    scraperEnabledDesc: string;
   };
   ai: {
     title: string;

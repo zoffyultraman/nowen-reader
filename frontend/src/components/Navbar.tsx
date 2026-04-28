@@ -24,6 +24,7 @@ import { useTheme } from "@/lib/theme-context";
 import { useAuth } from "@/lib/auth-context";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import { useScraperStore } from "@/hooks/useScraperStore";
+import { useSiteSettings } from "@/hooks/useSiteSettings";
 
 interface NavbarProps {
   searchQuery: string;
@@ -54,6 +55,7 @@ export default function Navbar({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const scraperT = (t as any).scraper || {};
   const { batchRunning } = useScraperStore();
+  const { scraperEnabled } = useSiteSettings();
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 border-b border-border/50 bg-background/70 backdrop-blur-xl backdrop-saturate-150">
@@ -136,6 +138,7 @@ export default function Navbar({
             onScanLibrary={onScanLibrary}
             scanning={scanning}
             batchRunning={batchRunning}
+            scraperEnabled={scraperEnabled}
             theme={theme}
             toggleTheme={toggleTheme}
             t={t}
@@ -160,6 +163,7 @@ interface MoreMenuProps {
   onScanLibrary?: () => void;
   scanning?: boolean;
   batchRunning: boolean;
+  scraperEnabled: boolean;
   theme: string;
   toggleTheme: () => void;
   t: Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -175,6 +179,7 @@ function MoreMenu({
   onScanLibrary,
   scanning,
   batchRunning,
+  scraperEnabled,
   theme,
   toggleTheme,
   t,
@@ -269,6 +274,7 @@ function MoreMenu({
               </button>
 
               {/* 元数据刮削 */}
+              {scraperEnabled && (
               <button
                 onClick={() => handleAction(() => router.push("/scraper"))}
                 className={`w-full px-3 py-2.5 text-left text-sm flex items-center gap-2.5 ${
@@ -286,6 +292,7 @@ function MoreMenu({
                   </span>
                 )}
               </button>
+              )}
 
               {/* 分隔线 */}
               <div className="my-1 border-t border-border/50" />

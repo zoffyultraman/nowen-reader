@@ -30,6 +30,7 @@ type SiteConfigResponse struct {
 	Language         string   `json:"language"`
 	Theme            string   `json:"theme"`
 	RegistrationMode string   `json:"registrationMode"`
+	ScraperEnabled   bool     `json:"scraperEnabled"`
 }
 
 // GET /api/site-settings — Get site settings
@@ -80,6 +81,7 @@ func (h *SettingsHandler) GetSettings(c *gin.Context) {
 		Language:         cfg.Language,
 		Theme:            cfg.Theme,
 		RegistrationMode: config.GetRegistrationMode(),
+		ScraperEnabled:   config.IsScraperEnabled(),
 	}
 
 	if resp.Language == "" {
@@ -106,6 +108,7 @@ func (h *SettingsHandler) UpdateSettings(c *gin.Context) {
 		Language         *string  `json:"language"`
 		Theme            *string  `json:"theme"`
 		RegistrationMode *string  `json:"registrationMode"`
+		ScraperEnabled   *bool    `json:"scraperEnabled"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
@@ -150,6 +153,9 @@ func (h *SettingsHandler) UpdateSettings(c *gin.Context) {
 		if mode == "open" || mode == "invite" || mode == "closed" {
 			current.RegistrationMode = mode
 		}
+	}
+	if body.ScraperEnabled != nil {
+		current.ScraperEnabled = body.ScraperEnabled
 	}
 
 	if err := config.SaveSiteConfig(&current); err != nil {

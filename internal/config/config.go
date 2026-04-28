@@ -23,6 +23,7 @@ type SiteConfig struct {
 	Theme            string         `json:"theme,omitempty"`
 	ScannerConfig    *ScannerConfig `json:"scannerConfig,omitempty"`
 	RegistrationMode string         `json:"registrationMode,omitempty"` // "open" | "invite" | "closed"，默认 "open"
+	ScraperEnabled   *bool          `json:"scraperEnabled,omitempty"`   // 是否启用内容刮削功能，默认 false
 }
 
 // ScannerConfig 保存可配置化的扫描参数。
@@ -256,6 +257,15 @@ func GetRegistrationMode() string {
 		return m
 	}
 	return "open"
+}
+
+// IsScraperEnabled 返回是否启用内容刮削功能，默认为 false（关闭）。
+func IsScraperEnabled() bool {
+	cfg := loadSiteConfig()
+	if cfg.ScraperEnabled != nil {
+		return *cfg.ScraperEnabled
+	}
+	return false
 }
 
 // DatabaseURL returns the SQLite database path.

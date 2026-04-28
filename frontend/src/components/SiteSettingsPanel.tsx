@@ -5,8 +5,10 @@ import {
   Globe, Save, FolderOpen, Image, Languages, BookOpen,
   CheckCircle, Trash2, RefreshCw, Plus, X, Search, Sparkles,
   ImagePlus, AlertCircle, ChevronRight, ChevronUp, Folder,
+  Database,
 } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
+import { invalidateSiteSettings } from "@/hooks/useSiteSettings";
 
 interface SiteConfig {
   siteName: string;
@@ -18,6 +20,7 @@ interface SiteConfig {
   thumbnailHeight: number;
   pageSize: number;
   language: string;
+  scraperEnabled: boolean;
 }
 
 interface ThumbnailStats {
@@ -342,6 +345,7 @@ export function SiteSettingsPanel() {
       });
       if (res.ok) {
         setSaved(true);
+        invalidateSiteSettings();
         setTimeout(() => setSaved(false), 2000);
       }
     } finally {
@@ -349,7 +353,7 @@ export function SiteSettingsPanel() {
     }
   };
 
-  const update = (key: keyof SiteConfig, value: string | number | string[]) => {
+  const update = (key: keyof SiteConfig, value: string | number | string[] | boolean) => {
     if (!config) return;
     setConfig({ ...config, [key]: value });
     setSaved(false);
@@ -1121,6 +1125,33 @@ export function SiteSettingsPanel() {
             </button>
           </div>
         )}
+      </div>
+
+      {/* Scraper Toggle */}
+      <div className="space-y-3 rounded-xl bg-background p-4">
+        <div className="flex items-center gap-2 text-xs font-medium text-foreground">
+          <Database className="h-3.5 w-3.5 text-accent" />
+          {siteT?.scraperEnabled || "启用内容刮削"}
+        </div>
+        <div className="flex items-center justify-between">
+          <div className="flex-1 pr-4">
+            <p className="text-[11px] text-muted">
+              {siteT?.scraperEnabledDesc || "开启后允许系统从在线数据源（AniList、Bangumi 等）自动获取封面、简介、标签等元数据。关闭时所有自动内容获取和更新操作将被禁止。"}
+            </p>
+          </div>
+          <button
+            onClick={() => update("scraperEnabled", config.scraperEnabled ? false : true)}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 ${
+              config.scraperEnabled ? "bg-accent" : "bg-border"
+            }`}
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${
+                config.scraperEnabled ? "translate-x-6" : "translate-x-1"
+              }`}
+            />
+          </button>
+        </div>
       </div>
 
       {/* Default Reading Mode */}
