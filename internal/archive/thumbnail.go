@@ -95,6 +95,25 @@ func GenerateThumbnail(archivePath, comicID string) ([]byte, float64, error) {
 		data, err := generateTextCover(archivePath, comicID, thumbDir, cachePath)
 		return data, 0, err
 
+	case archiveType == TypeImageFolder:
+		// 图片文件夹漫画：直接读取第一张图片作为封面
+		reader, err := NewReader(archivePath)
+		if err != nil {
+			return nil, 0, err
+		}
+		defer reader.Close()
+
+		images := GetImageEntries(reader)
+		if len(images) == 0 {
+			return nil, 0, fmt.Errorf("no images in folder %s", archivePath)
+		}
+
+		buf, err := reader.ExtractEntry(images[0])
+		if err != nil {
+			return nil, 0, fmt.Errorf("extract first page from folder: %w", err)
+		}
+		pageBuffer = buf
+
 	default:
 		// Open archive and extract first image
 		reader, err := NewReader(archivePath)

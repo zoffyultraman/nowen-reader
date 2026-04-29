@@ -3,7 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../l10n/app_localizations.dart';
 
-/// 底部导航壳
+/// 底部导航壳 — 极简优雅风格
 class AppShell extends StatelessWidget {
   final Widget child;
   const AppShell({super.key, required this.child});
@@ -36,31 +36,41 @@ class AppShell extends StatelessWidget {
 
     return Scaffold(
       body: child,
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: index,
-        onDestinationSelected: (i) => _onTap(context, i),
-        destinations: [
-          NavigationDestination(
-            icon: const Icon(Icons.home_outlined),
-            selectedIcon: const Icon(Icons.home),
-            label: l10n.navHome,
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          border: Border(
+            top: BorderSide(
+              color: Theme.of(context).dividerTheme.color ?? Colors.transparent,
+              width: 0.5,
+            ),
           ),
-          NavigationDestination(
-            icon: const Icon(Icons.search_outlined),
-            selectedIcon: const Icon(Icons.search),
-            label: l10n.navSearch,
-          ),
-          NavigationDestination(
-            icon: const Icon(Icons.bar_chart_outlined),
-            selectedIcon: const Icon(Icons.bar_chart),
-            label: l10n.navStats,
-          ),
-          NavigationDestination(
-            icon: const Icon(Icons.settings_outlined),
-            selectedIcon: const Icon(Icons.settings),
-            label: l10n.navSettings,
-          ),
-        ],
+        ),
+        child: NavigationBar(
+          selectedIndex: index,
+          onDestinationSelected: (i) => _onTap(context, i),
+          destinations: [
+            NavigationDestination(
+              icon: const Icon(Icons.library_books_outlined),
+              selectedIcon: const Icon(Icons.library_books_rounded),
+              label: l10n.navHome,
+            ),
+            NavigationDestination(
+              icon: const Icon(Icons.search_rounded),
+              selectedIcon: const Icon(Icons.search_rounded),
+              label: l10n.navSearch,
+            ),
+            NavigationDestination(
+              icon: const Icon(Icons.insights_outlined),
+              selectedIcon: const Icon(Icons.insights_rounded),
+              label: l10n.navStats,
+            ),
+            NavigationDestination(
+              icon: const Icon(Icons.person_outline_rounded),
+              selectedIcon: const Icon(Icons.person_rounded),
+              label: l10n.navSettings,
+            ),
+          ],
+        ),
       ),
     );
   }

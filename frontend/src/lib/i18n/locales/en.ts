@@ -14,6 +14,8 @@ const en: Translations = {
     close: "Close",
     more: "more",
     collapse: "Collapse",
+    noSearchResults: "No matching results",
+    tryDifferentKeywords: "Try different keywords",
   },
 
   // Navbar
@@ -559,6 +561,8 @@ const en: Translations = {
     modeWebtoon: "Webtoon Scroll",
     saved: "Saved",
     restartHint: "Some settings require a restart to take effect",
+    scraperEnabled: "Enable Content Scraping",
+    scraperEnabledDesc: "When enabled, the system can automatically fetch covers, descriptions, tags and other metadata from online sources (AniList, Bangumi, etc.). When disabled, all automatic content fetching and update operations are prohibited.",
   },
 
   // AI

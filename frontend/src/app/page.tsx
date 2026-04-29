@@ -342,11 +342,11 @@ export default function Home() {
     if (!debouncedSearch) return groups;
     const q = debouncedSearch.toLowerCase();
     return groups.filter((g) =>
-      g.name?.toLowerCase().includes(q) ||
-      g.author?.toLowerCase().includes(q) ||
-      g.description?.toLowerCase().includes(q) ||
-      g.tags?.toLowerCase().includes(q) ||
-      g.publisher?.toLowerCase().includes(q)
+      (g.name?.toLowerCase().includes(q)) ||
+      (g.author?.toLowerCase().includes(q)) ||
+      (g.description?.toLowerCase().includes(q)) ||
+      (g.tags?.toLowerCase().includes(q)) ||
+      (g.publisher?.toLowerCase().includes(q))
     );
   }, [groups, debouncedSearch]);
 
@@ -433,8 +433,8 @@ export default function Home() {
     }
   }, [showGroupView, contentType, refetchGroupCategories]);
 
-  // 系列级分类：只显示有关联系列的分类（count > 0）
-  const effectiveCategories = showGroupView ? groupCategories.filter(c => c.count > 0) : categories;
+  // 只显示有内容的分类（count > 0）
+  const effectiveCategories = showGroupView ? groupCategories.filter(c => c.count > 0) : categories.filter(c => c.count > 0);
 
   // 根据当前 contentType 决定分页总页数
   const effectiveTotalPages = showGroupView ? groupTotalPages : totalPages;
@@ -1049,8 +1049,8 @@ accept=".zip,.cbz,.cbr,.rar,.7z,.cb7,.pdf,.txt,.epub,.mobi,.azw3,.html,.htm"
                   >
                     <Layers className="h-3.5 w-3.5" />
                     <span className="hidden sm:inline">
-                      {groups.length > 0
-                        ? `${t.comicGroup?.groups || "系列"} (${groups.length})`
+                      {filteredGroups.length > 0
+                        ? `${t.comicGroup?.groups || "系列"} (${filteredGroups.length})`
                         : (t.comicGroup?.groups || "系列")}
                     </span>
                   </button>

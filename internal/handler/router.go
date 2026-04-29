@@ -290,10 +290,10 @@ func SetupRoutes(r *gin.Engine) {
 	// Phase 4: Metadata, AI, OPDS, WebDAV, Recommendations, etc.
 	// ============================================================
 
-	// Metadata scraping — requires admin
+	// Metadata scraping — requires admin + scraper enabled
 	meta := NewMetadataHandler()
 	metadataGroup := api.Group("/metadata")
-	metadataGroup.Use(middleware.AdminRequired())
+	metadataGroup.Use(middleware.AdminRequired(), middleware.ScraperRequired())
 	{
 		metadataGroup.GET("/search", meta.Search)
 		metadataGroup.POST("/search", meta.Search)
@@ -468,15 +468,15 @@ func SetupRoutes(r *gin.Engine) {
 		groupWrite.POST("/:id/sync-categories", group.SyncGroupCategories)
 		groupWrite.POST("/:id/ai-suggest-categories", group.AISuggestCategories)
 		// P4: 系列级元数据刮削 & AI 识别
-		groupWrite.POST("/:id/scrape-metadata", group.ScrapeMetadata)
-		groupWrite.POST("/:id/apply-metadata", group.ApplyScrapedMetadata)
-		groupWrite.POST("/:id/ai-recognize", group.AIRecognize)
+		groupWrite.POST("/:id/scrape-metadata", middleware.ScraperRequired(), group.ScrapeMetadata)
+		groupWrite.POST("/:id/apply-metadata", middleware.ScraperRequired(), group.ApplyScrapedMetadata)
+		groupWrite.POST("/:id/ai-recognize", middleware.ScraperRequired(), group.AIRecognize)
 		// P3: 按话/卷自动分组
 		groupWrite.POST("/auto-group-by-dir", group.AutoGroupByDirectory)
 		groupWrite.POST("/auto-detect", group.AutoDetect)
 		groupWrite.POST("/batch-create", group.BatchCreate)
 		groupWrite.POST("/batch-delete", group.BatchDelete)
-		groupWrite.POST("/batch-scrape", group.BatchScrape)
+		groupWrite.POST("/batch-scrape", middleware.ScraperRequired(), group.BatchScrape)
 		groupWrite.POST("/merge", group.MergeGroups)
 		groupWrite.POST("/export", group.ExportGroups)
 		// 脏数据检测与清理

@@ -14,6 +14,7 @@ import '../features/server/server_config_screen.dart';
 import '../features/shell/app_shell.dart';
 import '../features/stats/stats_screen.dart';
 import '../features/groups/group_detail_screen.dart';
+import '../features/collections/collections_screen.dart';
 import '../features/metadata/metadata_screen.dart';
 import '../features/tag_manager/tag_manager_screen.dart';
 
@@ -97,6 +98,11 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/comic/:id',
         builder: (_, state) => ComicDetailScreen(comicId: state.pathParameters['id']!),
+      ),
+      // 合集列表
+      GoRoute(
+        path: '/collections',
+        builder: (_, __) => const CollectionsScreen(),
       ),
       // 分组详情
       GoRoute(

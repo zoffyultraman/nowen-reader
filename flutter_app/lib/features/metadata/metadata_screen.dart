@@ -36,17 +36,6 @@ const _novelSources = [
   _SourceDef('anilist_novel', 'AniList', '🅰', Color(0xFF3B82F6)),
 ];
 
-/// 根据文件名判断是否为小说
-bool _isNovelFile(String filename) {
-  final ext = filename.toLowerCase();
-  return ext.endsWith('.txt') ||
-      ext.endsWith('.epub') ||
-      ext.endsWith('.mobi') ||
-      ext.endsWith('.azw3') ||
-      ext.endsWith('.html') ||
-      ext.endsWith('.htm');
-}
-
 // ============================================================
 // 元数据刮削页面（漫画详情 → 入口）
 // ============================================================
@@ -121,7 +110,7 @@ class _MetadataScreenState extends ConsumerState<MetadataScreen>
         _loading = false;
         _searchCtrl.text = comic.title;
         // 根据类型设置默认数据源
-        final isNovel = _isNovelFile(comic.filename);
+        final isNovel = comic.isNovel;
         _enabledSources = (isNovel ? _novelSources : _comicSources)
             .map((s) => s.id)
             .toList();
@@ -141,7 +130,7 @@ class _MetadataScreenState extends ConsumerState<MetadataScreen>
   /// 可用的数据源列表
   List<_SourceDef> get _availableSources {
     if (_comic == null) return _comicSources;
-    return _isNovelFile(_comic!.filename) ? _novelSources : _comicSources;
+    return _comic!.isNovel ? _novelSources : _comicSources;
   }
 
   // ============================================================
@@ -159,7 +148,7 @@ class _MetadataScreenState extends ConsumerState<MetadataScreen>
     try {
       final api = ref.read(metadataApiProvider);
       final isNovel =
-          _comic != null && _isNovelFile(_comic!.filename);
+          _comic != null && _comic!.isNovel;
       final results = await api.searchMetadata(
         query: _searchCtrl.text.trim(),
         sources: _enabledSources,
@@ -230,7 +219,7 @@ class _MetadataScreenState extends ConsumerState<MetadataScreen>
     });
     try {
       final api = ref.read(metadataApiProvider);
-      final isNovel = _isNovelFile(_comic!.filename);
+      final isNovel = _comic!.isNovel;
       final data = isNovel
           ? await api.scanNovelMetadata(comicId: widget.comicId, lang: 'zh')
           : await api.scanMetadata(comicId: widget.comicId, lang: 'zh');
@@ -592,7 +581,7 @@ class _MetadataScreenState extends ConsumerState<MetadataScreen>
         // 已应用提示（扫描成功）
         if (_appliedIndex == -1) ...[
           _buildSuccessBanner(
-              _comic != null && _isNovelFile(_comic!.filename)
+              _comic != null && _comic!.isNovel
                   ? '小说元数据应用成功'
                   : '已从 ComicInfo.xml 应用元数据'),
           const SizedBox(height: 8),
@@ -780,7 +769,7 @@ class _MetadataScreenState extends ConsumerState<MetadataScreen>
 
   Widget _buildScanTab(ColorScheme cs) {
     final comic = _comic;
-    final isNovel = comic != null && _isNovelFile(comic.filename);
+    final isNovel = comic != null && comic.isNovel;
 
     return ListView(
       padding: const EdgeInsets.all(16),

@@ -6,7 +6,9 @@ import '../../data/api/api_client.dart';
 import '../../data/api/comic_api.dart';
 import '../../data/models/comic.dart';
 import '../../data/providers/auth_provider.dart';
+import '../../data/providers/comic_provider.dart';
 import '../../widgets/authenticated_image.dart';
+import '../../widgets/comic_list_tile.dart';
 
 /// 收藏管理状态
 class _FavoritesState {
@@ -172,11 +174,23 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
     final cs = Theme.of(context).colorScheme;
     final authState = ref.watch(authProvider);
     final serverUrl = authState.serverUrl;
+    final viewMode = ref.watch(viewModeProvider);
 
     return Scaffold(
       appBar: AppBar(
         title: Text('我的收藏 (${_state.comics.length})'),
         actions: [
+          // 视图模式切换按钮
+          IconButton(
+            icon: Icon(
+              viewMode == ViewMode.grid ? Icons.view_list : Icons.grid_view,
+            ),
+            tooltip: viewMode == ViewMode.grid ? '切换列表模式' : '切换网格模式',
+            onPressed: () {
+              ref.read(viewModeProvider.notifier).state =
+                  viewMode == ViewMode.grid ? ViewMode.list : ViewMode.grid;
+            },
+          ),
           // 排序
           PopupMenuButton<String>(
             icon: const Icon(Icons.sort),
@@ -258,30 +272,74 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
                       ],
                     ),
                   )
-                : ListView.builder(
-                    controller: _scrollController,
-                    padding: const EdgeInsets.only(bottom: 16),
-                    itemCount: _state.comics.length + (_state.hasMore ? 1 : 0),
-                    itemBuilder: (context, index) {
-                      if (index >= _state.comics.length) {
-                        return const Center(
-                          child: Padding(
-                            padding: EdgeInsets.all(16),
-                            child: CircularProgressIndicator(),
-                          ),
-                        );
-                      }
-                      return _FavoriteItem(
-                        comic: _state.comics[index],
-                        serverUrl: serverUrl,
-                        onTap: () =>
-                            context.push('/comic/${_state.comics[index].id}'),
-                        onRemove: () =>
-                            _toggleFavorite(_state.comics[index].id),
-                      );
-                    },
-                  ),
+                : viewMode == ViewMode.list
+                    ? ListView.builder(
+                        controller: _scrollController,
+                        padding: const EdgeInsets.only(bottom: 16),
+                        itemCount:
+                            _state.comics.length + (_state.hasMore ? 1 : 0),
+                        itemBuilder: (context, index) {
+                          if (index >= _state.comics.length) {
+                            return const Center(
+                              child: Padding(
+                                padding: EdgeInsets.all(16),
+                                child: CircularProgressIndicator(),
+                              ),
+                            );
+                          }
+                          return ComicListTile(
+                            comic: _state.comics[index],
+                            serverUrl: serverUrl,
+                            onTap: () => context
+                                .push('/comic/${_state.comics[index].id}'),
+                            onFavoriteToggle: () =>
+                                _toggleFavorite(_state.comics[index].id),
+                          );
+                        },
+                      )
+                    : _buildGridView(context, serverUrl),
       ),
+    );
+  }
+
+  /// 网格视图
+  Widget _buildGridView(BuildContext context, String serverUrl) {
+    final width = MediaQuery.of(context).size.width;
+    final crossAxisCount = width > 900
+        ? 6
+        : width > 600
+            ? 4
+            : width > 400
+                ? 3
+                : 2;
+
+    return GridView.builder(
+      controller: _scrollController,
+      padding: const EdgeInsets.all(8),
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: crossAxisCount,
+        childAspectRatio: 0.65,
+        crossAxisSpacing: 8,
+        mainAxisSpacing: 8,
+      ),
+      itemCount: _state.comics.length + (_state.hasMore ? 1 : 0),
+      itemBuilder: (context, index) {
+        if (index >= _state.comics.length) {
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.all(16),
+              child: CircularProgressIndicator(),
+            ),
+          );
+        }
+        final comic = _state.comics[index];
+        return _FavoriteGridCard(
+          comic: comic,
+          serverUrl: serverUrl,
+          onTap: () => context.push('/comic/${comic.id}'),
+          onRemove: () => _toggleFavorite(comic.id),
+        );
+      },
     );
   }
 
@@ -299,14 +357,14 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
   }
 }
 
-/// 收藏列表项组件
-class _FavoriteItem extends StatelessWidget {
+/// 收藏网格卡片组件
+class _FavoriteGridCard extends StatelessWidget {
   final Comic comic;
   final String serverUrl;
   final VoidCallback onTap;
   final VoidCallback onRemove;
 
-  const _FavoriteItem({
+  const _FavoriteGridCard({
     required this.comic,
     required this.serverUrl,
     required this.onTap,
@@ -319,133 +377,102 @@ class _FavoriteItem extends StatelessWidget {
     final thumbUrl = getImageUrl(serverUrl, comic.id, thumbnail: true);
 
     return Card(
-      margin: const EdgeInsets.fromLTRB(12, 6, 12, 6),
+      clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            children: [
-              // 缩略图
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: SizedBox(
-                  width: 56,
-                  height: 80,
-                  child: AuthenticatedImage(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  AuthenticatedImage(
                     imageUrl: thumbUrl,
                     fit: BoxFit.cover,
                     placeholder: Container(
                       color: cs.surfaceContainerHighest,
-                      child: const Icon(Icons.image_outlined, size: 24),
+                      child: const Center(
+                        child: Icon(Icons.image_outlined, size: 32),
+                      ),
                     ),
                     errorWidget: Container(
                       color: cs.surfaceContainerHighest,
-                      child: const Icon(Icons.broken_image_outlined, size: 24),
+                      child: Center(
+                        child: Icon(Icons.broken_image_outlined,
+                            size: 32, color: cs.onSurfaceVariant),
+                      ),
                     ),
                   ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              // 信息
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        if (comic.isNovel)
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 6, vertical: 1),
-                            margin: const EdgeInsets.only(right: 6),
-                            decoration: BoxDecoration(
-                              color: cs.tertiaryContainer,
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              '小说',
-                              style: TextStyle(
-                                color: cs.onTertiaryContainer,
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        Expanded(
-                          child: Text(
-                            comic.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleSmall
-                                ?.copyWith(fontWeight: FontWeight.w600),
-                          ),
-                        ),
-                      ],
+                  // 阅读进度条
+                  if (comic.progress > 0)
+                    Positioned(
+                      bottom: 0,
+                      left: 0,
+                      right: 0,
+                      child: LinearProgressIndicator(
+                        value: comic.progress / 100,
+                        minHeight: 3,
+                        backgroundColor: Colors.black38,
+                        valueColor: AlwaysStoppedAnimation(cs.primary),
+                      ),
                     ),
-                    if (comic.author.isNotEmpty) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        comic.author,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: cs.onSurfaceVariant,
-                          fontSize: 12,
+                  // 收藏图标（点击取消收藏）
+                  Positioned(
+                    top: 4,
+                    right: 4,
+                    child: GestureDetector(
+                      onTap: onRemove,
+                      child: const Icon(
+                        Icons.favorite,
+                        color: Colors.red,
+                        size: 20,
+                        shadows: [
+                          Shadow(blurRadius: 4, color: Colors.black54),
+                        ],
+                      ),
+                    ),
+                  ),
+                  // 类型标识
+                  if (comic.isNovel)
+                    Positioned(
+                      top: 4,
+                      left: 4,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: cs.tertiary,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          '小说',
+                          style: TextStyle(
+                            color: cs.onTertiary,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
-                    ],
-                    const SizedBox(height: 4),
-                    // 进度和评分
-                    Row(
-                      children: [
-                        if (comic.progress > 0) ...[
-                          SizedBox(
-                            width: 60,
-                            child: LinearProgressIndicator(
-                              value: comic.progress / 100,
-                              minHeight: 3,
-                              borderRadius: BorderRadius.circular(2),
-                            ),
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            '${comic.progress}%',
-                            style: TextStyle(
-                              color: cs.onSurfaceVariant,
-                              fontSize: 11,
-                            ),
-                          ),
-                        ],
-                        if (comic.rating != null && comic.rating! > 0) ...[
-                          const SizedBox(width: 8),
-                          Icon(Icons.star, size: 14, color: Colors.amber),
-                          Text(
-                            ' ${comic.rating!.toStringAsFixed(1)}',
-                            style: TextStyle(
-                              color: cs.onSurfaceVariant,
-                              fontSize: 11,
-                            ),
-                          ),
-                        ],
-                      ],
                     ),
-                  ],
-                ),
+                ],
               ),
-              // 取消收藏按钮
-              IconButton(
-                icon: Icon(Icons.favorite, color: cs.error),
-                tooltip: '取消收藏',
-                onPressed: onRemove,
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
+              child: Text(
+                comic.title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      fontWeight: FontWeight.w500,
+                    ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
+

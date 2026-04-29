@@ -158,11 +158,22 @@ func FindComicFilePath(comicID string) (string, string, error) {
 		return "", "", fmt.Errorf("comic not found: %s", comicID)
 	}
 
+	// 图片文件夹漫画：filename 以 "/" 结尾
+	isFolder := strings.HasSuffix(comic.Filename, "/")
+
 	// Search all directories for the file
 	for _, dir := range config.GetAllScanDirs() {
 		fp := filepath.Join(dir, comic.Filename)
-		if _, err := os.Stat(fp); err == nil {
-			return fp, comic.Filename, nil
+		if isFolder {
+			// 文件夹类型：去掉尾部斜杠后检查目录是否存在
+			fp = filepath.Join(dir, strings.TrimSuffix(comic.Filename, "/"))
+			if info, err := os.Stat(fp); err == nil && info.IsDir() {
+				return fp, comic.Filename, nil
+			}
+		} else {
+			if _, err := os.Stat(fp); err == nil {
+				return fp, comic.Filename, nil
+			}
 		}
 	}
 
@@ -457,18 +468,23 @@ func GetPageImageData(comicID string, pageIndex int) ([]byte, error) {
 // getArchivePageImage extracts a page from a non-PDF archive.
 func getArchivePageImage(comicID, fp string, pageIndex int) (*PageImage, error) {
 	cacheDir := filepath.Join(config.GetPagesCacheDir(), comicID)
+	archiveType := archive.DetectType(fp)
+	isImageFolder := archiveType == archive.TypeImageFolder
 
-	// Check disk cache
-	if entries, err := os.ReadDir(cacheDir); err == nil {
-		prefix := fmt.Sprintf("%d.", pageIndex)
-		for _, e := range entries {
-			if strings.HasPrefix(e.Name(), prefix) {
-				data, err := os.ReadFile(filepath.Join(cacheDir, e.Name()))
-				if err == nil {
-					return &PageImage{
-						Data:     data,
-						MimeType: archive.GetMimeType(e.Name()),
-					}, nil
+	// 图片文件夹漫画不使用磁盘缓存（图片本身就在磁盘上，无需复制）
+	if !isImageFolder {
+		// Check disk cache
+		if entries, err := os.ReadDir(cacheDir); err == nil {
+			prefix := fmt.Sprintf("%d.", pageIndex)
+			for _, e := range entries {
+				if strings.HasPrefix(e.Name(), prefix) {
+					data, err := os.ReadFile(filepath.Join(cacheDir, e.Name()))
+					if err == nil {
+						return &PageImage{
+							Data:     data,
+							MimeType: archive.GetMimeType(e.Name()),
+						}, nil
+					}
 				}
 			}
 		}
@@ -494,14 +510,16 @@ func getArchivePageImage(comicID, fp string, pageIndex int) (*PageImage, error) 
 	ext := strings.ToLower(filepath.Ext(entryName))
 	mimeType := archive.GetMimeType(entryName)
 
-	// Write to disk cache (fire-and-forget)
-	go func() {
-		if err := os.MkdirAll(cacheDir, 0755); err != nil {
-			return
-		}
-		cachePath := filepath.Join(cacheDir, fmt.Sprintf("%d%s", pageIndex, ext))
-		_ = os.WriteFile(cachePath, data, 0644)
-	}()
+	// Write to disk cache (fire-and-forget) — 图片文件夹漫画跳过缓存
+	if !isImageFolder {
+		go func() {
+			if err := os.MkdirAll(cacheDir, 0755); err != nil {
+				return
+			}
+			cachePath := filepath.Join(cacheDir, fmt.Sprintf("%d%s", pageIndex, ext))
+			_ = os.WriteFile(cachePath, data, 0644)
+		}()
+	}
 
 	return &PageImage{Data: data, MimeType: mimeType}, nil
 }
@@ -561,8 +579,8 @@ func WarmupPages(comicID string, startPage, count int) {
 		}
 
 		archiveType := archive.DetectType(fp)
-		// 仅对漫画格式预热（小说和PDF不需要）
-		if archive.IsNovelType(archiveType) || archiveType == archive.TypePdf {
+		// 仅对漫画格式预热（小说、PDF和图片文件夹不需要）
+		if archive.IsNovelType(archiveType) || archiveType == archive.TypePdf || archiveType == archive.TypeImageFolder {
 			return
 		}
 
@@ -683,6 +701,17 @@ func GetArchivePageCount(fp string) (int, error) {
 
 	if archiveType == archive.TypePdf {
 		return archive.GetPdfPageCount(fp)
+	}
+
+	// 图片文件夹漫画：直接使用 Reader 计算图片数量
+	if archiveType == archive.TypeImageFolder {
+		reader, err := archive.NewReader(fp)
+		if err != nil {
+			return 0, err
+		}
+		defer reader.Close()
+		images := archive.GetImageEntries(reader)
+		return len(images), nil
 	}
 
 	reader, err := archive.NewReader(fp)

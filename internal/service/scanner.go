@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -191,16 +192,58 @@ type diskFile struct {
 }
 
 // walkDirRecursive 递归遍历目录中的所有支持文件。
+// 同时识别图片文件夹漫画：如果某个子目录直接包含图片文件，则将该目录作为一个漫画入库。
 func walkDirRecursive(root string) []diskFile {
 	var files []diskFile
+	// 记录已被识别为图片文件夹漫画的目录，避免其子文件被重复处理
+	imageFolderDirs := make(map[string]bool)
 
 	filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return nil // 跳过不可访问的目录
 		}
+
+		// 对于目录：检查是否为图片文件夹漫画
 		if d.IsDir() {
+			// 跳过根目录本身
+			if path == root {
+				return nil
+			}
+			// 如果父目录已经是图片文件夹漫画，跳过子目录
+			parent := filepath.Dir(path)
+			if imageFolderDirs[parent] {
+				return filepath.SkipDir
+			}
+			// 检查该目录是否直接包含图片文件（不递归子目录）
+			if isImageFolderDirect(path) {
+				imageFolderDirs[path] = true
+				// 将该目录作为一个漫画入库
+				relPath, err := filepath.Rel(root, path)
+				if err != nil {
+					relPath = d.Name()
+				}
+				relPath = filepath.ToSlash(relPath)
+				// 图片文件夹的 filename 以 "/" 结尾，标识其为文件夹类型
+				folderFilename := relPath + "/"
+				// 计算文件夹总大小
+				folderSize := calcDirSize(path)
+				files = append(files, diskFile{
+					ID:       store.FilenameToID(folderFilename),
+					Filename: folderFilename,
+					Title:    d.Name(),
+					FileSize: folderSize,
+				})
+				return filepath.SkipDir // 不再递归进入该目录
+			}
 			return nil
 		}
+
+		// 如果当前文件所在目录已被识别为图片文件夹漫画，跳过
+		dir := filepath.Dir(path)
+		if imageFolderDirs[dir] {
+			return nil
+		}
+
 		name := d.Name()
 		if !config.IsSupportedFile(name) {
 			return nil
@@ -227,6 +270,50 @@ func walkDirRecursive(root string) []diskFile {
 	})
 
 	return files
+}
+
+// isImageFolderDirect 检查目录是否直接包含图片文件（不递归子目录）。
+// 条件：目录中至少有一个图片文件，且不包含其他支持的归档文件。
+func isImageFolderDirect(dirPath string) bool {
+	entries, err := os.ReadDir(dirPath)
+	if err != nil {
+		return false
+	}
+
+	hasImage := false
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		// 跳过隐藏文件
+		if strings.HasPrefix(name, ".") {
+			continue
+		}
+		// 如果目录中有归档文件，则不视为图片文件夹漫画
+		if config.IsSupportedArchive(name) {
+			return false
+		}
+		if config.IsImageFile(name) {
+			hasImage = true
+		}
+	}
+	return hasImage
+}
+
+// calcDirSize 计算目录中所有文件的总大小。
+func calcDirSize(dirPath string) int64 {
+	var total int64
+	filepath.WalkDir(dirPath, func(path string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil
+		}
+		if info, err := d.Info(); err == nil {
+			total += info.Size()
+		}
+		return nil
+	})
+	return total
 }
 
 // ============================================================
@@ -372,6 +459,16 @@ func quickSync() (added, removed int) {
 		}
 	}
 
+	// 修正已有记录的类型：严格按来源目录决定类型
+	// 漫画库目录的文件 → comic，电子书目录的文件 → novel
+	{
+		fileSourceMap := make(map[string]string, len(filesOnDisk))
+		for _, f := range filesOnDisk {
+			fileSourceMap[f.ID] = f.Source
+		}
+		store.FixComicTypesBySource(fileSourceMap)
+	}
+
 	// Batch delete stale comics
 	if len(toRemove) > 0 {
 		for i := 0; i < len(toRemove); i += dbBatchSize {
@@ -470,10 +567,19 @@ func fullSync() {
 	for _, c := range comics {
 		var foundPath string
 		for _, dir := range allDirs {
-			candidate := filepath.Join(dir, c.Filename)
-			if _, err := os.Stat(candidate); err == nil {
-				foundPath = candidate
-				break
+			// 图片文件夹漫画：filename 以 "/" 结尾
+			if strings.HasSuffix(c.Filename, "/") {
+				candidate := filepath.Join(dir, strings.TrimSuffix(c.Filename, "/"))
+				if info, err := os.Stat(candidate); err == nil && info.IsDir() {
+					foundPath = candidate
+					break
+				}
+			} else {
+				candidate := filepath.Join(dir, c.Filename)
+				if _, err := os.Stat(candidate); err == nil {
+					foundPath = candidate
+					break
+				}
 			}
 		}
 		if foundPath == "" {
@@ -571,13 +677,28 @@ func md5Sync() {
 	for _, c := range comics {
 		var foundPath string
 		for _, dir := range allDirs {
-			candidate := filepath.Join(dir, c.Filename)
-			if _, err := os.Stat(candidate); err == nil {
-				foundPath = candidate
-				break
+			// 图片文件夹漫画：filename 以 "/" 结尾，跳过 MD5 计算
+			if strings.HasSuffix(c.Filename, "/") {
+				candidate := filepath.Join(dir, strings.TrimSuffix(c.Filename, "/"))
+				if info, err := os.Stat(candidate); err == nil && info.IsDir() {
+					foundPath = candidate
+					break
+				}
+			} else {
+				candidate := filepath.Join(dir, c.Filename)
+				if _, err := os.Stat(candidate); err == nil {
+					foundPath = candidate
+					break
+				}
 			}
 		}
 		if foundPath == "" {
+			continue
+		}
+		// 图片文件夹不计算 MD5（文件夹没有单一文件哈希的意义）
+		if strings.HasSuffix(c.Filename, "/") {
+			// 标记为特殊值，表示不需要 MD5
+			_ = store.UpdateComicMD5Hash(c.ID, "folder")
 			continue
 		}
 		jobs <- workItem{ID: c.ID, Filename: c.Filename, Path: foundPath}
@@ -792,7 +913,7 @@ func startFSWatcher() {
 					}
 
 					// 支持的文件类型变更触发同步
-					if config.IsSupportedFile(name) {
+					if config.IsSupportedFile(name) || config.IsImageFile(name) {
 						triggerDebouncedSync()
 					}
 				}
@@ -921,10 +1042,19 @@ func CleanupInvalidComics() (int, error) {
 	for _, c := range allComics {
 		found := false
 		for _, dir := range allDirs {
-			fp := filepath.Join(dir, c.Filename)
-			if _, err := os.Stat(fp); err == nil {
-				found = true
-				break
+			// 图片文件夹漫画：filename 以 "/" 结尾
+			if strings.HasSuffix(c.Filename, "/") {
+				fp := filepath.Join(dir, strings.TrimSuffix(c.Filename, "/"))
+				if info, err := os.Stat(fp); err == nil && info.IsDir() {
+					found = true
+					break
+				}
+			} else {
+				fp := filepath.Join(dir, c.Filename)
+				if _, err := os.Stat(fp); err == nil {
+					found = true
+					break
+				}
 			}
 		}
 		if !found {

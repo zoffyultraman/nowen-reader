@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -8,9 +9,9 @@ import '../data/models/comic.dart';
 import '../data/providers/auth_provider.dart';
 import 'authenticated_image.dart';
 import '../features/reader/novel_reader_screen.dart';
+import 'animations.dart';
 
-/// 继续阅读横条 — 显示最近阅读的漫画，带阅读进度
-/// 类似 Netflix "继续观看" 的体验
+/// 继续阅读 — 优雅的横向滚动卡片
 class ContinueReading extends ConsumerStatefulWidget {
   const ContinueReading({super.key});
 
@@ -58,7 +59,6 @@ class _ContinueReadingState extends ConsumerState<ContinueReading> {
     }
   }
 
-  /// 刷新阅读记录（外部可调用）
   Future<void> refresh() => _fetchRecent();
 
   String _formatTime(String dateStr) {
@@ -86,208 +86,291 @@ class _ContinueReadingState extends ConsumerState<ContinueReading> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // 标题栏 — 可点击折叠
+        // ─── 标题栏 ───
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+          padding: const EdgeInsets.fromLTRB(20, 16, 16, 0),
           child: GestureDetector(
-            onTap: () => setState(() => _collapsed = !_collapsed),
+            onTap: () {
+              HapticFeedback.selectionClick();
+              setState(() => _collapsed = !_collapsed);
+            },
+            behavior: HitTestBehavior.opaque,
             child: Row(
               children: [
-                Icon(Icons.auto_stories, size: 20, color: cs.primary),
-                const SizedBox(width: 8),
                 Text(
                   '继续阅读',
                   style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
                     color: cs.onSurface,
+                    letterSpacing: -0.3,
                   ),
                 ),
-                const SizedBox(width: 4),
-                Text(
-                  '(${_recentComics.length})',
-                  style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+                const SizedBox(width: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: cs.primary.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    '${_recentComics.length}',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: cs.primary,
+                    ),
+                  ),
                 ),
-                const SizedBox(width: 4),
-                Icon(
-                  _collapsed
-                      ? Icons.keyboard_arrow_down
-                      : Icons.keyboard_arrow_up,
-                  size: 18,
-                  color: cs.onSurfaceVariant,
+                const Spacer(),
+                AnimatedRotation(
+                  turns: _collapsed ? 0.5 : 0,
+                  duration: const Duration(milliseconds: 200),
+                  child: Icon(
+                    Icons.keyboard_arrow_up_rounded,
+                    size: 22,
+                    color: cs.onSurfaceVariant.withOpacity(0.5),
+                  ),
                 ),
               ],
             ),
           ),
         ),
 
-        // 横向滚动列表
+        // ─── 横向滚动列表 ───
         AnimatedCrossFade(
-          firstChild: SizedBox(
-            height: 180,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: _recentComics.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 12),
-              itemBuilder: (context, index) {
-                final comic = _recentComics[index];
-                final progress = comic.pageCount > 0
-                    ? (comic.lastReadPage / comic.pageCount * 100).round()
-                    : 0;
-                final thumbUrl =
-                    getImageUrl(serverUrl, comic.id, thumbnail: true);
-
-                return GestureDetector(
-                  onTap: () {
-                    if (comic.isNovel) {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => NovelReaderScreen(
-                            comicId: comic.id,
-                            initialChapter: comic.lastReadPage,
-                          ),
-                        ),
-                      );
-                    } else {
-                      context.push(
-                        '/reader/${comic.id}?page=${comic.lastReadPage}',
-                      );
-                    }
-                  },
-                  child: SizedBox(
-                    width: 120,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // 封面 + 进度覆盖层
-                        Expanded(
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: Stack(
-                              fit: StackFit.expand,
-                              children: [
-                                AuthenticatedImage(
-                                  imageUrl: thumbUrl,
-                                  fit: BoxFit.cover,
-                                  placeholder: Container(
-                                    color: cs.surfaceContainerHighest,
-                                    child: const Center(
-                                      child: Icon(Icons.image_outlined,
-                                          size: 24),
-                                    ),
-                                  ),
-                                  errorWidget: Container(
-                                    color: cs.surfaceContainerHighest,
-                                  ),
-                                ),
-                                // 底部渐变 + 进度
-                                Positioned(
-                                  left: 0,
-                                  right: 0,
-                                  bottom: 0,
-                                  child: Container(
-                                    padding: const EdgeInsets.fromLTRB(
-                                        6, 20, 6, 6),
-                                    decoration: const BoxDecoration(
-                                      gradient: LinearGradient(
-                                        begin: Alignment.bottomCenter,
-                                        end: Alignment.topCenter,
-                                        colors: [
-                                          Colors.black87,
-                                          Colors.transparent
-                                        ],
-                                      ),
-                                    ),
-                                    child: Column(
-                                      children: [
-                                        // 进度文字
-                                        Row(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.spaceBetween,
-                                          children: [
-                                            Text(
-                                              '${comic.lastReadPage + 1}/${comic.pageCount}页',
-                                              style: const TextStyle(
-                                                color: Colors.white70,
-                                                fontSize: 9,
-                                              ),
-                                            ),
-                                            Text(
-                                              '$progress%',
-                                              style: TextStyle(
-                                                color: cs.primary,
-                                                fontSize: 9,
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                        const SizedBox(height: 3),
-                                        // 进度条
-                                        ClipRRect(
-                                          borderRadius:
-                                              BorderRadius.circular(2),
-                                          child: LinearProgressIndicator(
-                                            value: progress / 100,
-                                            minHeight: 3,
-                                            backgroundColor:
-                                                Colors.white.withAlpha(51),
-                                            valueColor:
-                                                AlwaysStoppedAnimation(
-                                                    cs.primary),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ],
+          firstChild: Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: SizedBox(
+              height: 190,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                itemCount: _recentComics.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 14),
+                itemBuilder: (context, index) {
+                  final comic = _recentComics[index];
+                  return _ContinueReadingCard(
+                    comic: comic,
+                    serverUrl: serverUrl,
+                    timeStr: _formatTime(comic.lastReadAt!),
+                    onTap: () {
+                      HapticFeedback.lightImpact();
+                      if (comic.isNovel) {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => NovelReaderScreen(
+                              comicId: comic.id,
+                              initialChapter: comic.lastReadPage,
                             ),
                           ),
-                        ),
-                        const SizedBox(height: 6),
-                        // 标题
-                        Text(
-                          comic.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w500,
-                            color: cs.onSurface.withAlpha(204),
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        // 阅读时间
-                        Row(
-                          children: [
-                            Icon(Icons.access_time,
-                                size: 10, color: cs.onSurfaceVariant),
-                            const SizedBox(width: 3),
-                            Text(
-                              _formatTime(comic.lastReadAt!),
-                              style: TextStyle(
-                                fontSize: 10,
-                                color: cs.onSurfaceVariant,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
+                        );
+                      } else {
+                        context.push(
+                          '/reader/${comic.id}?page=${comic.lastReadPage}',
+                        );
+                      }
+                    },
+                  );
+                },
+              ),
             ),
           ),
-          secondChild: const SizedBox.shrink(),
+          secondChild: const SizedBox(height: 8),
           crossFadeState: _collapsed
               ? CrossFadeState.showSecond
               : CrossFadeState.showFirst,
           duration: const Duration(milliseconds: 250),
+          sizeCurve: Curves.easeInOut,
         ),
+
+        // 底部分隔
+        if (!_collapsed)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
+            child: Divider(
+              height: 1,
+              color: cs.outlineVariant.withOpacity(0.3),
+            ),
+          ),
       ],
+    );
+  }
+}
+
+/// 继续阅读卡片 — 精致的封面+进度+按压缩放
+class _ContinueReadingCard extends StatelessWidget {
+  final Comic comic;
+  final String serverUrl;
+  final String timeStr;
+  final VoidCallback onTap;
+
+  const _ContinueReadingCard({
+    required this.comic,
+    required this.serverUrl,
+    required this.timeStr,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final progress = comic.pageCount > 0
+        ? (comic.lastReadPage / comic.pageCount * 100).round()
+        : 0;
+    final thumbUrl = getImageUrl(serverUrl, comic.id, thumbnail: true);
+
+    return PressableScale(
+      onTap: onTap,
+      scaleDown: 0.95,
+      child: SizedBox(
+        width: 120,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 封面
+            Expanded(
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(10),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.06),
+                      blurRadius: 10,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      AuthenticatedImage(
+                        imageUrl: thumbUrl,
+                        fit: BoxFit.cover,
+                        placeholder: Container(
+                          color: cs.surfaceContainerHighest,
+                          child: Center(
+                            child: Icon(Icons.image_outlined,
+                                size: 22, color: cs.onSurfaceVariant.withOpacity(0.3)),
+                          ),
+                        ),
+                        errorWidget: Container(
+                          color: cs.surfaceContainerHighest,
+                        ),
+                      ),
+
+                      // 底部渐变 + 进度
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        child: Container(
+                          padding: const EdgeInsets.fromLTRB(8, 24, 8, 8),
+                          decoration: const BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.bottomCenter,
+                              end: Alignment.topCenter,
+                              colors: [Colors.black87, Colors.transparent],
+                            ),
+                          ),
+                          child: Column(
+                            children: [
+                              // 进度文字
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    comic.pageCount > 0
+                                        ? '${comic.lastReadPage + 1}/${comic.pageCount}'
+                                        : '${comic.lastReadPage + 1}',
+                                    style: const TextStyle(
+                                      color: Colors.white60,
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                  Text(
+                                    '$progress%',
+                                    style: TextStyle(
+                                      color: cs.primary,
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              // 进度条
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(2),
+                                child: LinearProgressIndicator(
+                                  value: progress / 100,
+                                  minHeight: 2.5,
+                                  backgroundColor: Colors.white.withAlpha(30),
+                                  valueColor: AlwaysStoppedAnimation(cs.primary),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+
+                      // 播放按钮覆盖层
+                      Positioned.fill(
+                        child: Center(
+                          child: BreathingPulse(
+                            minScale: 0.92,
+                            maxScale: 1.08,
+                            duration: const Duration(milliseconds: 1800),
+                            child: Container(
+                              width: 36,
+                              height: 36,
+                              decoration: BoxDecoration(
+                                color: Colors.black.withOpacity(0.35),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.play_arrow_rounded,
+                                color: Colors.white,
+                                size: 22,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            // 标题
+            Text(
+              comic.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: cs.onSurface,
+                height: 1.2,
+              ),
+            ),
+            const SizedBox(height: 3),
+            // 时间
+            Text(
+              timeStr,
+              style: TextStyle(
+                fontSize: 10,
+                color: cs.onSurfaceVariant.withOpacity(0.6),
+                fontWeight: FontWeight.w400,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
