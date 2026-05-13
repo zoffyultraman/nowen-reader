@@ -17,6 +17,7 @@ import {
   Settings,
   LogOut,
   Globe,
+  HardDrive,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useTranslation } from "@/lib/i18n";
@@ -273,6 +274,15 @@ function MoreMenu({
                 {((t as any).tagManager?.title) || "标签与分类管理"}
               </button>
 
+              {/* 数据管理 */}
+              <button
+                onClick={() => handleAction(() => router.push("/data-admin"))}
+                className="w-full px-3 py-2.5 text-left text-sm text-muted hover:bg-card-hover hover:text-foreground flex items-center gap-2.5"
+              >
+                <HardDrive className="h-4 w-4" />
+                {((t as any).dataAdmin?.title) || "数据管理"}
+              </button>
+
               {/* 元数据刮削 — 启用时正常显示；未启用时灰显并跳转到设置 */}
               {scraperEnabled ? (
                 <button
@@ -360,6 +370,15 @@ function MoreMenu({
                 <Settings className="h-4 w-4" />
                 {t.auth?.settings || "设置"}
               </button>
+              {isAdmin && (
+                <button
+                  onClick={() => handleAction(() => router.push("/data-admin"))}
+                  className="w-full px-3 py-2.5 text-left text-sm text-muted hover:bg-card-hover hover:text-foreground flex items-center gap-2.5"
+                >
+                  <Database className="h-4 w-4" />
+                  数据管理
+                </button>
+              )}
               <button
                 onClick={() => { setOpen(false); logout(); }}
                 className="w-full px-3 py-2.5 text-left text-sm text-red-400 hover:bg-red-500/5 flex items-center gap-2.5"
