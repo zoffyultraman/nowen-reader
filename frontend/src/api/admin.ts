@@ -172,6 +172,31 @@ export async function updateStorageThreshold(t: StorageThreshold): Promise<{ suc
 }
 
 // ============================================================
+// 历史趋势（P2）
+// ============================================================
+
+export interface StorageSample {
+  ts: number;          // unix sec
+  cacheBytes: number;
+  dbBytes: number;
+  diskFree: number;
+}
+
+export interface StorageHistoryResponse {
+  days: number;
+  count: number;
+  samples: StorageSample[];
+}
+
+export async function fetchStorageHistory(days = 30): Promise<StorageHistoryResponse> {
+  const d = Math.max(1, Math.min(90, Math.floor(days)));
+  const res = await fetch(`/api/admin/storage/history?days=${d}`, {
+    credentials: "include",
+  });
+  return safeJson<StorageHistoryResponse>(res);
+}
+
+// ============================================================
 // Helpers
 // ============================================================
 

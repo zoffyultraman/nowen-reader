@@ -777,6 +777,33 @@ func humanBytes(n int64) string {
 	return fmt.Sprintf("%.2f %s", x, units[idx])
 }
 
+// GetHistory 返回最近 N 天的存储采样（用于趋势折线图）。
+// Query 参数：
+//   - days: 1~90，默认 30
+//
+// 返回字段：samples 数组（ts/cacheBytes/dbBytes/diskFree）。
+func (h *DataAdminHandler) GetHistory(c *gin.Context) {
+	days := 30
+	if v := c.Query("days"); v != "" {
+		// 简单解析，避免引入 strconv 之外的依赖
+		var n int
+		_, err := fmt.Sscanf(v, "%d", &n)
+		if err == nil && n > 0 {
+			if n > 90 {
+				n = 90
+			}
+			days = n
+		}
+	}
+
+	samples := service.GetStorageHistory(days)
+	c.JSON(http.StatusOK, gin.H{
+		"days":    days,
+		"count":   len(samples),
+		"samples": samples,
+	})
+}
+
 // SampleStorageUsage 返回当前缓存大小、数据库大小、磁盘剩余空间，
 // 供 service.StartStorageSampler 周期性采样写入历史趋势。
 func SampleStorageUsage() (cacheBytes int64, dbBytes int64, diskFree uint64) {

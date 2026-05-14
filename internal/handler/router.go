@@ -285,6 +285,7 @@ func SetupRoutes(r *gin.Engine) {
 	{
 		dataAdminGroup.GET("", dataAdmin.GetOverview)
 		dataAdminGroup.GET("/database", dataAdmin.GetDatabaseInfo)
+		dataAdminGroup.GET("/history", dataAdmin.GetHistory)
 		dataAdminGroup.POST("/cache/clear", dataAdmin.ClearCache)
 		dataAdminGroup.POST("/db/checkpoint", dataAdmin.DBCheckpoint)
 		dataAdminGroup.POST("/db/analyze", dataAdmin.DBAnalyze)
