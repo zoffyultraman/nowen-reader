@@ -17,6 +17,8 @@ export interface ReaderOptions {
   containerWidth: string;
   // 页面渲染模式
   mode: ComicReadingMode;
+  // 双页模式：封面单独显示（错页1页），日漫见开页对齐用
+  doubleCoverAlone: boolean;
   // 阅读方向
   direction: ReadingDirection;
   // 预加载图片数量
@@ -41,6 +43,7 @@ export const defaultReaderOptions: ReaderOptions = {
   fitMode: "container",
   containerWidth: "",
   mode: "single",
+  doubleCoverAlone: false,
   direction: "ltr",
   preloadCount: 2,
   headerVisible: true,

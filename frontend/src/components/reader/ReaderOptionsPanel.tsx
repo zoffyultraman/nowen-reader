@@ -334,6 +334,16 @@ export default function ReaderOptionsPanel({
                 />
               </div>
 
+              {/* 双页：封面单独显示（错页对齐） */}
+              {options.mode === "double" && (
+                <Toggle
+                  checked={options.doubleCoverAlone}
+                  onToggle={(v) => onChange({ doubleCoverAlone: v })}
+                  label={ro.doubleCoverAlone}
+                  desc={ro.doubleCoverAloneDesc}
+                />
+              )}
+
               {/* 阅读方向 */}
               <div>
                 <Label>{ro.readingDirection}</Label>

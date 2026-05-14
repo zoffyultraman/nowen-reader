@@ -17,6 +17,8 @@ class ReaderSettings {
   final FitMode fitMode;
   final bool showPageNumber;
   final int autoPageInterval; // 秒，0=禁用
+  /// 双页模式下封面单独显示（错页 1 页），日漫见开页对齐用
+  final bool doubleCoverAlone;
 
   const ReaderSettings({
     this.mode = ComicReadingMode.single,
@@ -24,6 +26,7 @@ class ReaderSettings {
     this.fitMode = FitMode.contain,
     this.showPageNumber = true,
     this.autoPageInterval = 10,
+    this.doubleCoverAlone = true,
   });
 
   ReaderSettings copyWith({
@@ -32,6 +35,7 @@ class ReaderSettings {
     FitMode? fitMode,
     bool? showPageNumber,
     int? autoPageInterval,
+    bool? doubleCoverAlone,
   }) {
     return ReaderSettings(
       mode: mode ?? this.mode,
@@ -39,6 +43,7 @@ class ReaderSettings {
       fitMode: fitMode ?? this.fitMode,
       showPageNumber: showPageNumber ?? this.showPageNumber,
       autoPageInterval: autoPageInterval ?? this.autoPageInterval,
+      doubleCoverAlone: doubleCoverAlone ?? this.doubleCoverAlone,
     );
   }
 
@@ -51,6 +56,7 @@ class ReaderSettings {
       fitMode: FitMode.values[prefs.getInt('reader_fitMode') ?? 0],
       showPageNumber: prefs.getBool('reader_showPageNumber') ?? true,
       autoPageInterval: prefs.getInt('reader_autoPageInterval') ?? 10,
+      doubleCoverAlone: prefs.getBool('reader_doubleCoverAlone') ?? true,
     );
   }
 
@@ -62,6 +68,7 @@ class ReaderSettings {
     await prefs.setInt('reader_fitMode', fitMode.index);
     await prefs.setBool('reader_showPageNumber', showPageNumber);
     await prefs.setInt('reader_autoPageInterval', autoPageInterval);
+    await prefs.setBool('reader_doubleCoverAlone', doubleCoverAlone);
   }
 }
 
@@ -203,6 +210,26 @@ class _ReaderSettingsPanelState extends State<ReaderSettingsPanel> {
                           _update(_settings.copyWith(mode: v)),
                     ),
                     const SizedBox(height: 16),
+
+                    // 双页：封面单独显示（错页对齐）
+                    if (_settings.mode == ComicReadingMode.doublePage) ...[
+                      _SwitchRow(
+                        label: '封面单独显示（双页错页）',
+                        value: _settings.doubleCoverAlone,
+                        onChanged: (v) => _update(
+                            _settings.copyWith(doubleCoverAlone: v)),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2, bottom: 8),
+                        child: Text(
+                          '关闭后从第 1 页开始两两配对，适合欧美漫画；开启后第 1 页单独显示，对齐日漫见开页',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.white.withAlpha(77),
+                          ),
+                        ),
+                      ),
+                    ],
 
                     // 阅读方向
                     _SettingLabel('阅读方向'),

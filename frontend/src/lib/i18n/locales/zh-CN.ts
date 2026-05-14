@@ -339,6 +339,8 @@ const zhCN = {
     pageRendering: "页面渲染",
     singlePage: "单页",
     doublePage: "双页",
+    doubleCoverAlone: "封面单独显示",
+    doubleCoverAloneDesc: "双页模式下首页单独显示（错页1页），用于对齐日漫见开页",
     readingDirection: "阅读方向",
     ltr: "从左到右",
     rtl: "从右到左",
@@ -1457,6 +1459,8 @@ export interface Translations {
     pageRendering: string;
     singlePage: string;
     doublePage: string;
+    doubleCoverAlone: string;
+    doubleCoverAloneDesc: string;
     readingDirection: string;
     ltr: string;
     rtl: string;

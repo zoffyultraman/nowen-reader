@@ -343,6 +343,8 @@ const en: Translations = {
     pageRendering: "Page Rendering",
     singlePage: "Single Page",
     doublePage: "Double Page",
+    doubleCoverAlone: "Cover as Single Page",
+    doubleCoverAloneDesc: "Show the first page alone (cover), then pair the rest. Useful for manga 2-page spreads.",
     readingDirection: "Reading Direction",
     ltr: "Left to Right",
     rtl: "Right to Left",

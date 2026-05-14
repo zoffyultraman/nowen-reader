@@ -576,6 +576,7 @@ export default function ReaderPage() {
           preloadCount={readerOpts.preloadCount}
           comicId={comicId}
           onBoundaryReached={handleBoundaryReached}
+          coverAlone={readerOpts.doubleCoverAlone}
         />
       ) : (
         <WebtoonView
