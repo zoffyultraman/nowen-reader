@@ -550,20 +550,21 @@ func fullSync() {
 					// For ebook archives already marked as comic in DB, count images instead of chapters
 					archiveType := archive.DetectType(item.Path)
 					var pageCount int
+					var countErr error
 					if archive.IsEbookType(archiveType) {
 						// Check DB type: if comic, count embedded images; if novel, count chapters
 						comic, dbErr := store.GetComicByID(item.ID)
 						if dbErr == nil && comic != nil && comic.ComicType == "comic" {
-							pageCount, err = GetArchivePageCount(item.Path, true)
+							pageCount, countErr = GetArchivePageCount(item.Path, true)
 						} else {
-							pageCount, err = GetArchivePageCount(item.Path)
+							pageCount, countErr = GetArchivePageCount(item.Path)
 						}
 					} else {
-						pageCount, err = GetArchivePageCount(item.Path)
+						pageCount, countErr = GetArchivePageCount(item.Path)
 					}
 
-					if err != nil || pageCount <= 0 {
-						log.Printf("[full-sync] Failed to parse %s: %v", item.Filename, err)
+					if countErr != nil || pageCount <= 0 {
+						log.Printf("[full-sync] Failed to parse %s: %v", item.Filename, countErr)
 						_ = store.UpdateComicPageCount(item.ID, -1)
 						return
 					}
