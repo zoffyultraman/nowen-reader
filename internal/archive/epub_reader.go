@@ -223,6 +223,7 @@ func (r *epubReader) parseEpub() error {
 	for _, href := range chapterHrefs {
 		data, err := r.readZipFile(href)
 		if err != nil {
+			log.Printf("[epub] Step5: failed to read %s: %v", href, err)
 			continue
 		}
 		html := string(data)
@@ -264,6 +265,14 @@ func (r *epubReader) parseEpub() error {
 			}
 		}
 	}
+
+	log.Printf("[epub] Step5: spineImages count=%d, first5=%v", len(r.spineImages), func() []string {
+		n := 5
+		if len(r.spineImages) < n {
+			n = len(r.spineImages)
+		}
+		return r.spineImages[:n]
+	}())
 
 	return nil
 }
@@ -960,6 +969,7 @@ func ListEpubEmbeddedImages(r Reader) []string {
 
 	// 如果有 spine 顺序的图片列表，优先使用（漫画模式）
 	if len(er.spineImages) > 0 {
+		log.Printf("[ListEpubEmbeddedImages] Using spine order: %d images, first5=%v", len(er.spineImages), er.spineImages[:min(5, len(er.spineImages))])
 		for _, img := range er.spineImages {
 			if !seen[img] {
 				seen[img] = true
@@ -988,6 +998,7 @@ func ListEpubEmbeddedImages(r Reader) []string {
 	}
 
 	// 非 spine 模式：封面优先，然后按 zip 目录顺序
+	log.Printf("[ListEpubEmbeddedImages] Falling back to zip order (spineImages=%d)", len(er.spineImages))
 	if er.coverPath != "" && config.IsImageFile(er.coverPath) {
 		images = append(images, er.coverPath)
 		seen[er.coverPath] = true
