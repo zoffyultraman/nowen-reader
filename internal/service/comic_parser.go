@@ -686,7 +686,7 @@ func WarmupPages(comicID string, startPage, count int) {
 
 // warmupEbookComic 对电子书漫画格式（EPUB/MOBI/AZW3）逐页预热缓存。
 // 与普通漫画不同，电子书漫画使用专用的图片提取接口（按索引而非按路径）。
-func warmupEbookComic(comicID string, archiveType string, reader archive.Reader, images []string, start, end int, cacheDir string) {
+func warmupEbookComic(comicID string, archiveType archive.ArchiveType, reader archive.Reader, images []string, start, end int, cacheDir string) {
 	warmed := 0
 	for i := start; i < end; i++ {
 		if pageExistsInCache(cacheDir, i) {
