@@ -100,6 +100,10 @@ func ApplyMetadata(comicID string, meta ComicMetadata, lang string, overwrite bo
 
 // downloadCoverAsThumbnail fetches a cover URL and saves as WebP thumbnail.
 func downloadCoverAsThumbnail(comicID, coverURL string) {
+	// Bangumi 等源可能返回 http:// URL，Go HTTP 客户端会跟随重定向，
+	// 但显式转为 https 更安全
+	coverURL = strings.Replace(coverURL, "http://", "https://", 1)
+
 	thumbDir := config.GetThumbnailsDir()
 	if err := os.MkdirAll(thumbDir, 0755); err != nil {
 		return
@@ -136,30 +140,22 @@ func downloadCoverAsThumbnail(comicID, coverURL string) {
 	log.Printf("[metadata] Cover cached for %s", comicID)
 }
 
-// DownloadGroupCover 下载系列封面图片并保存到系列的 coverUrl 字段。
+// DownloadGroupCover 保存系列封面 URL 到数据库。
+// 群组封面直接使用外部 URL（不保存到本地）。
 func DownloadGroupCover(groupID int, coverURL string) {
 	if coverURL == "" {
 		return
 	}
+	// Bangumi 等源可能返回 http:// URL，强制转为 https://
+	coverURL = strings.Replace(coverURL, "http://", "https://", 1)
 
-	client := &http.Client{Timeout: 30 * time.Second}
-	req, err := http.NewRequest("GET", coverURL, nil)
-	if err != nil {
-		return
-	}
-	req.Header.Set("User-Agent", "NowenReader/1.0")
-
-	resp, err := client.Do(req)
-	if err != nil || resp.StatusCode != 200 {
-		return
-	}
-	defer resp.Body.Close()
-
-	// 将封面 URL 保存到系列的 coverUrl 字段
-	_ = store.UpdateGroupMetadata(groupID, store.GroupMetadataUpdate{
+	if err := store.UpdateGroupMetadata(groupID, store.GroupMetadataUpdate{
 		CoverURL: &coverURL,
-	})
-	log.Printf("[metadata] Group cover URL saved for group %d", groupID)
+	}); err != nil {
+		log.Printf("[metadata] Group cover URL save failed for group %d: %v", groupID, err)
+	} else {
+		log.Printf("[metadata] Group cover URL saved for group %d", groupID)
+	}
 }
 
 // ============================================================

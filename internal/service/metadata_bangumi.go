@@ -45,10 +45,13 @@ func searchBangumiWithType(query, lang string, bangumiType int, sourceName strin
 			NameCN  string `json:"name_cn"`
 			Summary string `json:"summary"`
 			Date    string `json:"date"`
-			Images  struct {
-				Large  string `json:"large"`
-				Medium string `json:"medium"`
-			} `json:"images"`
+			Images struct {
+					Large   string `json:"large"`
+					Common  string `json:"common"`
+					Medium  string `json:"medium"`
+					Small   string `json:"small"`
+					Grid    string `json:"grid"`
+				} `json:"images"`
 			Tags []struct {
 				Name  string `json:"name"`
 				Count int    `json:"count"`
@@ -108,8 +111,13 @@ func searchBangumiWithType(query, lang string, bangumiType int, sourceName strin
 
 		coverURL := s.Images.Large
 		if coverURL == "" {
+			coverURL = s.Images.Common
+		}
+		if coverURL == "" {
 			coverURL = s.Images.Medium
 		}
+		// Bangumi 返回 http:// URL，强制转为 https:// 避免 HTTPS 环境混合内容阻止
+		coverURL = strings.Replace(coverURL, "http://", "https://", 1)
 
 		results = append(results, ComicMetadata{
 			Title:       title,
