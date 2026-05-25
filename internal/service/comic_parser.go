@@ -278,7 +278,7 @@ func GetComicPagesEx(comicID string) (*PagesResult, error) {
 		}
 		// E-book archives in comic mode: treat embedded images as pages
 		// (epub/mobi/azw3 readers return chapter entries, not image files)
-		if archive.IsEbookType(archiveType) && \!isNovel {
+		if archive.IsEbookType(archiveType) && !isNovel {
 			switch archiveType {
 			case archive.TypeMobi, archive.TypeAzw3:
 				entries = archive.ListMobiEmbeddedImages(reader)
@@ -538,14 +538,14 @@ func getArchivePageImage(comicID, fp string, pageIndex int) (*PageImage, error) 
 		switch archiveType {
 		case archive.TypeMobi, archive.TypeAzw3:
 			imgData, imgMime, err := archive.GetMobiEmbeddedImageData(reader, pageIndex)
-			if err \!= nil {
+			if err != nil {
 				return nil, fmt.Errorf("extract page %d: %w", pageIndex, err)
 			}
 			data = imgData
 			mimeType = imgMime
 		default:
 			imgData, imgMime, err := archive.GetEpubEmbeddedImageData(reader, entryName)
-			if err \!= nil {
+			if err != nil {
 				return nil, fmt.Errorf("extract page %d: %w", pageIndex, err)
 			}
 			data = imgData
@@ -553,7 +553,7 @@ func getArchivePageImage(comicID, fp string, pageIndex int) (*PageImage, error) 
 		}
 	} else {
 		data, err = reader.ExtractEntry(entryName)
-		if err \!= nil {
+		if err != nil {
 			return nil, fmt.Errorf("extract page %d: %w", pageIndex, err)
 		}
 		mimeType = archive.GetMimeType(entryName)
@@ -681,7 +681,7 @@ func WarmupPages(comicID string, startPage, count int) {
 			// ZIP/7z 等格式逐页解压（支持随机访问，性能好）
 			warmupNormal(reader, comicID, images, startPage, end, cacheDir)
 		}
-	}
+	}()
 }
 
 // warmupEbookComic 对电子书漫画格式（EPUB/MOBI/AZW3）逐页预热缓存。
