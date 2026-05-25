@@ -158,13 +158,13 @@ class ComicListTile extends StatelessWidget {
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 6, vertical: 2),
                               decoration: BoxDecoration(
-                                color: cs.primary.withOpacity(0.1),
+                                color: cs.onSurface.withOpacity(0.08),
                                 borderRadius: BorderRadius.circular(4),
                               ),
                               child: Text(
                                 '${comic.progress}%',
                                 style: TextStyle(
-                                  color: cs.primary,
+                                  color: cs.onSurface,
                                   fontSize: 10,
                                   fontWeight: FontWeight.w700,
                                 ),

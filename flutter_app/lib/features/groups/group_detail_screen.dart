@@ -268,9 +268,9 @@ class _GroupDetailScreenState extends ConsumerState<GroupDetailScreen> {
                         .map((tag) => Chip(
                               label: Text(tag,
                                   style: TextStyle(
-                                      fontSize: 11, color: cs.primary)),
+                                      fontSize: 11, color: cs.onSurface)),
                               backgroundColor:
-                                  cs.primary.withOpacity(0.08),
+                                  cs.onSurface.withOpacity(0.06),
                               side: BorderSide.none,
                               padding: EdgeInsets.zero,
                               materialTapTargetSize:
@@ -534,7 +534,7 @@ class _GroupDetailScreenState extends ConsumerState<GroupDetailScreen> {
                         width: 28,
                         height: 28,
                         decoration: BoxDecoration(
-                          color: cs.primary.withOpacity(0.1),
+                          color: cs.onSurface.withOpacity(0.08),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         alignment: Alignment.center,
@@ -543,7 +543,7 @@ class _GroupDetailScreenState extends ConsumerState<GroupDetailScreen> {
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.bold,
-                            color: cs.primary,
+                            color: cs.onSurface,
                           ),
                         ),
                       ),
