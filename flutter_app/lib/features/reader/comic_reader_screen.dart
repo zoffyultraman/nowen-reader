@@ -303,7 +303,11 @@ class _ComicReaderScreenState extends ConsumerState<ComicReaderScreen> {
         final imageUrl =
             getImageUrl(serverUrl, widget.comicId, page: index);
         return PhotoView(
-          imageProvider: AuthenticatedImageProvider(imageUrl),
+          imageProvider: AuthenticatedImageProvider(
+            imageUrl,
+            comicId: widget.comicId,
+            pageIndex: index,
+          ),
           minScale: PhotoViewComputedScale.contained,
           maxScale: PhotoViewComputedScale.covered * 3,
           initialScale: _getInitialScale(),
@@ -386,7 +390,11 @@ class _ComicReaderScreenState extends ConsumerState<ComicReaderScreen> {
           // 单页（封面或最后一页）
           final imageUrl = getImageUrl(serverUrl, widget.comicId, page: pages[0]);
           return PhotoView(
-            imageProvider: AuthenticatedImageProvider(imageUrl),
+            imageProvider: AuthenticatedImageProvider(
+              imageUrl,
+              comicId: widget.comicId,
+              pageIndex: pages[0],
+            ),
             minScale: PhotoViewComputedScale.contained,
             maxScale: PhotoViewComputedScale.covered * 3,
             initialScale: PhotoViewComputedScale.contained,
@@ -417,6 +425,8 @@ class _ComicReaderScreenState extends ConsumerState<ComicReaderScreen> {
             Expanded(
               child: AuthenticatedImage(
                 imageUrl: leftUrl,
+                comicId: widget.comicId,
+                pageIndex: leftPage,
                 fit: BoxFit.contain,
                 alignment: noGap ? Alignment.centerRight : Alignment.center,
                 placeholder: const Center(child: CircularProgressIndicator()),
@@ -428,6 +438,8 @@ class _ComicReaderScreenState extends ConsumerState<ComicReaderScreen> {
             Expanded(
               child: AuthenticatedImage(
                 imageUrl: rightUrl,
+                comicId: widget.comicId,
+                pageIndex: rightPage,
                 fit: BoxFit.contain,
                 alignment: noGap ? Alignment.centerLeft : Alignment.center,
                 placeholder: const Center(child: CircularProgressIndicator()),
@@ -468,6 +480,8 @@ class _ComicReaderScreenState extends ConsumerState<ComicReaderScreen> {
               getImageUrl(serverUrl, widget.comicId, page: index);
           return AuthenticatedImage(
             imageUrl: imageUrl,
+            comicId: widget.comicId,
+            pageIndex: index,
             fit: _settings.fitMode == FitMode.width
                 ? BoxFit.fitWidth
                 : BoxFit.contain,
