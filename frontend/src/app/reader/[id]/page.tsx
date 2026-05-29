@@ -537,7 +537,7 @@ export default function ReaderPage() {
       readerTheme === "day" ? "bg-gray-100" : "bg-black"
     }`}>
       {/* Reading View */}
-      {usePdfView ? (
+      {usePdfView && mode === "single" ? (
         <PdfView
           comicId={comicId}
           totalPages={pages.length}

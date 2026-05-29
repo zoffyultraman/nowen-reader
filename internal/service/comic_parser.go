@@ -124,6 +124,7 @@ type pageListCacheEntry struct {
 	entries       []string
 	chapterTitles []string
 	isPdf         bool
+	isNovel       bool
 	ts            time.Time
 }
 
@@ -215,6 +216,11 @@ func GetComicPagesEx(comicID string) (*PagesResult, error) {
 				if archive.IsMobiImageHeavy(fp) {
 					log.Printf("[pages] Auto-detected image-heavy %s, reclassifying as comic: %s", archiveType, comic.Filename)
 					_ = store.UpdateComicType(comicID, "comic")
+					// Recalculate page count: novel mode counts chapters,
+					// comic mode needs image count
+					if imgCount, err := GetArchivePageCount(fp, true); err == nil && imgCount > 0 {
+						_ = store.UpdateComicPageCount(comicID, imgCount)
+					}
 					isNovel = false
 				}
 			}
@@ -223,7 +229,7 @@ func GetComicPagesEx(comicID string) (*PagesResult, error) {
 
 	// Check cache for entries
 	pageListCacheMu.RLock()
-	if cached, ok := pageListCache[comicID]; ok && time.Since(cached.ts) < pageListCacheTTL {
+	if cached, ok := pageListCache[comicID]; ok && time.Since(cached.ts) < pageListCacheTTL && cached.isNovel == isNovel {
 		pageListCacheMu.RUnlock()
 		result := &PagesResult{Entries: cached.entries, IsNovel: isNovel, IsPdf: cached.isPdf}
 		if isNovel {
@@ -271,13 +277,27 @@ func GetComicPagesEx(comicID string) (*PagesResult, error) {
 		if err != nil {
 			return nil, err
 		}
-		entries = archive.GetImageEntries(reader)
+		// E-book archives in comic mode: treat embedded images as pages
+		// (epub/mobi/azw3 readers return chapter entries, not image files)
+		if archive.IsEbookType(archiveType) && !isNovel {
+			switch archiveType {
+			case archive.TypeMobi, archive.TypeAzw3:
+				entries = archive.ListMobiEmbeddedImages(reader)
+			default:
+				entries = archive.ListEpubEmbeddedImages(reader)
+			}
+		} else {
+			entries = archive.GetImageEntries(reader)
+		}
 	}
 
 	// Update cache
 	pageListCacheMu.Lock()
-	pageListCache[comicID] = &pageListCacheEntry{entries: entries, chapterTitles: chapterTitles, isPdf: isPdf, ts: time.Now()}
+	pageListCache[comicID] = &pageListCacheEntry{entries: entries, chapterTitles: chapterTitles, isPdf: isPdf, isNovel: isNovel, ts: time.Now()}
 	pageListCacheMu.Unlock()
+
+	// Invalidate disk cache if page order changed (e.g. zip→spine order fix)
+	invalidatePageImageCacheIfNeeded(comicID, entries)
 
 	return &PagesResult{
 		Entries:       entries,
@@ -496,19 +516,57 @@ func getArchivePageImage(comicID, fp string, pageIndex int) (*PageImage, error) 
 		return nil, err
 	}
 
-	images := archive.GetImageEntries(reader)
+	// For e-book archives, use embedded image extraction
+	// (epub/mobi/azw3 readers list chapter entries, not image files)
+	var images []string
+	if archive.IsEbookType(archiveType) {
+		switch archiveType {
+		case archive.TypeMobi, archive.TypeAzw3:
+			images = archive.ListMobiEmbeddedImages(reader)
+		default:
+			images = archive.ListEpubEmbeddedImages(reader)
+		}
+	} else {
+		images = archive.GetImageEntries(reader)
+	}
 	if pageIndex < 0 || pageIndex >= len(images) {
 		return nil, fmt.Errorf("page index %d out of range (0-%d)", pageIndex, len(images)-1)
 	}
 
 	entryName := images[pageIndex]
-	data, err := reader.ExtractEntry(entryName)
-	if err != nil {
-		return nil, fmt.Errorf("extract page %d: %w", pageIndex, err)
+
+	var data []byte
+	var mimeType string
+
+	if archive.IsEbookType(archiveType) {
+		switch archiveType {
+		case archive.TypeMobi, archive.TypeAzw3:
+			imgData, imgMime, err := archive.GetMobiEmbeddedImageData(reader, pageIndex)
+			if err != nil {
+				return nil, fmt.Errorf("extract page %d: %w", pageIndex, err)
+			}
+			data = imgData
+			mimeType = imgMime
+		default:
+			imgData, imgMime, err := archive.GetEpubEmbeddedImageData(reader, entryName)
+			if err != nil {
+				return nil, fmt.Errorf("extract page %d: %w", pageIndex, err)
+			}
+			data = imgData
+			mimeType = imgMime
+		}
+	} else {
+		data, err = reader.ExtractEntry(entryName)
+		if err != nil {
+			return nil, fmt.Errorf("extract page %d: %w", pageIndex, err)
+		}
+		mimeType = archive.GetMimeType(entryName)
 	}
 
 	ext := strings.ToLower(filepath.Ext(entryName))
-	mimeType := archive.GetMimeType(entryName)
+	if ext == "" && archive.IsEbookType(archiveType) {
+		ext = ".jpg" // MOBI/AZW3 entries have no file extension; use .jpg as default
+	}
 
 	// Write to disk cache (fire-and-forget) — 图片文件夹漫画跳过缓存
 	if !isImageFolder {
@@ -589,7 +647,17 @@ func WarmupPages(comicID string, startPage, count int) {
 			return
 		}
 
-		images := archive.GetImageEntries(reader)
+		var images []string
+		if archive.IsEbookType(archiveType) {
+			switch archiveType {
+			case archive.TypeMobi, archive.TypeAzw3:
+				images = archive.ListMobiEmbeddedImages(reader)
+			default:
+				images = archive.ListEpubEmbeddedImages(reader)
+			}
+		} else {
+			images = archive.GetImageEntries(reader)
+		}
 		if len(images) == 0 {
 			return
 		}
@@ -605,18 +673,66 @@ func WarmupPages(comicID string, startPage, count int) {
 			startPage = 0
 		}
 
-		// 检查是否为 RAR 格式，RAR 使用批量解压优化
-		isRar := archiveType == archive.TypeRar
+		// E-book archives in comic mode: use dedicated warmup (different extraction path)
+		isEbookComic := archive.IsEbookType(archiveType)
 
-		if isRar {
+		if isEbookComic {
+			warmupEbookComic(comicID, archiveType, reader, images, startPage, end, cacheDir)
+		} else if archiveType == archive.TypeRar {
 			// 方案 C: RAR 批量解压优化
-			// RAR 每次 ExtractEntry 都要从头扫描，所以一次性批量解压多页
 			warmupRarBatch(fp, comicID, images, startPage, end, cacheDir)
 		} else {
 			// ZIP/7z 等格式逐页解压（支持随机访问，性能好）
 			warmupNormal(reader, comicID, images, startPage, end, cacheDir)
 		}
 	}()
+}
+
+// warmupEbookComic 对电子书漫画格式（EPUB/MOBI/AZW3）逐页预热缓存。
+// 与普通漫画不同，电子书漫画使用专用的图片提取接口（按索引而非按路径）。
+func warmupEbookComic(comicID string, archiveType archive.ArchiveType, reader archive.Reader, images []string, start, end int, cacheDir string) {
+	warmed := 0
+	for i := start; i < end; i++ {
+		if pageExistsInCache(cacheDir, i) {
+			continue
+		}
+
+		var data []byte
+		var mimeType string
+		var err error
+
+		switch archiveType {
+		case archive.TypeMobi, archive.TypeAzw3:
+			data, mimeType, err = archive.GetMobiEmbeddedImageData(reader, i)
+		default: // EPUB
+			data, mimeType, err = archive.GetEpubEmbeddedImageData(reader, images[i])
+		}
+
+		if err != nil {
+			log.Printf("[warmup] Failed to extract page %d for %s: %v", i, comicID, err)
+			continue
+		}
+
+		ext := ".jpg"
+		switch mimeType {
+		case "image/png":
+			ext = ".png"
+		case "image/gif":
+			ext = ".gif"
+		case "image/webp":
+			ext = ".webp"
+		}
+
+		if err := os.MkdirAll(cacheDir, 0755); err != nil {
+			return
+		}
+		cachePath := filepath.Join(cacheDir, fmt.Sprintf("%d%s", i, ext))
+		_ = os.WriteFile(cachePath, data, 0644)
+		warmed++
+	}
+	if warmed > 0 {
+		log.Printf("[warmup] Ebook pre-cached %d pages for %s (pages %d-%d)", warmed, comicID, start, end-1)
+	}
 }
 
 // warmupNormal 对 ZIP/7z 等支持随机访问的格式逐页预热。
@@ -696,8 +812,10 @@ func pageExistsInCache(cacheDir string, pageIndex int) bool {
 // ============================================================
 
 // GetArchivePageCount opens an archive and counts image entries (or chapters for novels).
-func GetArchivePageCount(fp string) (int, error) {
+// When isComic is true for ebook formats, it counts embedded images instead of chapters.
+func GetArchivePageCount(fp string, isComic ...bool) (int, error) {
 	archiveType := archive.DetectType(fp)
+	forceComic := len(isComic) > 0 && isComic[0]
 
 	if archiveType == archive.TypePdf {
 		return archive.GetPdfPageCount(fp)
@@ -720,6 +838,17 @@ func GetArchivePageCount(fp string) (int, error) {
 	}
 	defer reader.Close()
 
+	// For ebook archives marked as comic, count embedded images
+	if archive.IsEbookType(archiveType) && forceComic {
+		switch archiveType {
+		case archive.TypeMobi, archive.TypeAzw3:
+			return archive.CountMobiEmbeddedImages(reader), nil
+		default:
+			images := archive.ListEpubEmbeddedImages(reader)
+			return len(images), nil
+		}
+	}
+
 	// For novel formats, count chapters (non-directory entries)
 	if archive.IsNovelType(archiveType) {
 		count := 0
@@ -733,4 +862,48 @@ func GetArchivePageCount(fp string) (int, error) {
 
 	images := archive.GetImageEntries(reader)
 	return len(images), nil
+}
+
+// invalidatePageImageCacheIfNeeded clears the disk-based page image cache
+// for a comic when the page list order has changed (e.g., switching from
+// zip-ordered to spine-ordered for manga EPUBs).
+func invalidatePageImageCacheIfNeeded(comicID string, entries []string) {
+	if len(entries) == 0 {
+		return
+	}
+
+	cacheDir := filepath.Join(config.GetPagesCacheDir(), comicID)
+
+	// Build a fingerprint from the first, middle, and last entry names + total count.
+	// More robust than just first+last for detecting ordering changes.
+	fingerprint := fmt.Sprintf("%s|%s|%s|%d",
+		entries[0],
+		entries[len(entries)/2],
+		entries[len(entries)-1],
+		len(entries))
+
+	fpPath := filepath.Join(cacheDir, ".order-fp")
+	existing, err := os.ReadFile(fpPath)
+	if err == nil && string(existing) == fingerprint {
+		return
+	}
+
+	entriesOnDisk, err := os.ReadDir(cacheDir)
+	if err != nil {
+		_ = os.MkdirAll(cacheDir, 0755)
+		_ = os.WriteFile(fpPath, []byte(fingerprint), 0644)
+		return
+	}
+
+	for _, e := range entriesOnDisk {
+		if e.Name() == ".order-fp" {
+			continue
+		}
+		_ = os.Remove(filepath.Join(cacheDir, e.Name()))
+	}
+
+	_ = os.MkdirAll(cacheDir, 0755)
+	_ = os.WriteFile(fpPath, []byte(fingerprint), 0644)
+
+	log.Printf("[cache] Invalidated page image cache for %s (order changed)", comicID)
 }
