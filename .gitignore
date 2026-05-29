@@ -21,6 +21,9 @@ data/
 # Cache
 .cache/
 
+#claude
+.claude/
+
 # Comics (user data)
 comics/
 
