@@ -342,6 +342,28 @@ func ThumbnailCacheName(comicID string) string {
 	return fmt.Sprintf("%s_%dx%d.webp", comicID, tw, th)
 }
 
+// GroupCoverCacheName returns the canonical cache filename for a group cover.
+func GroupCoverCacheName(groupID int) string {
+	tw := config.GetThumbnailWidth()
+	th := config.GetThumbnailHeight()
+	return fmt.Sprintf("group_%d_%dx%d.webp", groupID, tw, th)
+}
+
+// ClearGroupCoverCache removes all cached cover files for a given group ID.
+func ClearGroupCoverCache(groupID int) {
+	thumbDir := config.GetThumbnailsDir()
+	entries, err := os.ReadDir(thumbDir)
+	if err != nil {
+		return
+	}
+	prefix := fmt.Sprintf("group_%d_", groupID)
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), prefix) {
+			_ = os.Remove(filepath.Join(thumbDir, entry.Name()))
+		}
+	}
+}
+
 // ClearThumbnailCache removes all cached thumbnails for a given comic ID,
 // including the old format ({id}.webp) and all sized variants ({id}_{W}x{H}.webp).
 func ClearThumbnailCache(comicID string) {

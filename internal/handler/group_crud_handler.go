@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/nowen-reader/nowen-reader/internal/archive"
+	"github.com/nowen-reader/nowen-reader/internal/service"
 	"github.com/nowen-reader/nowen-reader/internal/store"
 )
 
@@ -136,6 +138,11 @@ func (h *GroupHandler) UpdateGroup(c *gin.Context) {
 		return
 	}
 
+	// 如果提供了外部封面 URL，触发异步下载到本地缓存
+	if body.CoverURL != "" && (strings.HasPrefix(body.CoverURL, "http://") || strings.HasPrefix(body.CoverURL, "https://")) {
+		go service.DownloadGroupCover(id, body.CoverURL)
+	}
+
 	// 如果有元数据字段，也一并更新
 	update := store.GroupMetadataUpdate{
 		Author:      body.Author,
@@ -169,6 +176,10 @@ func (h *GroupHandler) DeleteGroup(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "删除分组失败"})
 		return
 	}
+
+	// 清理本地封面缓存
+	archive.ClearGroupCoverCache(id)
+
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }
 
@@ -312,6 +323,12 @@ func (h *GroupHandler) BatchDelete(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "批量删除失败"})
 		return
 	}
+
+	// 清理本地封面缓存
+	for _, gid := range body.GroupIDs {
+		archive.ClearGroupCoverCache(gid)
+	}
+
 	c.JSON(http.StatusOK, gin.H{"success": true, "deleted": deleted})
 }
 

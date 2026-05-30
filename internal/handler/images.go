@@ -156,6 +156,12 @@ func (h *ImageHandler) GetPageImage(c *gin.Context) {
 func (h *ImageHandler) GetThumbnail(c *gin.Context) {
 	id := c.Param("id")
 
+	// 合集封面：ID 以 "group_" 前缀开头时，走合集封面缓存逻辑
+	if strings.HasPrefix(id, "group_") {
+		h.serveGroupCoverThumbnail(c, id)
+		return
+	}
+
 	comic, err := store.GetComicByID(id)
 	if err != nil || comic == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Comic not found"})
@@ -198,6 +204,65 @@ func (h *ImageHandler) GetThumbnail(c *gin.Context) {
 	c.Header("Content-Length", strconv.Itoa(len(thumbnail)))
 	c.Header("ETag", etag)
 	c.Data(http.StatusOK, "image/webp", thumbnail)
+}
+
+// serveGroupCoverThumbnail 处理合集封面缩略图请求（通过 group_ 前缀识别）。
+// 复用 /api/comics/:id/thumbnail 端点，ID 格式为 "group_{groupID}"。
+func (h *ImageHandler) serveGroupCoverThumbnail(c *gin.Context, id string) {
+	// 解析 groupID：从 "group_{groupID}" 中提取
+	groupIDStr := strings.TrimPrefix(id, "group_")
+	groupID, err := strconv.Atoi(groupIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的合集ID"})
+		return
+	}
+
+	group, err := store.GetGroupByID(groupID)
+	if err != nil || group == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "合集不存在"})
+		return
+	}
+
+	// 尝试读取本地缓存
+	cachePath := filepath.Join(config.GetThumbnailsDir(), archive.GroupCoverCacheName(groupID))
+	if data, err := os.ReadFile(cachePath); err == nil && len(data) > 0 {
+		etag := fmt.Sprintf(`"%d"`, len(data))
+		if stat, err := os.Stat(cachePath); err == nil {
+			etag = fmt.Sprintf(`"%s-%s"`,
+				strconv.FormatInt(stat.ModTime().UnixMilli(), 36),
+				strconv.FormatInt(stat.Size(), 36),
+			)
+		}
+		if c.GetHeader("If-None-Match") == etag {
+			c.Header("ETag", etag)
+			c.Status(http.StatusNotModified)
+			return
+		}
+		c.Header("Content-Type", "image/webp")
+		c.Header("Cache-Control", "public, max-age=300, must-revalidate")
+		c.Header("Content-Length", strconv.Itoa(len(data)))
+		c.Header("ETag", etag)
+		c.Data(http.StatusOK, "image/webp", data)
+		return
+	}
+
+	// 本地缓存不存在：异步下载，临时重定向到外部 URL
+	if group.CoverURL != "" {
+		go service.DownloadGroupCover(groupID, group.CoverURL)
+		c.Redirect(http.StatusTemporaryRedirect, group.CoverURL)
+		return
+	}
+
+	// Fallback: 重定向到第一本漫画的缩略图
+	if len(group.Comics) > 0 {
+		firstCover := group.Comics[0].CoverURL
+		if firstCover != "" {
+			c.Redirect(http.StatusTemporaryRedirect, firstCover)
+			return
+		}
+	}
+
+	c.JSON(http.StatusNotFound, gin.H{"error": "封面不可用"})
 }
 
 // ============================================================

@@ -140,8 +140,7 @@ func downloadCoverAsThumbnail(comicID, coverURL string) {
 	log.Printf("[metadata] Cover cached for %s", comicID)
 }
 
-// DownloadGroupCover 保存系列封面 URL 到数据库。
-// 群组封面直接使用外部 URL（不保存到本地）。
+// DownloadGroupCover 保存系列封面 URL 到数据库，并下载到本地缓存。
 func DownloadGroupCover(groupID int, coverURL string) {
 	if coverURL == "" {
 		return
@@ -149,13 +148,57 @@ func DownloadGroupCover(groupID int, coverURL string) {
 	// Bangumi 等源可能返回 http:// URL，强制转为 https://
 	coverURL = strings.Replace(coverURL, "http://", "https://", 1)
 
+	// 保存外部 URL 到数据库
 	if err := store.UpdateGroupMetadata(groupID, store.GroupMetadataUpdate{
 		CoverURL: &coverURL,
 	}); err != nil {
 		log.Printf("[metadata] Group cover URL save failed for group %d: %v", groupID, err)
-	} else {
-		log.Printf("[metadata] Group cover URL saved for group %d", groupID)
+		return
 	}
+	log.Printf("[metadata] Group cover URL saved for group %d", groupID)
+
+	// 下载封面到本地缓存
+	downloadGroupCoverToLocal(groupID, coverURL)
+}
+
+// downloadGroupCoverToLocal 下载合集封面图片并保存为本地 WebP 缩略图。
+func downloadGroupCoverToLocal(groupID int, coverURL string) {
+	thumbDir := config.GetThumbnailsDir()
+	if err := os.MkdirAll(thumbDir, 0755); err != nil {
+		return
+	}
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	req, err := http.NewRequest("GET", coverURL, nil)
+	if err != nil {
+		return
+	}
+	req.Header.Set("User-Agent", "NowenReader/1.0")
+
+	resp, err := client.Do(req)
+	if err != nil || resp.StatusCode != 200 {
+		return
+	}
+	defer resp.Body.Close()
+
+	imgData, err := io.ReadAll(resp.Body)
+	if err != nil || len(imgData) == 0 {
+		return
+	}
+
+	// 清理旧缓存文件
+	archive.ClearGroupCoverCache(groupID)
+
+	cacheName := archive.GroupCoverCacheName(groupID)
+	cachePath := filepath.Join(thumbDir, cacheName)
+	webpData, err := archive.ResizeImageToWebP(imgData, config.GetThumbnailWidth(), config.GetThumbnailHeight(), 85)
+	if err != nil {
+		// Fallback: 保存原始图片数据
+		_ = os.WriteFile(cachePath, imgData, 0644)
+	} else {
+		_ = os.WriteFile(cachePath, webpData, 0644)
+	}
+	log.Printf("[metadata] Group cover cached locally for group %d", groupID)
 }
 
 // ============================================================

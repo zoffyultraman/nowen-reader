@@ -175,8 +175,10 @@ func GetAllGroupsWithOptions(opts GroupListOptions) ([]ComicGroupWithCount, erro
 		}
 		g.CreatedAt = createdAt.UTC().Format(time.RFC3339)
 		g.UpdatedAt = updatedAt.UTC().Format(time.RFC3339)
-		// 如果没有自定义封面，使用第一本漫画的缩略图
-		if g.CoverURL == "" && g.ComicCount > 0 {
+		// 封面 URL：有自定义封面时返回本地缓存路径，无封面时使用第一本漫画缩略图
+		if g.CoverURL != "" {
+			g.CoverURL = BuildGroupCoverURL(g.ID)
+		} else if g.ComicCount > 0 {
 			var firstComicID string
 			err := db.QueryRow(`
 				SELECT gi."comicId" FROM "ComicGroupItem" gi
@@ -271,8 +273,10 @@ func GetGroupByID(groupID int, contentType ...string) (*ComicGroupDetail, error)
 		g.Comics = append(g.Comics, item)
 	}
 
-	// 如果没有自定义封面，使用第一本漫画的缩略图
-	if g.CoverURL == "" && len(g.Comics) > 0 {
+	// 封面 URL：有自定义封面时返回本地缓存路径，无封面时使用第一本漫画缩略图
+	if g.CoverURL != "" {
+		g.CoverURL = BuildGroupCoverURL(g.ID)
+	} else if len(g.Comics) > 0 {
 		g.CoverURL = g.Comics[0].CoverURL
 	}
 

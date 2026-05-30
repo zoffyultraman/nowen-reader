@@ -26,3 +26,18 @@ func BuildComicCoverURL(comicID string) string {
 	}
 	return base
 }
+
+// BuildGroupCoverURL 构造合集封面缩略图 URL。
+// 复用 /api/comics/ 端点，ID 前缀为 "group_" 以区分漫画缩略图。
+func BuildGroupCoverURL(groupID int) string {
+	coverID := fmt.Sprintf("group_%d", groupID)
+	base := fmt.Sprintf("/api/comics/%s/thumbnail", coverID)
+	tw := config.GetThumbnailWidth()
+	th := config.GetThumbnailHeight()
+	cacheName := fmt.Sprintf("group_%d_%dx%d.webp", groupID, tw, th)
+	cachePath := filepath.Join(config.GetThumbnailsDir(), cacheName)
+	if info, err := os.Stat(cachePath); err == nil {
+		return fmt.Sprintf("%s?v=%d", base, info.ModTime().Unix())
+	}
+	return base
+}
