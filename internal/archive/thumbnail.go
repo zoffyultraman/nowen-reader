@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	// Register decoders for common image formats
 	_ "image/gif"
@@ -35,25 +36,53 @@ func CalcThumbnailDPI(pageWidthPt float64, targetWidthPx int) int {
 	return int(dpi)
 }
 
+// 缩略图生成去重：同一 comicID 同时只有一个生成任务，其余等待结果
+var thumbnailGen sync.Map // comicID -> chan struct{}
+
 // GenerateThumbnail generates a WebP thumbnail for a comic.
 // Returns the thumbnail bytes, the original cover aspect ratio (width/height), and writes it to disk cache.
 func GenerateThumbnail(archivePath, comicID string) ([]byte, float64, error) {
+	// 快速路径：磁盘缓存命中
+	tw := config.GetThumbnailWidth()
+	th := config.GetThumbnailHeight()
+	cacheName := fmt.Sprintf("%s_%dx%d.webp", comicID, tw, th)
+	cachePath := filepath.Join(config.GetThumbnailsDir(), cacheName)
+	if data, err := os.ReadFile(cachePath); err == nil && len(data) > 0 {
+		return data, 0, nil
+	}
+
+	// 去重：如果同一 comicID 正在生成，等待其完成后读缓存
+	ch, loaded := thumbnailGen.LoadOrStore(comicID, make(chan struct{}, 1))
+	done := ch.(chan struct{})
+	if loaded {
+		// 其他 goroutine 正在生成，等待完成
+		<-done
+		data, err := os.ReadFile(cachePath)
+		if err != nil {
+			return nil, 0, fmt.Errorf("thumbnail not found after wait for %s", comicID)
+		}
+		return data, 0, nil
+	}
+
+	// 当前 goroutine 负责生成，完成后通知等待者
+	defer func() {
+		close(done)
+		thumbnailGen.Delete(comicID)
+	}()
+
+	return generateThumbnailInternal(archivePath, comicID)
+}
+
+func generateThumbnailInternal(archivePath, comicID string) ([]byte, float64, error) {
 	thumbDir := config.GetThumbnailsDir()
 	if err := os.MkdirAll(thumbDir, 0755); err != nil {
 		return nil, 0, err
 	}
 
-	// 缓存路径包含尺寸信息，尺寸变更后自动生成新缩略图
 	tw := config.GetThumbnailWidth()
 	th := config.GetThumbnailHeight()
 	cacheName := fmt.Sprintf("%s_%dx%d.webp", comicID, tw, th)
 	cachePath := filepath.Join(thumbDir, cacheName)
-
-	// Check cache first（尺寸匹配才命中）
-	if data, err := os.ReadFile(cachePath); err == nil && len(data) > 0 {
-		// 从缓存返回时，尝试检测已有缩略图的宽高比（无法获取原始比例，返回 0）
-		return data, 0, nil
-	}
 
 	// 清理该 comicID 的旧尺寸缓存文件
 	cleanOldThumbnailCache(thumbDir, comicID, cacheName)
