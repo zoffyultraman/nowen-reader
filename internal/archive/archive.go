@@ -879,7 +879,7 @@ func pdfPageCountByMutool(fp string) (int, bool) {
 }
 
 // GetPdfPageSize 返回 PDF 指定页面的物理宽高（单位：pt，1pt = 1/72 inch）。
-// 使用 `mutool info` 解析 MediaBox 获取。
+// 使用 `mutool info` 解析 MediaBox/CropBox 获取。
 func GetPdfPageSize(fp string, pageIndex int) (widthPt, heightPt float64, err error) {
 	bin, ok := config.LookPdfTool("mutool", exec.LookPath)
 	if !ok {
@@ -891,17 +891,18 @@ func GetPdfPageSize(fp string, pageIndex int) (widthPt, heightPt float64, err er
 		return 0, 0, fmt.Errorf("mutool info failed: %w", err)
 	}
 
+	raw := string(out)
 	pageNum := pageIndex + 1 // mutool info 使用 1-based 页码
-	lines := strings.Split(string(out), "\n")
+	lines := strings.Split(raw, "\n")
 	foundPage := false
 
 	for _, line := range lines {
-		line = strings.TrimSpace(line)
+		trimmed := strings.TrimSpace(line)
 
-		// 定位 "Page N" 行
-		if strings.HasPrefix(line, "Page ") {
+		// 定位 "Page N" 行（兼容 "Page N:" 或 "Page N" 格式）
+		if strings.HasPrefix(trimmed, "Page ") {
 			var n int
-			if _, err := fmt.Sscanf(line, "Page %d", &n); err == nil && n == pageNum {
+			if _, err := fmt.Sscanf(trimmed, "Page %d", &n); err == nil && n == pageNum {
 				foundPage = true
 				continue
 			}
@@ -911,21 +912,45 @@ func GetPdfPageSize(fp string, pageIndex int) (widthPt, heightPt float64, err er
 			}
 		}
 
-		// 在目标 Page 行之后查找 MediaBox
-		if foundPage && strings.HasPrefix(line, "MediaBox:") {
-			// 格式: "MediaBox: 0 0 595.276 841.89"
-			rest := strings.TrimSpace(line[len("MediaBox:"):])
+		if !foundPage {
+			continue
+		}
+
+		// 在目标 Page 行之后查找 MediaBox 或 CropBox
+		// 兼容格式: "MediaBox: 0 0 595.276 841.89" 或 "MediaBox:   0 0 595 842"
+		// 也兼容 "MediaBox[0 0 595 842]" 格式
+		boxLine := trimmed
+		boxPrefix := ""
+		if strings.HasPrefix(boxLine, "MediaBox") {
+			boxPrefix = "MediaBox"
+		} else if strings.HasPrefix(boxLine, "CropBox") {
+			boxPrefix = "CropBox"
+		}
+
+		if boxPrefix != "" {
+			// 去掉前缀，处理 ": ..." 和 "[...]" 两种格式
+			rest := strings.TrimPrefix(boxLine, boxPrefix)
+			rest = strings.TrimLeft(rest, ": ")
+			rest = strings.Trim(rest, "[]")
 			parts := strings.Fields(rest)
 			if len(parts) >= 4 {
-				x1, err1 := strconv.ParseFloat(parts[2], 64)
-				y1, err2 := strconv.ParseFloat(parts[3], 64)
-				if err1 == nil && err2 == nil && x1 > 0 && y1 > 0 {
-					return x1, y1, nil
+				// 格式: x0 y0 x1 y1（MediaBox 的坐标）
+				x0, err0 := strconv.ParseFloat(parts[0], 64)
+				y0, err1 := strconv.ParseFloat(parts[1], 64)
+				x1, err2 := strconv.ParseFloat(parts[2], 64)
+				y1, err3 := strconv.ParseFloat(parts[3], 64)
+				if err0 == nil && err1 == nil && err2 == nil && err3 == nil {
+					w := x1 - x0
+					h := y1 - y0
+					if w > 0 && h > 0 {
+						return w, h, nil
+					}
 				}
 			}
 		}
 	}
 
+	log.Printf("[pdf] GetPdfPageSize: MediaBox not found for page %d in %s, mutool output:\n%s", pageNum, fp, raw)
 	return 0, 0, fmt.Errorf("MediaBox not found for page %d in %s", pageNum, fp)
 }
 
