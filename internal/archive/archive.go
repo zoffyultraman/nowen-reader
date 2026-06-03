@@ -878,6 +878,57 @@ func pdfPageCountByMutool(fp string) (int, bool) {
 	return 0, false
 }
 
+// GetPdfPageSize 返回 PDF 指定页面的物理宽高（单位：pt，1pt = 1/72 inch）。
+// 使用 `mutool info` 解析 MediaBox 获取。
+func GetPdfPageSize(fp string, pageIndex int) (widthPt, heightPt float64, err error) {
+	bin, ok := config.LookPdfTool("mutool", exec.LookPath)
+	if !ok {
+		return 0, 0, fmt.Errorf("mutool not installed")
+	}
+	cmd := exec.Command(bin, "info", fp)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return 0, 0, fmt.Errorf("mutool info failed: %w", err)
+	}
+
+	pageNum := pageIndex + 1 // mutool info 使用 1-based 页码
+	lines := strings.Split(string(out), "\n")
+	foundPage := false
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+
+		// 定位 "Page N" 行
+		if strings.HasPrefix(line, "Page ") {
+			var n int
+			if _, err := fmt.Sscanf(line, "Page %d", &n); err == nil && n == pageNum {
+				foundPage = true
+				continue
+			}
+			// 遇到下一个 Page 行，停止搜索
+			if foundPage {
+				break
+			}
+		}
+
+		// 在目标 Page 行之后查找 MediaBox
+		if foundPage && strings.HasPrefix(line, "MediaBox:") {
+			// 格式: "MediaBox: 0 0 595.276 841.89"
+			rest := strings.TrimSpace(line[len("MediaBox:"):])
+			parts := strings.Fields(rest)
+			if len(parts) >= 4 {
+				x1, err1 := strconv.ParseFloat(parts[2], 64)
+				y1, err2 := strconv.ParseFloat(parts[3], 64)
+				if err1 == nil && err2 == nil && x1 > 0 && y1 > 0 {
+					return x1, y1, nil
+				}
+			}
+		}
+	}
+
+	return 0, 0, fmt.Errorf("MediaBox not found for page %d in %s", pageNum, fp)
+}
+
 // pdfPageCountByPdfinfo 用 poppler 的 `pdfinfo` 获取 PDF 页数。
 // 输出形如：`Pages:          23`
 func pdfPageCountByPdfinfo(fp string) (int, bool) {
@@ -1113,9 +1164,12 @@ func countPdfPageObjects(content string) int {
 
 // RenderPdfPage renders a single PDF page to a PNG image.
 // Uses external tools (mutool, pdftoppm, or convert).
-// 渲染策略：每个工具按 200 -> 120 -> 96 dpi 降级重试，遇到 OOM/signal killed 自动降级，
+// 渲染策略：每个工具按 dpiLadder 降级重试，遇到 OOM/signal killed 自动降级，
 // 直到全部失败才进入下一个工具，所有工具全部失败时返回结构化错误。
-func RenderPdfPage(fp string, pageIndex int) ([]byte, error) {
+//
+// targetDPI: 可选参数，传入时使用 [targetDPI, 96] 作为降级阶梯（用于缩略图场景的动态 DPI）；
+// 不传时保持默认阶梯 [200, 120, 96]（用于页面阅读场景）。
+func RenderPdfPage(fp string, pageIndex int, targetDPI ...int) ([]byte, error) {
 	pageNum := pageIndex + 1 // External tools use 1-based page numbers
 	var errors []string
 
@@ -1124,7 +1178,14 @@ func RenderPdfPage(fp string, pageIndex int) ([]byte, error) {
 	defer release()
 
 	// dpi 降级序列：高质量优先，失败时降低分辨率以节省内存（适配 NAS/低内存环境）
-	dpiLadder := []int{200, 120, 96}
+	var dpiLadder []int
+	if len(targetDPI) > 0 && targetDPI[0] > 0 {
+		// 缩略图场景：使用动态计算的 DPI，失败时降到 96 兜底
+		dpiLadder = []int{targetDPI[0], 96}
+	} else {
+		// 阅读场景：保持原始阶梯
+		dpiLadder = []int{200, 120, 96}
+	}
 
 	// Method 1: mutool (from MuPDF — best quality)
 	if mutool, ok := config.LookPdfTool("mutool", exec.LookPath); ok {

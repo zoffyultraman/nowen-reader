@@ -19,6 +19,22 @@ import (
 	"github.com/nowen-reader/nowen-reader/internal/config"
 )
 
+// CalcThumbnailDPI 根据 PDF 页面物理宽度（pt）和目标缩略图像素宽度计算最优 DPI。
+// 返回值限制在 [72, 120] 范围内：大页面用低 DPI 避免超大位图，小页面用高 DPI 保证清晰度。
+func CalcThumbnailDPI(pageWidthPt float64, targetWidthPx int) int {
+	if pageWidthPt <= 0 || targetWidthPx <= 0 {
+		return 96
+	}
+	dpi := float64(targetWidthPx) * 72.0 / pageWidthPt
+	if dpi < 72 {
+		return 72
+	}
+	if dpi > 120 {
+		return 120
+	}
+	return int(dpi)
+}
+
 // GenerateThumbnail generates a WebP thumbnail for a comic.
 // Returns the thumbnail bytes, the original cover aspect ratio (width/height), and writes it to disk cache.
 func GenerateThumbnail(archivePath, comicID string) ([]byte, float64, error) {
@@ -48,10 +64,19 @@ func GenerateThumbnail(archivePath, comicID string) ([]byte, float64, error) {
 
 	switch {
 	case archiveType == TypePdf:
-		// PDF: render first page
-		buf, err := RenderPdfPage(archivePath, 0)
-		if err != nil {
-			log.Printf("[thumbnail] PDF render failed for %s: %v, generating text cover", comicID, err)
+		// PDF: 动态计算 DPI 后渲染第一页，避免大尺寸 PDF 产生超大位图
+		var buf []byte
+		var renderErr error
+		if w, h, err := GetPdfPageSize(archivePath, 0); err == nil && w > 0 {
+			dpi := CalcThumbnailDPI(w, config.GetThumbnailWidth())
+			log.Printf("[thumbnail] PDF page size: %.0fx%.0f pt, calculated DPI: %d for %s", w, h, dpi, comicID)
+			buf, renderErr = RenderPdfPage(archivePath, 0, dpi)
+		} else {
+			log.Printf("[thumbnail] cannot get PDF page size for %s: %v, using default DPI", comicID, err)
+			buf, renderErr = RenderPdfPage(archivePath, 0)
+		}
+		if renderErr != nil {
+			log.Printf("[thumbnail] PDF render failed for %s: %v, generating text cover", comicID, renderErr)
 			// 渲染工具不可用时，回退到文字封面
 			data, err := generateTextCover(archivePath, comicID, thumbDir, cachePath)
 			return data, 0, err
