@@ -247,8 +247,24 @@ func (h *ImageHandler) serveGroupCoverThumbnail(c *gin.Context, id string) {
 	}
 
 	// 本地缓存不存在：异步下载，临时重定向到外部 URL
-	if group.CoverURL != "" {
-		go service.DownloadGroupCover(groupID, group.CoverURL)
+	rawCoverURL, err := store.GetGroupStoredCoverURL(groupID)
+	if err == nil && rawCoverURL != "" {
+		switch {
+		case strings.HasPrefix(rawCoverURL, "http://") || strings.HasPrefix(rawCoverURL, "https://"):
+			go service.DownloadGroupCover(groupID, rawCoverURL)
+			c.Redirect(http.StatusTemporaryRedirect, rawCoverURL)
+			return
+		case strings.HasPrefix(rawCoverURL, "data:image/"):
+			if err := service.CacheGroupCoverDataURL(groupID, rawCoverURL); err == nil {
+				if data, err := os.ReadFile(cachePath); err == nil && len(data) > 0 {
+					c.Data(http.StatusOK, "image/webp", data)
+					return
+				}
+			}
+		}
+	}
+
+	if group.CoverURL != "" && !strings.HasPrefix(group.CoverURL, "/api/comics/group_") {
 		c.Redirect(http.StatusTemporaryRedirect, group.CoverURL)
 		return
 	}

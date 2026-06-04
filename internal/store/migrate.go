@@ -431,33 +431,30 @@ func splitSQL(sql string) []string {
 		if inBlock && (upper == "END" || strings.HasSuffix(upper, " END") ||
 			upper == "END;" || strings.HasSuffix(upper, " END;")) {
 			inBlock = false
-			stmt := strings.TrimSpace(strings.TrimRight(strings.TrimSpace(current.String()), ";"))
-			if stmt != "" {
-				result = append(result, stmt)
-			}
+			appendSQLStatement(&result, current.String())
 			current.Reset()
 			continue
 		}
 
 		// 不在块内时，按行尾分号分割
 		if !inBlock && strings.HasSuffix(trimmed, ";") {
-			stmt := strings.TrimSpace(strings.TrimRight(strings.TrimSpace(current.String()), ";"))
-			if stmt != "" {
-				result = append(result, stmt)
-			}
+			appendSQLStatement(&result, current.String())
 			current.Reset()
 		}
 	}
 
 	// 处理末尾没有分号的剩余内容
-	remaining := strings.TrimSpace(current.String())
-	remaining = strings.TrimRight(remaining, ";")
-	remaining = strings.TrimSpace(remaining)
-	if remaining != "" {
-		result = append(result, remaining)
-	}
+	appendSQLStatement(&result, current.String())
 
 	return result
+}
+
+func appendSQLStatement(result *[]string, stmt string) {
+	stmt = strings.Trim(stmt, " \t\r\n;")
+	if stmt == "" {
+		return
+	}
+	*result = append(*result, stmt)
 }
 
 // isIgnorableError checks if a migration error can be safely ignored.

@@ -1,6 +1,7 @@
 package service
 
 import (
+	"encoding/base64"
 	"fmt"
 	"io"
 	"log"
@@ -14,6 +15,8 @@ import (
 	"github.com/nowen-reader/nowen-reader/internal/config"
 	"github.com/nowen-reader/nowen-reader/internal/store"
 )
+
+const maxCoverDownloadBytes = 20 << 20
 
 // ============================================================
 // Apply metadata to comic
@@ -122,21 +125,23 @@ func downloadCoverAsThumbnail(comicID, coverURL string) {
 	}
 	defer resp.Body.Close()
 
-	imgData, err := io.ReadAll(resp.Body)
+	imgData, err := io.ReadAll(io.LimitReader(resp.Body, maxCoverDownloadBytes+1))
 	if err != nil || len(imgData) == 0 {
 		return
 	}
+	if len(imgData) > maxCoverDownloadBytes {
+		log.Printf("[metadata] Cover download too large for %s", comicID)
+		return
+	}
 
-	// Clear old cache files first, then write to canonical path
-	archive.ClearThumbnailCache(comicID)
 	thumbPath := filepath.Join(thumbDir, archive.ThumbnailCacheName(comicID))
 	webpData, err := archive.ResizeImageToWebP(imgData, config.GetThumbnailWidth(), config.GetThumbnailHeight(), 85)
 	if err != nil {
-		// Fallback: save raw image data directly
-		_ = os.WriteFile(thumbPath, imgData, 0644)
-	} else {
-		_ = os.WriteFile(thumbPath, webpData, 0644)
+		log.Printf("[metadata] Cover convert failed for %s: %v", comicID, err)
+		return
 	}
+	archive.ClearThumbnailCache(comicID)
+	_ = os.WriteFile(thumbPath, webpData, 0644)
 	log.Printf("[metadata] Cover cached for %s", comicID)
 }
 
@@ -181,24 +186,60 @@ func downloadGroupCoverToLocal(groupID int, coverURL string) {
 	}
 	defer resp.Body.Close()
 
-	imgData, err := io.ReadAll(resp.Body)
+	imgData, err := io.ReadAll(io.LimitReader(resp.Body, maxCoverDownloadBytes+1))
 	if err != nil || len(imgData) == 0 {
 		return
 	}
-
-	// 清理旧缓存文件
-	archive.ClearGroupCoverCache(groupID)
+	if len(imgData) > maxCoverDownloadBytes {
+		log.Printf("[metadata] Group cover download too large for group %d", groupID)
+		return
+	}
 
 	cacheName := archive.GroupCoverCacheName(groupID)
 	cachePath := filepath.Join(thumbDir, cacheName)
 	webpData, err := archive.ResizeImageToWebP(imgData, config.GetThumbnailWidth(), config.GetThumbnailHeight(), 85)
 	if err != nil {
 		// Fallback: 保存原始图片数据
-		_ = os.WriteFile(cachePath, imgData, 0644)
-	} else {
-		_ = os.WriteFile(cachePath, webpData, 0644)
+		log.Printf("[metadata] Group cover cache failed for group %d: %v", groupID, err)
+		return
+	}
+	archive.ClearGroupCoverCache(groupID)
+	_ = os.WriteFile(cachePath, webpData, 0644)
+	log.Printf("[metadata] Group cover cached locally for group %d", groupID)
+}
+
+func CacheGroupCoverDataURL(groupID int, coverDataURL string) error {
+	comma := strings.Index(coverDataURL, ",")
+	if comma <= 0 || !strings.HasPrefix(coverDataURL, "data:image/") {
+		return fmt.Errorf("unsupported data URL")
+	}
+	meta := coverDataURL[:comma]
+	if !strings.Contains(meta, ";base64") {
+		return fmt.Errorf("unsupported non-base64 data URL")
+	}
+	imgData, err := base64.StdEncoding.DecodeString(coverDataURL[comma+1:])
+	if err != nil {
+		return err
+	}
+	if len(imgData) == 0 || len(imgData) > maxCoverDownloadBytes {
+		return fmt.Errorf("invalid image size")
+	}
+
+	thumbDir := config.GetThumbnailsDir()
+	if err := os.MkdirAll(thumbDir, 0755); err != nil {
+		return err
+	}
+	webpData, err := archive.ResizeImageToWebP(imgData, config.GetThumbnailWidth(), config.GetThumbnailHeight(), 85)
+	if err != nil {
+		return err
+	}
+	archive.ClearGroupCoverCache(groupID)
+	cachePath := filepath.Join(thumbDir, archive.GroupCoverCacheName(groupID))
+	if err := os.WriteFile(cachePath, webpData, 0644); err != nil {
+		return err
 	}
 	log.Printf("[metadata] Group cover cached locally for group %d", groupID)
+	return nil
 }
 
 // ============================================================

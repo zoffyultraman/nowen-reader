@@ -4,8 +4,11 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/nowen-reader/nowen-reader/internal/archive"
+	"github.com/nowen-reader/nowen-reader/internal/service"
 	"github.com/nowen-reader/nowen-reader/internal/store"
 )
 
@@ -38,6 +41,18 @@ func (h *GroupHandler) UpdateMetadata(c *gin.Context) {
 	if err := store.UpdateGroupMetadata(id, body); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "更新系列元数据失败"})
 		return
+	}
+	if body.CoverURL != nil {
+		switch coverURL := *body.CoverURL; {
+		case coverURL == "":
+			archive.ClearGroupCoverCache(id)
+		case strings.HasPrefix(coverURL, "http://") || strings.HasPrefix(coverURL, "https://"):
+			go service.DownloadGroupCover(id, coverURL)
+		case strings.HasPrefix(coverURL, "data:image/"):
+			if err := service.CacheGroupCoverDataURL(id, coverURL); err != nil {
+				log.Printf("[API] UpdateMetadata: cache group cover failed: %v", err)
+			}
+		}
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }

@@ -304,11 +304,25 @@ func CreateGroup(name string, userID ...string) (int64, error) {
 
 // UpdateGroup 更新分组名称和封面。
 func UpdateGroup(groupID int, name string, coverURL string) error {
+	if coverURL == "" || strings.HasPrefix(coverURL, "/api/comics/group_") {
+		_, err := db.Exec(`
+			UPDATE "ComicGroup" SET "name" = ?, "updatedAt" = ?
+			WHERE "id" = ?
+		`, name, time.Now().UTC(), groupID)
+		return err
+	}
+
 	_, err := db.Exec(`
 		UPDATE "ComicGroup" SET "name" = ?, "coverUrl" = ?, "updatedAt" = ?
 		WHERE "id" = ?
 	`, name, coverURL, time.Now().UTC(), groupID)
 	return err
+}
+
+func GetGroupStoredCoverURL(groupID int) (string, error) {
+	var coverURL string
+	err := db.QueryRow(`SELECT "coverUrl" FROM "ComicGroup" WHERE "id" = ?`, groupID).Scan(&coverURL)
+	return coverURL, err
 }
 
 // GroupMetadataUpdate 系列元数据更新请求。

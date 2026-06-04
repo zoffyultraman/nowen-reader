@@ -169,6 +169,7 @@ func createTables() error {
 			"genre"          TEXT NOT NULL DEFAULT '',
 			"metadataSource" TEXT NOT NULL DEFAULT '',
 			"coverImageUrl"  TEXT NOT NULL DEFAULT '',
+			"coverAspectRatio" REAL NOT NULL DEFAULT 0,
 			"type"           TEXT NOT NULL DEFAULT 'comic',
 			"readingStatus"  TEXT NOT NULL DEFAULT ''
 		)`,
