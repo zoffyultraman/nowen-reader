@@ -199,10 +199,13 @@ func SetupRoutes(r *gin.Engine) {
 	// ============================================================
 	settings := NewSettingsHandler()
 	api.GET("/site-settings", settings.GetSettings)
+	api.GET("/site-settings/icon", settings.GetIcon)
 	settingsWrite := api.Group("")
 	settingsWrite.Use(middleware.AdminRequired())
 	{
 		settingsWrite.PUT("/site-settings", settings.UpdateSettings)
+		settingsWrite.POST("/site-settings/icon", settings.UploadIcon)
+		settingsWrite.DELETE("/site-settings/icon", settings.DeleteIcon)
 	}
 
 	// ============================================================

@@ -9,12 +9,13 @@ import type { ComicGroup, ComicGroupDetail, AutoDetectGroup } from "@/hooks/useC
 // ============================================================
 
 /** 获取所有分组（支持按内容类型、分类、标签过滤） */
-export async function fetchGroups(contentType?: string, category?: string, tags?: string[]): Promise<ComicGroup[]> {
+export async function fetchGroups(contentType?: string, category?: string, tags?: string[], favoritesOnly?: boolean): Promise<ComicGroup[]> {
   try {
     const params = new URLSearchParams();
     if (contentType) params.set("contentType", contentType);
     if (category) params.set("category", category);
     if (tags && tags.length > 0) params.set("tags", tags.join(","));
+    if (favoritesOnly) params.set("favoritesOnly", "true");
     const url = params.toString() ? `/api/groups?${params}` : "/api/groups";
     const res = await fetch(url);
     if (!res.ok) return [];
