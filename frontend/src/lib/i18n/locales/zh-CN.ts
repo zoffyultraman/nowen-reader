@@ -1,4 +1,4 @@
-const zhCN = {
+﻿const zhCN = {
   // Common
   common: {
     confirm: "确定",
@@ -49,6 +49,8 @@ const zhCN = {
     emptyLibraryHint: "点击上传按钮或将 .zip/.cbz 文件放入 comics/ 目录",
     emptyNovelLibraryHint: "点击上传按钮或将 .epub/.mobi/.txt 文件放入 comics/ 目录",
     noMatchingHint: "试试更换搜索关键词或清除标签筛选",
+    noFavorites: "暂无收藏",
+    noFavoritesHint: "在漫画详情页点击收藏按钮，即可在这里查看",
     uploadFailed: "上传失败，请重试",
     uploadSuccess: "上传成功",
     firstPage: "第一页",
@@ -1201,6 +1203,8 @@ export interface Translations {
     emptyLibraryHint: string;
     emptyNovelLibraryHint: string;
     noMatchingHint: string;
+    noFavorites: string;
+    noFavoritesHint: string;
     uploadFailed: string;
     uploadSuccess: string;
     firstPage: string;

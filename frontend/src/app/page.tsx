@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -415,7 +415,7 @@ export default function Home() {
   }, []);
 
   // Fetch real comics from API with pagination + server-side filtering
-  const { comics: apiComics, loading, fetching, total: apiTotal, totalPages, refetch } = useComics({
+  const { comics: apiComics, setComics, loading, fetching, total: apiTotal, totalPages, refetch } = useComics({
     page: currentPage,
     pageSize,
     search: debouncedSearch || undefined,

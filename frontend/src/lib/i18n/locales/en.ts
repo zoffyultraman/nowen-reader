@@ -1,4 +1,4 @@
-import type { Translations } from "./zh-CN";
+﻿import type { Translations } from "./zh-CN";
 
 const en: Translations = {
   // Common
@@ -53,6 +53,8 @@ const en: Translations = {
     emptyLibraryHint: "Click upload or place .zip/.cbz files in the comics/ directory",
     emptyNovelLibraryHint: "Click upload or place .epub/.mobi/.txt files in the comics/ directory",
     noMatchingHint: "Try different keywords or clear tag filters",
+    noFavorites: "No favorites yet",
+    noFavoritesHint: "Tap the favorite button on a comic detail page to add it here",
     uploadFailed: "Upload failed, please retry",
     uploadSuccess: "Upload successful",
     firstPage: "First Page",
