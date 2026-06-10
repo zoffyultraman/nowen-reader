@@ -305,6 +305,55 @@ var Migrations = []Migration{
 			`CREATE INDEX IF NOT EXISTS "Comic_missingSince_idx" ON "Comic"("missingSince");`,
 		}, "\n"),
 	},
+	{
+		Version:     22,
+		Description: "Add Library and UserLibraryAccess tables for multi-user library access control",
+		SQL: strings.Join([]string{
+			// Create Library table
+			`CREATE TABLE IF NOT EXISTS "Library" (
+				"id" TEXT NOT NULL PRIMARY KEY,
+				"name" TEXT NOT NULL,
+				"type" TEXT NOT NULL DEFAULT 'comic',
+				"rootPath" TEXT NOT NULL,
+				"enabled" BOOLEAN NOT NULL DEFAULT 1,
+				"sortOrder" INTEGER NOT NULL DEFAULT 0,
+				"createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+				"updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+			);`,
+			`CREATE INDEX IF NOT EXISTS "Library_name_idx" ON "Library"("name");`,
+			`CREATE INDEX IF NOT EXISTS "Library_type_idx" ON "Library"("type");`,
+			`CREATE INDEX IF NOT EXISTS "Library_enabled_idx" ON "Library"("enabled");`,
+
+			// Create UserLibraryAccess table
+			`CREATE TABLE IF NOT EXISTS "UserLibraryAccess" (
+				"userId" TEXT NOT NULL,
+				"libraryId" TEXT NOT NULL,
+				"canView" BOOLEAN NOT NULL DEFAULT 1,
+				"canDownload" BOOLEAN NOT NULL DEFAULT 0,
+				"canManage" BOOLEAN NOT NULL DEFAULT 0,
+				"createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+				PRIMARY KEY ("userId", "libraryId"),
+				CONSTRAINT "ULA_userId_fkey" FOREIGN KEY ("userId")
+					REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+				CONSTRAINT "ULA_libraryId_fkey" FOREIGN KEY ("libraryId")
+					REFERENCES "Library" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+			);`,
+			`CREATE INDEX IF NOT EXISTS "ULA_userId_idx" ON "UserLibraryAccess"("userId");`,
+			`CREATE INDEX IF NOT EXISTS "ULA_libraryId_idx" ON "UserLibraryAccess"("libraryId");`,
+
+			// Add libraryId and relativePath to Comic
+			`ALTER TABLE "Comic" ADD COLUMN "libraryId" TEXT;`,
+			`ALTER TABLE "Comic" ADD COLUMN "relativePath" TEXT;`,
+			`CREATE INDEX IF NOT EXISTS "Comic_libraryId_idx" ON "Comic"("libraryId");`,
+
+			// Create default library from existing config
+			`INSERT INTO "Library" ("id", "name", "type", "rootPath")
+			 VALUES ('default', 'Default Library', 'comic', '');`,
+
+			// Update existing comics with default library
+			`UPDATE "Comic" SET "libraryId" = 'default', "relativePath" = "filename";`,
+		}, "\n"),
+	},
 }
 
 // ensureMigrationsTable creates the migrations tracking table.
@@ -628,3 +677,8 @@ func migrateTable(sourceDB *sql.DB, tableName, selectSQL, insertSQL string) (int
 
 	return count, rows.Err()
 }
+
+
+
+
+
