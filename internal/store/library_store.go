@@ -1,0 +1,244 @@
+package store
+
+import (
+	"database/sql"
+	"fmt"
+	"time"
+
+	"github.com/nowen-reader/nowen-reader/internal/model"
+)
+
+// ============================================================
+// Library CRUD Operations
+// ============================================================
+
+// GetAllLibraries 获取所有书库
+func GetAllLibraries() ([]model.Library, error) {
+	rows, err := db.Query(`SELECT "id", "name", "type", "rootPath", "enabled", "sortOrder", "createdAt", "updatedAt" FROM "Library" ORDER BY "sortOrder", "name"`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var libraries []model.Library
+	for rows.Next() {
+		var lib model.Library
+		var createdAt, updatedAt time.Time
+		if err := rows.Scan(&lib.ID, &lib.Name, &lib.Type, &lib.RootPath, &lib.Enabled, &lib.SortOrder, &createdAt, &updatedAt); err != nil {
+			continue
+		}
+		lib.CreatedAt = createdAt
+		lib.UpdatedAt = updatedAt
+		libraries = append(libraries, lib)
+	}
+	return libraries, nil
+}
+
+// GetLibraryByID 根据ID获取书库
+func GetLibraryByID(id string) (*model.Library, error) {
+	var lib model.Library
+	var createdAt, updatedAt time.Time
+	err := db.QueryRow(`SELECT "id", "name", "type", "rootPath", "enabled", "sortOrder", "createdAt", "updatedAt" FROM "Library" WHERE "id" = ?`, id).Scan(
+		&lib.ID, &lib.Name, &lib.Type, &lib.RootPath, &lib.Enabled, &lib.SortOrder, &createdAt, &updatedAt,
+	)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	lib.CreatedAt = createdAt
+	lib.UpdatedAt = updatedAt
+	return &lib, nil
+}
+
+// CreateLibrary 创建新书库
+func CreateLibrary(lib *model.Library) error {
+	if lib.ID == "" {
+		lib.ID = fmt.Sprintf("lib_%d", time.Now().UnixNano())
+	}
+	now := time.Now().UTC()
+	lib.CreatedAt = now
+	lib.UpdatedAt = now
+
+	_, err := db.Exec(`INSERT INTO "Library" ("id", "name", "type", "rootPath", "enabled", "sortOrder", "createdAt", "updatedAt")
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		lib.ID, lib.Name, lib.Type, lib.RootPath, lib.Enabled, lib.SortOrder, lib.CreatedAt, lib.UpdatedAt)
+	return err
+}
+
+// UpdateLibrary 更新书库信息
+func UpdateLibrary(lib *model.Library) error {
+	lib.UpdatedAt = time.Now().UTC()
+	_, err := db.Exec(`UPDATE "Library" SET "name" = ?, "type" = ?, "rootPath" = ?, "enabled" = ?, "sortOrder" = ?, "updatedAt" = ?
+		WHERE "id" = ?`,
+		lib.Name, lib.Type, lib.RootPath, lib.Enabled, lib.SortOrder, lib.UpdatedAt, lib.ID)
+	return err
+}
+
+// DeleteLibrary 删除书库
+func DeleteLibrary(id string) error {
+	// 首先检查是否有漫画关联到此书库
+	var count int
+	err := db.QueryRow(`SELECT COUNT(*) FROM "Comic" WHERE "libraryId" = ?`, id).Scan(&count)
+	if err != nil {
+		return err
+	}
+	if count > 0 {
+		return fmt.Errorf("cannot delete library with %d comics. Move or delete comics first", count)
+	}
+
+	// 删除书库（级联删除 UserLibraryAccess）
+	_, err = db.Exec(`DELETE FROM "Library" WHERE "id" = ?`, id)
+	return err
+}
+
+// ============================================================
+// UserLibraryAccess CRUD Operations
+// ============================================================
+
+// GetUserLibraryAccess 获取用户的所有书库访问权限
+func GetUserLibraryAccess(userID string) ([]model.UserLibraryAccess, error) {
+	rows, err := db.Query(`SELECT "userId", "libraryId", "canView", "canDownload", "canManage", "createdAt"
+		FROM "UserLibraryAccess" WHERE "userId" = ?`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var accesses []model.UserLibraryAccess
+	for rows.Next() {
+		var access model.UserLibraryAccess
+		var createdAt time.Time
+		if err := rows.Scan(&access.UserID, &access.LibraryID, &access.CanView, &access.CanDownload, &access.CanManage, &createdAt); err != nil {
+			continue
+		}
+		access.CreatedAt = createdAt
+		accesses = append(accesses, access)
+	}
+	return accesses, nil
+}
+
+// GetUserAccessibleLibraryIDs 获取用户可访问的书库ID列表
+func GetUserAccessibleLibraryIDs(userID string) ([]string, error) {
+	// 首先检查用户是否是管理员
+	var role string
+	err := db.QueryRow(`SELECT "role" FROM "User" WHERE "id" = ?`, userID).Scan(&role)
+	if err != nil {
+		return nil, err
+	}
+
+	// 管理员可以访问所有书库
+	if role == "admin" {
+		var ids []string
+		rows, err := db.Query(`SELECT "id" FROM "Library" WHERE "enabled" = 1`)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var id string
+			if err := rows.Scan(&id); err == nil {
+				ids = append(ids, id)
+			}
+		}
+		return ids, nil
+	}
+
+	// 普通用户只能访问被授权的书库
+	rows, err := db.Query(`SELECT "libraryId" FROM "UserLibraryAccess" WHERE "userId" = ? AND "canView" = 1`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err == nil {
+			ids = append(ids, id)
+		}
+	}
+	return ids, nil
+}
+
+// SetUserLibraryAccess 设置用户的书库访问权限
+func SetUserLibraryAccess(userID string, libraryIDs []string) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	// 删除现有权限
+	_, err = tx.Exec(`DELETE FROM "UserLibraryAccess" WHERE "userId" = ?`, userID)
+	if err != nil {
+		return err
+	}
+
+	// 插入新权限
+	stmt, err := tx.Prepare(`INSERT INTO "UserLibraryAccess" ("userId", "libraryId", "canView", "createdAt") VALUES (?, ?, 1, ?)`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	now := time.Now().UTC()
+	for _, libID := range libraryIDs {
+		if _, err := stmt.Exec(userID, libID, now); err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
+}
+
+// UserCanViewLibrary 检查用户是否有权访问指定书库
+func UserCanViewLibrary(userID, libraryID string) (bool, error) {
+	// 首先检查用户是否是管理员
+	var role string
+	err := db.QueryRow(`SELECT "role" FROM "User" WHERE "id" = ?`, userID).Scan(&role)
+	if err != nil {
+		return false, err
+	}
+
+	// 管理员可以访问所有书库
+	if role == "admin" {
+		return true, nil
+	}
+
+	// 检查用户是否有权访问此书库
+	var count int
+	err = db.QueryRow(`SELECT COUNT(*) FROM "UserLibraryAccess" WHERE "userId" = ? AND "libraryId" = ? AND "canView" = 1`, userID, libraryID).Scan(&count)
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
+// UserCanViewComic 检查用户是否有权访问指定漫画
+func UserCanViewComic(userID, comicID string) (bool, error) {
+	// 获取漫画的书库ID
+	var libraryID string
+	err := db.QueryRow(`SELECT "libraryId" FROM "Comic" WHERE "id" = ?`, comicID).Scan(&libraryID)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+
+	// 如果漫画没有书库ID（旧数据），默认允许访问
+	if libraryID == "" {
+		return true, nil
+	}
+
+	return UserCanViewLibrary(userID, libraryID)
+}
+
+// GetLibraryComicCount 获取书库中的漫画数量
+func GetLibraryComicCount(libraryID string) (int, error) {
+	var count int
+	err := db.QueryRow(`SELECT COUNT(*) FROM "Comic" WHERE "libraryId" = ?`, libraryID).Scan(&count)
+	return count, err
+}
