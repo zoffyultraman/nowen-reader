@@ -1,4 +1,4 @@
-package handler
+﻿package handler
 
 import (
 	"runtime"
@@ -41,6 +41,6 @@ func SetupRoutes(r *gin.Engine) {
 	registerComicRoutes(api)
 	registerContentRoutes(api)
 	registerMetadataRoutes(api)
+	registerLibraryRoutes(api)
+	registerUserGroupRoutes(api)
 }
-
-
