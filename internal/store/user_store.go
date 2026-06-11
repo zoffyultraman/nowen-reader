@@ -122,6 +122,12 @@ func UpdateUserAiEnabled(userID string, aiEnabled bool) error {
 	return err
 }
 
+
+// GetUserRole 获取用户角色并写入 role 指针。用于轻量级权限检查。
+func GetUserRole(userID string, role *string) error {
+	return db.QueryRow(`SELECT "role" FROM "User" WHERE "id" = ?`, userID).Scan(role)
+}
+
 // ============================================================
 // Session operations
 // ============================================================
