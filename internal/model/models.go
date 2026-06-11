@@ -1,4 +1,4 @@
-package model
+﻿package model
 
 import "time"
 
@@ -45,6 +45,7 @@ type Library struct {
 	RootPath  string    `json:"rootPath"`
 	Enabled   bool      `json:"enabled"`
 	SortOrder int       `json:"sortOrder"`
+	DefaultAccess string    `json:"defaultAccess"` // "public" | "private"
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
 }
@@ -57,6 +58,37 @@ type UserLibraryAccess struct {
 	CanDownload bool      `json:"canDownload"`
 	CanManage   bool      `json:"canManage"`
 	CreatedAt   time.Time `json:"createdAt"`
+}
+
+// ============================================================
+// User Groups (用户组)
+// ============================================================
+
+// UserGroup 代表一组用户的集合，用于批量管理书库权限。
+type UserGroup struct {
+	ID          string    `json:"id"`
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
+	CreatedAt   time.Time `json:"createdAt"`
+	UpdatedAt   time.Time `json:"updatedAt"`
+	// 查询时填充
+	MemberCount int `json:"memberCount,omitempty"`
+}
+
+// UserGroupMember 保存用户和用户组的多对多关系。
+type UserGroupMember struct {
+	GroupID   string    `json:"groupId"`
+	UserID    string    `json:"userId"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
+// GroupLibraryAccess 保存用户组对书库的访问权限。
+// 当用户属于某个组时，继承该组对书库的访问权限。
+type GroupLibraryAccess struct {
+	GroupID   string    `json:"groupId"`
+	LibraryID string    `json:"libraryId"`
+	CanView   bool      `json:"canView"`
+	CreatedAt time.Time `json:"createdAt"`
 }
 
 // ============================================================

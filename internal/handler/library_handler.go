@@ -1,4 +1,4 @@
-package handler
+﻿package handler
 
 import (
 	"net/http"
@@ -54,8 +54,9 @@ func (h *LibraryHandler) CreateLibrary(c *gin.Context) {
 		Name      string `json:"name" binding:"required"`
 		Type      string `json:"type" binding:"required"`
 		RootPath  string `json:"rootPath" binding:"required"`
-		Enabled   *bool  `json:"enabled"`
-		SortOrder *int   `json:"sortOrder"`
+		Enabled       *bool   `json:"enabled"`
+		SortOrder     *int    `json:"sortOrder"`
+		DefaultAccess *string `json:"defaultAccess"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -79,12 +80,18 @@ func (h *LibraryHandler) CreateLibrary(c *gin.Context) {
 		sortOrder = *req.SortOrder
 	}
 
+	defaultAccess := "private"
+	if req.DefaultAccess != nil && (*req.DefaultAccess == "public" || *req.DefaultAccess == "private") {
+		defaultAccess = *req.DefaultAccess
+	}
+
 	lib := &model.Library{
-		Name:      req.Name,
-		Type:      req.Type,
-		RootPath:  req.RootPath,
-		Enabled:   enabled,
-		SortOrder: sortOrder,
+		Name:          req.Name,
+		Type:          req.Type,
+		RootPath:      req.RootPath,
+		Enabled:       enabled,
+		SortOrder:     sortOrder,
+		DefaultAccess: defaultAccess,
 	}
 
 	if err := store.CreateLibrary(lib); err != nil {
@@ -116,8 +123,9 @@ func (h *LibraryHandler) UpdateLibrary(c *gin.Context) {
 		Name      *string `json:"name"`
 		Type      *string `json:"type"`
 		RootPath  *string `json:"rootPath"`
-		Enabled   *bool   `json:"enabled"`
-		SortOrder *int    `json:"sortOrder"`
+		Enabled       *bool   `json:"enabled"`
+		SortOrder     *int    `json:"sortOrder"`
+		DefaultAccess *string `json:"defaultAccess"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -143,6 +151,9 @@ func (h *LibraryHandler) UpdateLibrary(c *gin.Context) {
 	}
 	if req.SortOrder != nil {
 		existing.SortOrder = *req.SortOrder
+	}
+	if req.DefaultAccess != nil && (*req.DefaultAccess == "public" || *req.DefaultAccess == "private") {
+		existing.DefaultAccess = *req.DefaultAccess
 	}
 
 	if err := store.UpdateLibrary(existing); err != nil {

@@ -1,4 +1,4 @@
-package store
+﻿package store
 
 import (
 	"database/sql"
@@ -14,7 +14,7 @@ import (
 
 // GetAllLibraries 获取所有书库
 func GetAllLibraries() ([]model.Library, error) {
-	rows, err := db.Query(`SELECT "id", "name", "type", "rootPath", "enabled", "sortOrder", "createdAt", "updatedAt" FROM "Library" ORDER BY "sortOrder", "name"`)
+	rows, err := db.Query(`SELECT "id", "name", "type", "rootPath", "enabled", "sortOrder", COALESCE("defaultAccess", "private"), "createdAt", "updatedAt" FROM "Library" ORDER BY "sortOrder", "name"`)
 	if err != nil {
 		return nil, err
 	}
@@ -24,7 +24,7 @@ func GetAllLibraries() ([]model.Library, error) {
 	for rows.Next() {
 		var lib model.Library
 		var createdAt, updatedAt time.Time
-		if err := rows.Scan(&lib.ID, &lib.Name, &lib.Type, &lib.RootPath, &lib.Enabled, &lib.SortOrder, &createdAt, &updatedAt); err != nil {
+		if err := rows.Scan(&lib.ID, &lib.Name, &lib.Type, &lib.RootPath, &lib.Enabled, &lib.SortOrder, &lib.DefaultAccess, &createdAt, &updatedAt); err != nil {
 			continue
 		}
 		lib.CreatedAt = createdAt
@@ -38,8 +38,8 @@ func GetAllLibraries() ([]model.Library, error) {
 func GetLibraryByID(id string) (*model.Library, error) {
 	var lib model.Library
 	var createdAt, updatedAt time.Time
-	err := db.QueryRow(`SELECT "id", "name", "type", "rootPath", "enabled", "sortOrder", "createdAt", "updatedAt" FROM "Library" WHERE "id" = ?`, id).Scan(
-		&lib.ID, &lib.Name, &lib.Type, &lib.RootPath, &lib.Enabled, &lib.SortOrder, &createdAt, &updatedAt,
+	err := db.QueryRow(`SELECT "id", "name", "type", "rootPath", "enabled", "sortOrder", COALESCE("defaultAccess", "private"), "createdAt", "updatedAt" FROM "Library" WHERE "id" = ?`, id).Scan(
+		&lib.ID, &lib.Name, &lib.Type, &lib.RootPath, &lib.Enabled, &lib.SortOrder, &lib.DefaultAccess, &createdAt, &updatedAt,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -61,18 +61,18 @@ func CreateLibrary(lib *model.Library) error {
 	lib.CreatedAt = now
 	lib.UpdatedAt = now
 
-	_, err := db.Exec(`INSERT INTO "Library" ("id", "name", "type", "rootPath", "enabled", "sortOrder", "createdAt", "updatedAt")
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		lib.ID, lib.Name, lib.Type, lib.RootPath, lib.Enabled, lib.SortOrder, lib.CreatedAt, lib.UpdatedAt)
+	_, err := db.Exec(`INSERT INTO "Library" ("id", "name", "type", "rootPath", "enabled", "sortOrder", "defaultAccess", "createdAt", "updatedAt")
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		lib.ID, lib.Name, lib.Type, lib.RootPath, lib.Enabled, lib.SortOrder, lib.DefaultAccess, lib.CreatedAt, lib.UpdatedAt)
 	return err
 }
 
 // UpdateLibrary 更新书库信息
 func UpdateLibrary(lib *model.Library) error {
 	lib.UpdatedAt = time.Now().UTC()
-	_, err := db.Exec(`UPDATE "Library" SET "name" = ?, "type" = ?, "rootPath" = ?, "enabled" = ?, "sortOrder" = ?, "updatedAt" = ?
+	_, err := db.Exec(`UPDATE "Library" SET "name" = ?, "type" = ?, "rootPath" = ?, "enabled" = ?, "sortOrder" = ?, "defaultAccess" = ?, "updatedAt" = ?
 		WHERE "id" = ?`,
-		lib.Name, lib.Type, lib.RootPath, lib.Enabled, lib.SortOrder, lib.UpdatedAt, lib.ID)
+		lib.Name, lib.Type, lib.RootPath, lib.Enabled, lib.SortOrder, lib.DefaultAccess, lib.UpdatedAt, lib.ID)
 	return err
 }
 
@@ -145,11 +145,16 @@ func GetUserAccessibleLibraryIDs(userID string) ([]string, error) {
 		return ids, nil
 	}
 
-	// 普通用户只能访问被授权的书库
-	rows, err := db.Query(`SELECT "libraryId" FROM "UserLibraryAccess" WHERE "userId" = ? AND "canView" = 1`, userID)
-	if err != nil {
-		return nil, err
-	}
+	// 普通用户可以访问：公开书库 + 直接授权 + 用户组继承
+	rows, err := db.Query(`SELECT DISTINCT "id" FROM "Library" WHERE "enabled" = 1 AND (
+		"defaultAccess" = 'public'
+		OR "id" IN (SELECT "libraryId" FROM "UserLibraryAccess" WHERE "userId" = ? AND "canView" = 1)
+		OR "id" IN (
+			SELECT gla."libraryId" FROM "GroupLibraryAccess" gla
+			JOIN "UserGroupMember" ugm ON ugm."groupId" = gla."groupId"
+			WHERE ugm."userId" = ? AND gla."canView" = 1
+		)
+	)`, userID, userID)
 	defer rows.Close()
 
 	var ids []string
