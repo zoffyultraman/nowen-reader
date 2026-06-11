@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/nowen-reader/nowen-reader/internal/config"
+	"github.com/nowen-reader/nowen-reader/internal/model"
 	"github.com/nowen-reader/nowen-reader/internal/service"
 	"github.com/nowen-reader/nowen-reader/internal/store"
 )
@@ -183,6 +184,42 @@ func (h *OPDSHandler) Download(c *gin.Context) {
 	c.Header("Content-Type", contentType)
 	c.Status(200)
 	io.Copy(c.Writer, f)
+}
+
+// getOPDSUserID 从 OPDS 请求中提取当前用户 ID。
+func getOPDSUserID(c *gin.Context) string {
+	if u, exists := c.Get("auth_user"); exists {
+		if user, ok := u.(*model.AuthUser); ok {
+			return user.ID
+		}
+	}
+	return ""
+}
+
+// opdsLibraryFilter 返回基于用户书库权限的 WHERE 子句片段和参数。
+// 管理员或空用户不过滤。
+func opdsLibraryFilter(c *gin.Context) (string, []interface{}) {
+	uid := getOPDSUserID(c)
+	if uid == "" {
+		return "", nil
+	}
+	ids, err := store.GetUserAccessibleLibraryIDs(uid)
+	if err != nil || len(ids) == 0 {
+		return "", nil
+	}
+	// 如果用户是管理员，GetUserAccessibleLibraryIDs 返回所有启用书库，不需要过滤
+	var role string
+	_ = store.GetUserRole(uid, &role)
+	if role == "admin" {
+		return "", nil
+	}
+	placeholders := make([]string, len(ids))
+	args := make([]interface{}, len(ids))
+	for i, id := range ids {
+		placeholders[i] = "?"
+		args[i] = id
+	}
+	return fmt.Sprintf(`WHERE c."libraryId" IN (%s)`, strings.Join(placeholders, ",")), args
 }
 
 func toOPDSComics(rows []store.OPDSComicRow) []service.OPDSComic {
