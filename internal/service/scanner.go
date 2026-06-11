@@ -1,4 +1,4 @@
-package service
+﻿package service
 
 import (
 	"crypto/md5"
@@ -189,6 +189,7 @@ type diskFile struct {
 	Title    string
 	FileSize int64
 	Source   string // "comics" or "novels" — 来源目录类型
+	LibraryID string // 书库ID
 }
 
 // walkDirRecursive 递归遍历目录中的所有支持文件。
@@ -348,11 +349,32 @@ func quickSync() (added, removed int) {
 	}
 	var filesOnDisk []diskFile
 
+	// 为每个扫描目录自动创建/查找对应的书库
+	dirLibraryMap := make(map[string]string) // dirPath -> libraryID
+	for _, dir := range allDirs {
+		lib, err := store.FindOrCreateLibrary(dir, "comic")
+		if err != nil {
+			log.Printf("[Sync] Warning: failed to find/create library for %s: %v", dir, err)
+			continue
+		}
+		dirLibraryMap[dir] = lib.ID
+	}
+	for _, dir := range novelDirs {
+		if _, exists := dirLibraryMap[dir]; exists { continue }
+		lib, err := store.FindOrCreateLibrary(dir, "novel")
+		if err != nil {
+			log.Printf("[Sync] Warning: failed to find/create library for %s: %v", dir, err)
+			continue
+		}
+		dirLibraryMap[dir] = lib.ID
+	}
+
 	// 扫描漫画目录（启用图片文件夹漫画识别）
 	for _, dir := range allDirs {
 		files := walkDirRecursive(dir, true)
 		for i := range files {
 			files[i].Source = "comics"
+			files[i].LibraryID = dirLibraryMap[dir]
 		}
 		filesOnDisk = append(filesOnDisk, files...)
 	}
@@ -375,6 +397,7 @@ func quickSync() (added, removed int) {
 		files := walkDirRecursive(dir, false)
 		for i := range files {
 			files[i].Source = "novels"
+			files[i].LibraryID = dirLibraryMap[dir]
 		}
 		filesOnDisk = append(filesOnDisk, files...)
 	}
@@ -463,9 +486,11 @@ func quickSync() (added, removed int) {
 	// Batch insert new comics
 	if len(toAdd) > 0 {
 		// 构建文件 ID 到来源的映射
+		fileLibraryMap := make(map[string]string, len(filesOnDisk))
 		fileSourceMap := make(map[string]string, len(filesOnDisk))
 		for _, f := range filesOnDisk {
 			fileSourceMap[f.ID] = f.Source
+			fileLibraryMap[f.ID] = f.LibraryID
 		}
 
 		for i := 0; i < len(toAdd); i += dbBatchSize {
@@ -473,8 +498,7 @@ func quickSync() (added, removed int) {
 			if end > len(toAdd) {
 				end = len(toAdd)
 			}
-			if err := store.BulkCreateComicsWithSource(toAdd[i:end], fileSourceMap); err != nil {
-				log.Printf("[quick-sync] Failed to bulk create: %v", err)
+			if err := store.BulkCreateComicsWithSource(toAdd[i:end], fileSourceMap, fileLibraryMap); err != nil {
 			}
 		}
 	}
@@ -482,9 +506,11 @@ func quickSync() (added, removed int) {
 	// 修正已有记录的类型：严格按来源目录决定类型
 	// 漫画库目录的文件 → comic，电子书目录的文件 → novel
 	{
+		fileLibraryMap := make(map[string]string, len(filesOnDisk))
 		fileSourceMap := make(map[string]string, len(filesOnDisk))
 		for _, f := range filesOnDisk {
 			fileSourceMap[f.ID] = f.Source
+			fileLibraryMap[f.ID] = f.LibraryID
 		}
 		store.FixComicTypesBySource(fileSourceMap)
 	}

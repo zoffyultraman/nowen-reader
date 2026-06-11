@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/nowen-reader/nowen-reader/internal/model"
+	"path/filepath"
+
+"github.com/nowen-reader/nowen-reader/internal/model"
 )
 
 // ============================================================
@@ -94,7 +96,40 @@ func DeleteLibrary(id string) error {
 }
 
 // ============================================================
-// UserLibraryAccess CRUD Operations
+// FindOrCreateLibrary 根据rootPath查找书库，不存在则自动创建。
+// 用于扫描器自动为每个扫描目录创建对应的书库。
+func FindOrCreateLibrary(rootPath string, libType string) (*model.Library, error) {
+	// 先按rootPath查找
+	var lib model.Library
+	err := db.QueryRow(`SELECT "id", "name", "type", "rootPath", "enabled", "sortOrder", COALESCE("defaultAccess", "private"), "createdAt", "updatedAt" FROM "Library" WHERE "rootPath" = ?`, rootPath).Scan(
+		&lib.ID, &lib.Name, &lib.Type, &lib.RootPath, &lib.Enabled, &lib.SortOrder, &lib.DefaultAccess, &lib.CreatedAt, &lib.UpdatedAt)
+	if err == nil {
+		return &lib, nil
+	}
+	if err != sql.ErrNoRows {
+		return nil, err
+	}
+
+	// 不存在，自动创建
+	name := filepath.Base(rootPath)
+	if name == "" || name == "." || name == "/" {
+		name = rootPath
+	}
+	lib = model.Library{
+		ID:            fmt.Sprintf("lib_%d", time.Now().UnixNano()),
+		Name:          name,
+		Type:          libType,
+		RootPath:      rootPath,
+		Enabled:       true,
+		DefaultAccess: "private",
+	}
+	if err := CreateLibrary(&lib); err != nil {
+		return nil, err
+	}
+	return &lib, nil
+}
+
+// UserLibraryAccess CRUD
 // ============================================================
 
 // GetUserLibraryAccess 获取用户的所有书库访问权限

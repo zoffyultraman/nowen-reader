@@ -1,4 +1,4 @@
-package store
+﻿package store
 
 import (
 	"fmt"
@@ -228,7 +228,7 @@ func BulkCreateComicsWithSource(comics []struct {
 	Filename string
 	Title    string
 	FileSize int64
-}, fileSourceMap map[string]string) error {
+}, fileSourceMap map[string]string, fileLibraryMap map[string]string) error {
 	if len(comics) == 0 {
 		return nil
 	}
@@ -240,8 +240,8 @@ func BulkCreateComicsWithSource(comics []struct {
 
 	now := time.Now().UTC()
 	stmt, err := tx.Prepare(`
-		INSERT INTO "Comic" ("id", "filename", "title", "pageCount", "fileSize", "type", "addedAt", "updatedAt")
-		VALUES (?, ?, ?, 0, ?, ?, ?, ?)
+		INSERT INTO "Comic" ("id", "filename", "title", "pageCount", "fileSize", "type", "libraryId", "relativePath", "addedAt", "updatedAt")
+		VALUES (?, ?, ?, 0, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT("id") DO NOTHING
 	`)
 	if err != nil {
@@ -262,8 +262,10 @@ func BulkCreateComicsWithSource(comics []struct {
 				comicType = "comic"
 			}
 		}
-		if _, err := stmt.Exec(c.ID, c.Filename, c.Title, c.FileSize, comicType, now, now); err != nil {
-			return err
+		libID := fileLibraryMap[c.ID]
+		relPath := c.Filename
+		if libID == "" { libID = "default" }
+		if _, err := stmt.Exec(c.ID, c.Filename, c.Title, c.FileSize, comicType, libID, relPath, now, now); err != nil {
 		}
 	}
 	return tx.Commit()
