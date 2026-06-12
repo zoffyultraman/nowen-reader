@@ -137,6 +137,10 @@ func (h *OPDSHandler) Download(c *gin.Context) {
 		return
 	}
 
+if err := checkComicAccess(c, comicID); err != nil {
+		return
+	}
+
 	// Find file on disk
 	var filePath string
 	for _, dir := range config.GetAllScanDirs() {
@@ -201,13 +205,15 @@ func getOPDSUserID(c *gin.Context) string {
 func opdsLibraryFilter(c *gin.Context) (string, []interface{}) {
 	uid := getOPDSUserID(c)
 	if uid == "" {
-		return "", nil
+		return "WHERE 1 = 0", nil
 	}
 	ids, err := store.GetUserAccessibleLibraryIDs(uid)
-	if err != nil || len(ids) == 0 {
-		return "", nil
+	if err != nil {
+		return "WHERE 1 = 0", nil
 	}
-	// 如果用户是管理员，GetUserAccessibleLibraryIDs 返回所有启用书库，不需要过滤
+	if len(ids) == 0 {
+		return "WHERE 1 = 0", nil
+	}
 	var role string
 	_ = store.GetUserRole(uid, &role)
 	if role == "admin" {
