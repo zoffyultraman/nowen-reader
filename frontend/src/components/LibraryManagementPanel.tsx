@@ -16,6 +16,7 @@ import {
   Book,
   ToggleLeft,
   ToggleRight,
+  ScanLine,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import {
@@ -23,6 +24,7 @@ import {
   createLibrary,
   updateLibrary,
   deleteLibrary,
+  scanLibrary,
   type Library as LibraryType,
 } from "@/api/libraries";
 
@@ -45,7 +47,9 @@ export function LibraryManagementPanel() {
   const [editName, setEditName] = useState("");
   const [editType, setEditType] = useState<"comic" | "novel" | "mixed">("comic");
   const [editRootPath, setEditRootPath] = useState("");
+  const [editScanEnabled, setEditScanEnabled] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [scanningId, setScanningId] = useState<string | null>(null);
 
   // 确认删除
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -112,6 +116,7 @@ export function LibraryManagementPanel() {
     setEditName(lib.name);
     setEditType(lib.type);
     setEditRootPath(lib.rootPath);
+    setEditScanEnabled(lib.scanEnabled);
   };
 
   // 取消编辑
@@ -132,6 +137,7 @@ export function LibraryManagementPanel() {
         name: editName.trim(),
         type: editType,
         rootPath: editRootPath.trim(),
+        scanEnabled: editScanEnabled,
       });
       showMessage("书库更新成功");
       setEditingId(null);
@@ -151,6 +157,19 @@ export function LibraryManagementPanel() {
       fetchLibraryList();
     } catch (err) {
       showMessage(err instanceof Error ? err.message : "更新失败", true);
+    }
+  };
+
+  const handleScan = async (id: string) => {
+    try {
+      setScanningId(id);
+      const result = await scanLibrary(id);
+      showMessage(`扫描完成，新增 ${result.added} 个内容`);
+      fetchLibraryList();
+    } catch (err) {
+      showMessage(err instanceof Error ? err.message : "扫描失败", true);
+    } finally {
+      setScanningId(null);
     }
   };
 
@@ -178,6 +197,11 @@ export function LibraryManagementPanel() {
       default:
         return <Library className="h-4 w-4" />;
     }
+  };
+
+  const formatDate = (date: string | null) => {
+    if (!date) return "未扫描";
+    try { return new Date(date).toLocaleString("zh-CN"); } catch { return date; }
   };
 
   // 获取类型名称
@@ -429,10 +453,26 @@ export function LibraryManagementPanel() {
                           {lib.rootPath}
                         </span>
                         <span>{lib.comicCount} 个内容</span>
+                        <span>{lib.scanEnabled ? "自动扫描：开" : "自动扫描：关"}</span>
+                        <span>上次扫描：{formatDate(lib.lastScanAt)}</span>
+                        <span>上次新增：{lib.lastScanAdded}</span>
+                        <span>上次文件数：{lib.lastScanTotal}</span>
                       </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleScan(lib.id)}
+                      disabled={scanningId === lib.id}
+                      className="p-2 rounded-lg text-muted hover:text-primary hover:bg-primary/10 transition-colors disabled:opacity-50"
+                      title="立即扫描"
+                    >
+                      {scanningId === lib.id ? (
+                        <RefreshCw className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <ScanLine className="h-4 w-4" />
+                      )}
+                    </button>
                     <button
                       onClick={() => toggleEnabled(lib.id, lib.enabled)}
                       className={`p-2 rounded-lg transition-colors ${

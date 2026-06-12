@@ -15,6 +15,10 @@ export interface Library {
   enabled: boolean;
   sortOrder: number;
   defaultAccess: "public" | "private";
+  scanEnabled: boolean;
+  lastScanAt: string | null;
+  lastScanAdded: number;
+  lastScanTotal: number;
   createdAt: string;
   updatedAt: string;
   comicCount: number;
@@ -80,6 +84,7 @@ export async function updateLibrary(
     enabled: boolean;
     sortOrder: number;
     defaultAccess: "public" | "private";
+    scanEnabled: boolean;
   }>
 ): Promise<Library> {
   const res = await fetch(`/api/admin/libraries/${id}`, {
@@ -108,6 +113,16 @@ export async function fetchUserLibraryAccess(userId: string): Promise<{
   libraries: Array<Library & { canView: boolean }>;
 }> {
   const res = await fetch(`/api/admin/users/${userId}/library-access`);
+  return safeJson(res);
+}
+
+// 扫描单个书库
+export async function scanLibrary(
+  id: string
+): Promise<{ added: number; library: Library }> {
+  const res = await fetch(`/api/admin/libraries/${id}/scan`, {
+    method: "POST",
+  });
   return safeJson(res);
 }
 
