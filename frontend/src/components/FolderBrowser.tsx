@@ -13,6 +13,8 @@ interface BrowseResult {
   current: string;
   parent: string;
   dirs: FolderEntry[];
+  error?: string;
+  hint?: string;
 }
 
 /**
@@ -34,17 +36,27 @@ export function FolderBrowser({
   const [entries, setEntries] = useState<FolderEntry[]>([]);
   const [parentPath, setParentPath] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [hint, setHint] = useState<string | null>(null);
 
   const browse = useCallback(async (path: string) => {
     setLoading(true);
+    setError(null);
+    setHint(null);
     try {
-      const res = await fetch(`/api/admin/browse?path=${encodeURIComponent(path)}`);
+      const res = await fetch(`/api/browse-dirs?path=${encodeURIComponent(path)}`);
       const data: BrowseResult = await res.json();
+      if (!res.ok) {
+        setError(data.error || `请求失败 (${res.status})`);
+        setHint(data.hint || null);
+        setEntries([]);
+        return;
+      }
       setCurrentPath(data.current);
       setParentPath(data.parent);
       setEntries(data.dirs || []);
     } catch {
-      // ignore
+      setError("网络错误，请检查连接");
     } finally {
       setLoading(false);
     }
@@ -89,6 +101,15 @@ export function FolderBrowser({
         <div className="max-h-64 overflow-y-auto px-2 py-1">
           {loading ? (
             <div className="flex items-center justify-center py-8 text-muted text-sm">加载中...</div>
+          ) : error ? (
+            <div className="px-3 py-4">
+              <div className="text-sm text-red-500">{error}</div>
+              {hint && (
+                <pre className="mt-2 whitespace-pre-wrap text-xs text-muted bg-background rounded-lg p-2 max-h-32 overflow-y-auto">
+                  {hint}
+                </pre>
+              )}
+            </div>
           ) : (
             <>
               {parentPath && parentPath !== currentPath && (
