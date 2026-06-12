@@ -216,7 +216,7 @@ class _ContinueReadingCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final progress = comic.pageCount > 0
-        ? (comic.lastReadPage / comic.pageCount * 100).round()
+        ? ((comic.lastReadPage + 1) / comic.pageCount * 100).round().clamp(0, 100)
         : 0;
     final thumbUrl = getImageUrl(serverUrl, comic.id, thumbnail: true);
 
