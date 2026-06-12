@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import type { ReaderTheme } from "./ReaderToolbar";
@@ -31,6 +31,7 @@ export default function PdfView({
   const [loading, setLoading] = useState(true);
   const [rendering, setRendering] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
   const [scale, setScale] = useState(1);
   const renderTaskRef = useRef<{ cancel: () => void } | null>(null);
 
@@ -486,7 +487,7 @@ export default function PdfView({
           </p>
           <div className="flex gap-2 mt-1">
             <button
-              onClick={() => window.location.reload()}
+              onClick={() => { setError(null); setRetryCount(c => c + 1); }}
               className="rounded-lg bg-accent/20 px-4 py-1.5 text-xs text-accent hover:bg-accent/30 transition-colors"
             >
               重试
