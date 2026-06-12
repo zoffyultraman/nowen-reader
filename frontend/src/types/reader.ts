@@ -38,6 +38,10 @@ export interface ReaderOptions {
   showTranslate: boolean;
   // 显示 AI 助手按钮
   showAIChat: boolean;
+  // 图片滤镜
+  imageBrightness: number;
+  imageContrast: number;
+  imageGrayscale: number;
 }
 
 export const defaultReaderOptions: ReaderOptions = {
@@ -55,6 +59,9 @@ export const defaultReaderOptions: ReaderOptions = {
   autoPageInterval: 10,
   showTranslate: true,
   showAIChat: true,
+  imageBrightness: 100,
+  imageContrast: 100,
+  imageGrayscale: 0,
 };
 
 export interface ReaderSettings {

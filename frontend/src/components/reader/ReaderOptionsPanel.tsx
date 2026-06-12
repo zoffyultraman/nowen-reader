@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import { useTranslation } from "@/lib/i18n";
-import { X, ChevronDown, Monitor, Wrench, Cog } from "lucide-react";
+import { X, ChevronDown, Monitor, Wrench, Cog, SlidersHorizontal } from "lucide-react";
 import type {
   ReaderOptions,
   FitMode,
@@ -184,6 +184,41 @@ export default function ReaderOptionsPanel({
       >
         {ro.apply}
       </button>
+    </div>
+  );
+
+  /** 图片滤镜滑块组件 */
+  const FilterSlider = ({
+    label,
+    value,
+    min,
+    max,
+    step,
+    unit,
+    onChange,
+  }: {
+    label: string;
+    value: number;
+    min: number;
+    max: number;
+    step: number;
+    unit: string;
+    onChange: (v: number) => void;
+  }) => (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between">
+        <Label>{label}</Label>
+        <span className="text-[11px] text-white/50 tabular-nums">{value}{unit}</span>
+      </div>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="reader-slider w-full"
+      />
     </div>
   );
 
@@ -380,6 +415,53 @@ export default function ReaderOptionsPanel({
                 onToggle={(v) => onChange({ headerVisible: v })}
                 label={ro.header}
               />
+            </Group>
+
+            {/* ── 🎨 图片滤镜 ── */}
+            <Group
+              id="imageFilters"
+              icon={<SlidersHorizontal className="h-4 w-4" />}
+              title={ro.groupImageFilters}
+            >
+              <FilterSlider
+                label={ro.imageBrightness}
+                value={options.imageBrightness}
+                min={50}
+                max={150}
+                step={1}
+                unit="%"
+                onChange={(v) => onChange({ imageBrightness: v })}
+              />
+              <FilterSlider
+                label={ro.imageContrast}
+                value={options.imageContrast}
+                min={50}
+                max={150}
+                step={1}
+                unit="%"
+                onChange={(v) => onChange({ imageContrast: v })}
+              />
+              <FilterSlider
+                label={ro.imageGrayscale}
+                value={options.imageGrayscale}
+                min={0}
+                max={100}
+                step={1}
+                unit="%"
+                onChange={(v) => onChange({ imageGrayscale: v })}
+              />
+              <button
+                onClick={() =>
+                  onChange({
+                    imageBrightness: 100,
+                    imageContrast: 100,
+                    imageGrayscale: 0,
+                  })
+                }
+                className="w-full rounded-lg bg-white/8 py-1.5 text-xs font-medium text-white/60 hover:bg-white/12 active:bg-white/15 transition-colors"
+              >
+                {ro.imageFilterReset}
+              </button>
             </Group>
 
             {/* ── ⚙️ 高级设置 ── */}

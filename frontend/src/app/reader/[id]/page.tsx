@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   useComicPages,
@@ -431,6 +431,15 @@ export default function ReaderPage() {
     }
   }, [updateReaderOpts, mode]);
 
+  // 图片 CSS 滤镜
+  const imageFilter = useMemo(() => {
+    const b = readerOpts.imageBrightness;
+    const co = readerOpts.imageContrast;
+    const g = readerOpts.imageGrayscale;
+    if (b === 100 && co === 100 && g === 0) return "";
+    return `brightness(${b}%) contrast(${co}%) grayscale(${g}%)`;
+  }, [readerOpts.imageBrightness, readerOpts.imageContrast, readerOpts.imageGrayscale]);
+
   // 计算容器宽度样式
   const containerWidthStyle = readerOpts.containerWidth
     ? (readerOpts.containerWidth.includes("%") || readerOpts.containerWidth.includes("px")
@@ -567,6 +576,7 @@ export default function ReaderPage() {
           preloadCount={readerOpts.preloadCount}
           comicId={comicId}
           onBoundaryReached={handleBoundaryReached}
+          imageFilter={imageFilter}
         />
       ) : mode === "double" ? (
         <DoublePageView
@@ -584,6 +594,7 @@ export default function ReaderPage() {
           onBoundaryReached={handleBoundaryReached}
           coverAlone={readerOpts.doubleCoverAlone}
           noGap={readerOpts.doublePageNoGap}
+          imageFilter={imageFilter}
         />
       ) : (
         <WebtoonView
@@ -598,6 +609,7 @@ export default function ReaderPage() {
           comicId={comicId}
           onBoundaryReached={handleBoundaryReached}
           nextVolumeTitle={nextVolume?.title}
+          imageFilter={imageFilter}
         />
       )}
 

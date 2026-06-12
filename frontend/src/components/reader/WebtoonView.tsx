@@ -20,6 +20,7 @@ interface WebtoonViewProps {
   onBoundaryReached?: (direction: "next" | "prev") => void;
   /** 下一卷信息（用于底部提示） */
   nextVolumeTitle?: string;
+  imageFilter?: string;
 }
 
 /** Estimated page height for skeleton placeholders */
@@ -43,6 +44,7 @@ export default function WebtoonView({
   comicId,
   onBoundaryReached,
   nextVolumeTitle,
+  imageFilter = "",
 }: WebtoonViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const pageRefs = useRef<(HTMLDivElement | null)[]>([]);
@@ -240,6 +242,7 @@ export default function WebtoonView({
                       src={pageUrl}
                       alt={`Page ${index + 1}`}
                       className="w-full h-auto"
+                      style={imageFilter ? { filter: imageFilter } : undefined}
                       loading={Math.abs(index - currentPage) < 3 ? "eager" : "lazy"}
                       onLoad={(e) => handleImageLoad(index, e)}
                       onError={() => setErrorPages(prev => new Set(prev).add(index))}
@@ -253,6 +256,7 @@ export default function WebtoonView({
                       src={pageUrl}
                       alt={`Page ${index + 1}`}
                       className="w-full h-auto object-contain"
+                      style={imageFilter ? { filter: imageFilter } : undefined}
                       loading={Math.abs(index - currentPage) < 3 ? "eager" : "lazy"}
                     />
                   </div>

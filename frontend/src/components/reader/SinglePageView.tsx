@@ -21,6 +21,7 @@ interface SinglePageViewProps {
   comicId?: string;
   /** 翻页超出边界时触发："next" 表示翻过最后一页，"prev" 表示翻到第一页之前 */
   onBoundaryReached?: (direction: "next" | "prev") => void;
+  imageFilter?: string;
 }
 
 export default function SinglePageView({
@@ -36,6 +37,7 @@ export default function SinglePageView({
   preloadCount = 3,
   comicId,
   onBoundaryReached,
+  imageFilter = "",
 }: SinglePageViewProps) {
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
@@ -416,6 +418,7 @@ export default function SinglePageView({
             onLoad={() => setImageLoaded(true)}
             onError={() => setImageError(true)}
             draggable={false}
+            style={imageFilter ? { filter: imageFilter } : undefined}
           />
         ) : (
           <Image
@@ -426,6 +429,7 @@ export default function SinglePageView({
             className={`object-contain transition-opacity duration-200 ${
               imageLoaded ? "opacity-100" : "opacity-0"
             }`}
+            style={imageFilter ? { filter: imageFilter } : undefined}
             priority
             onLoad={() => setImageLoaded(true)}
             sizes="100vw"

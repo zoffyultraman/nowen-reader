@@ -371,6 +371,11 @@
     showTranslateDesc: "显示页面翻译按钮，支持 AI 实时翻译漫画内容",
     showAIChat: "AI 助手",
     showAIChatDesc: "显示 AI 助手按钮，可以智能问答漫画内容",
+    groupImageFilters: "图片滤镜",
+    imageBrightness: "亮度",
+    imageContrast: "对比度",
+    imageGrayscale: "灰度",
+    imageFilterReset: "重置滤镜",
   },
 
   // Duration formatting
@@ -1507,6 +1512,11 @@ export interface Translations {
     showTranslateDesc: string;
     showAIChat: string;
     showAIChatDesc: string;
+    groupImageFilters: string;
+    imageBrightness: string;
+    imageContrast: string;
+    imageGrayscale: string;
+    imageFilterReset: string;
   };
   duration: {
     seconds: string;

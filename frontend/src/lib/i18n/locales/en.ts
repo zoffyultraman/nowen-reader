@@ -374,6 +374,11 @@ const en: Translations = {
     showTranslateDesc: "Show page translation button for AI-powered comic translation",
     showAIChat: "AI Assistant",
     showAIChatDesc: "Show AI assistant button for smart Q&A about comic content",
+    groupImageFilters: "Image Filters",
+    imageBrightness: "Brightness",
+    imageContrast: "Contrast",
+    imageGrayscale: "Grayscale",
+    imageFilterReset: "Reset Filters",
   },
 
   // Duration formatting

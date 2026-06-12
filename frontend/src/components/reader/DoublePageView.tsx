@@ -25,6 +25,7 @@ interface DoublePageViewProps {
   coverAlone?: boolean;
   /** 双页贴合（去除中间缝），两页在屏幕中央拼接 */
   noGap?: boolean;
+  imageFilter?: string;
 }
 
 export default function DoublePageView({
@@ -42,6 +43,7 @@ export default function DoublePageView({
   onBoundaryReached,
   coverAlone = false,
   noGap = true,
+  imageFilter = "",
 }: DoublePageViewProps) {
   const [loadedLeft, setLoadedLeft] = useState(false);
   const [loadedRight, setLoadedRight] = useState(false);
@@ -306,6 +308,7 @@ export default function DoublePageView({
             src={pageUrl}
             alt={`Page ${pageIndex + 1}`}
             className={`${getImageClass(loaded)}`}
+            style={imageFilter ? { filter: imageFilter } : undefined}
             onLoad={() => setLoaded(true)}
             onError={() => setError(true)}
           />
@@ -316,6 +319,7 @@ export default function DoublePageView({
             alt={`Page ${pageIndex + 1}`}
             fill
             className={`${getImageClass(loaded)}`}
+            style={imageFilter ? { filter: imageFilter } : undefined}
             onLoad={() => setLoaded(true)}
             onError={() => setError(true)}
             sizes="50vw"

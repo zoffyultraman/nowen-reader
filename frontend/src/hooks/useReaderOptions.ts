@@ -18,7 +18,7 @@ export function useReaderOptions() {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
-        setOptions({ ...defaultReaderOptions, ...parsed });
+        setOptions({ ...defaultReaderOptions, ...parsed, imageBrightness: parsed.imageBrightness ?? defaultReaderOptions.imageBrightness, imageContrast: parsed.imageContrast ?? defaultReaderOptions.imageContrast, imageGrayscale: parsed.imageGrayscale ?? defaultReaderOptions.imageGrayscale });
       }
     } catch {
       // ignore
