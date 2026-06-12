@@ -36,6 +36,7 @@ func SetupRoutes(r *gin.Engine) {
 	})
 
 	api.GET("/system/pdf-renderer", GetPdfRendererStatus)
+	api.GET("/system/diagnostics", GetDiagnostics)
 
 	registerAuthRoutes(api)
 	registerComicRoutes(api)
