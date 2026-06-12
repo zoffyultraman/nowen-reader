@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Image from "next/image";
 import { useMemo, useState, useEffect, useRef, useCallback } from "react";
@@ -252,7 +252,23 @@ export default function DoublePageView({
     imgRef?: React.RefObject<HTMLImageElement | null>,
     side: "left" | "right" = "left"
   ) => {
-    if (!pageUrl) return <div className="flex-1" />;
+    if (!pageUrl) {
+      // 判断是否为最后一组 spread 的右页（总页数为奇数时）
+      const isLastSpread = spreadIndex >= pages.length - 1 || (coverAlone && spreadIndex >= pages.length - 2);
+      const showEndHint = isLastSpread && side === "right" && !isCoverSpread;
+      return (
+        <div className="flex-1 flex items-center justify-center">
+          {showEndHint && (
+            <div className={`flex flex-col items-center gap-2 text-center px-4 ${
+              readerTheme === "day" ? "text-gray-400" : "text-white/30"
+            }`}>
+              <span className="text-3xl">📖</span>
+              <p className="text-sm">本卷已到最后一页</p>
+            </div>
+          )}
+        </div>
+      );
+    }
 
     // 贴合模式：左页右对齐、右页左对齐，两页在屏幕中央拼接；否则各自居中
     const justify = noGap
