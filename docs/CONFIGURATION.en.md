@@ -91,7 +91,21 @@ Open **Settings → AI**, select a provider, enter API Key, choose a model, clic
 
 > The Docker image bundles all dependencies. When installing manually, install them as needed.
 
-## Multiple Manga/Novel Directories
+## Library Management & Multi-Directory Setup (Recommended)
+
+The new version supports creating independent libraries (manga, novel, mixed) in **Admin Panel → Library Management**, each with:
+
+| Setting | Description |
+|:---|:---|
+| `rootPath` | Library root directory (with directory browser) |
+| `defaultAccess` | Access control: `public` (all logged-in users) / `private` (authorized users only) |
+| `scanEnabled` | Whether to include in automatic scanning |
+
+Admins can also assign per-user or per-group library access for **multi-user resource isolation**.
+
+### Legacy Directory Configuration
+
+The legacy `ComicsDir`, `ExtraComicsDirs`, `NovelsDir`, `ExtraNovelsDirs` environment variables and "Site Settings → Extra Manga Directories" still work, but Library Management is recommended.
 
 1. **Docker**: Mount additional host directories into the container in `docker-compose.yml`:
 
@@ -101,8 +115,8 @@ Open **Settings → AI**, select a provider, enter API Key, choose a model, clic
      - /your/manga/path2:/mnt/comics2
    ```
 
-2. Add the in-container paths under **Settings → Extra Manga Directories / Extra Novel Directories** in the web UI
-3. The system will scan all configured directories automatically
+2. Create a library in **Admin Panel → Library Management** and select the directory
+3. The system will scan all enabled libraries with scanEnabled=true
 
 ## Related Documents
 
