@@ -21,10 +21,10 @@ NowenReader 提供完整的 RESTful API，所有功能均可通过 API 调用。
 
 | 方法 | 路径 | 说明 |
 |:---|:---|:---|
-| GET | `/api/comics` | 列表（搜索/筛选/分页/排序/FTS5 全文搜索） |
-| GET | `/api/comics/:id` | 详情 |
-| PUT | `/api/comics/:id/favorite` | 切换收藏 🔒管理员 |
-| PUT | `/api/comics/:id/rating` | 更新评分 🔒管理员 |
+| GET | `/api/comics` | 列表（按用户可访问书库过滤，搜索/筛选/分页/排序/FTS5 全文搜索）🔒 |
+| GET | `/api/comics/:id` | 详情（无权限返回 403）🔒 |
+| PUT | `/api/comics/:id/favorite` | 切换收藏 🔒 |
+| PUT | `/api/comics/:id/rating` | 更新评分 🔒 |
 | PUT | `/api/comics/:id/progress` | 更新阅读进度 🔒 |
 | PUT | `/api/comics/:id/reading-status` | 设置阅读状态 🔒 |
 | PUT | `/api/comics/:id/metadata` | 编辑元数据 🔒管理员 |
@@ -297,6 +297,20 @@ NowenReader 提供完整的 RESTful API，所有功能均可通过 API 调用。
 | POST | `/api/sync/revert` | 回滚同步 |
 
 ## ⚙️ 系统
+
+## 📖 书库管理 🔒管理员
+
+| 方法 | 路径 | 说明 |
+|:---|:---|:---|
+| GET | `/api/admin/libraries` | 获取所有书库列表 |
+| POST | `/api/admin/libraries` | 创建书库 |
+| PUT | `/api/admin/libraries/:id` | 更新书库 |
+| DELETE | `/api/admin/libraries/:id` | 删除书库 |
+| GET | `/api/admin/users/:id/library-access` | 获取用户书库访问权限 |
+| PUT | `/api/admin/users/:id/library-access` | 设置用户书库访问权限 |
+
+> 普通用户只能访问被授权的书库。列表接口按用户可访问书库自动过滤，详情/图片/PDF/章节/OPDS 等资源接口无权限返回 403。
+
 
 | 方法 | 路径 | 说明 |
 |:---|:---|:---|
