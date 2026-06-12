@@ -18,6 +18,10 @@ data/
 !flutter_app/lib/data/
 !flutter_app/lib/data/**
 
+# Local config and history (may contain paths, API keys)
+site-config.json
+storage-history.json
+
 # Cache
 .cache/
 
