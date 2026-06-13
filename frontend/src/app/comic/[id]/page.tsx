@@ -865,6 +865,18 @@ export default function ComicDetailPage() {
 
   return (
     <div className="min-h-screen bg-background overflow-x-hidden">
+
+      {/* Hero Background Blur — cover image as blurred backdrop */}
+      {comic?.coverUrl && (
+        <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden" aria-hidden="true">
+          <div
+            className="absolute inset-0 scale-110 bg-cover bg-center opacity-25 blur-2xl"
+            style={{ backgroundImage: `url(/api/comics/${comic.id}/thumbnail?v=${coverKey})` }}
+          />
+          <div className="absolute inset-0 bg-gradient-to-b from-background/60 via-background/80 to-background" />
+        </div>
+      )}
+
       {/* Header */}
       <div className="sticky top-0 z-50 border-b border-border/50 bg-background/70 backdrop-blur-xl">
         <div className="mx-auto flex h-14 sm:h-16 max-w-5xl items-center gap-3 sm:gap-4 px-3 sm:px-6">
@@ -878,11 +890,11 @@ export default function ComicDetailPage() {
         </div>
       </div>
 
-      <main className="mx-auto max-w-5xl px-3 sm:px-6 py-4 sm:py-8 pb-20 sm:pb-8">
+      <main className="relative z-10 mx-auto max-w-5xl px-3 sm:px-6 py-4 sm:py-8 pb-20 sm:pb-8">
         <div className="grid gap-5 sm:gap-8 md:grid-cols-[280px_1fr] overflow-hidden">
           {/* Cover */}
           <div className="space-y-3 sm:space-y-4 mx-auto w-full max-w-[240px] md:max-w-none">
-            <div className="group relative aspect-[5/7] w-full overflow-hidden rounded-xl bg-card shadow-2xl">
+            <div className="motion-cover group relative aspect-[5/7] w-full overflow-hidden rounded-xl bg-card shadow-2xl shadow-black/20">
               <LazyImage
                 src={`/api/comics/${comic.id}/thumbnail?v=${coverKey}`}
                 alt={comic.title}
@@ -1014,7 +1026,7 @@ export default function ComicDetailPage() {
             {/* Read Button */}
             <Link
               href={getReaderUrl(comic)}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-accent py-3 text-sm font-medium text-white transition-all hover:bg-accent-hover hover:shadow-lg hover:shadow-accent/25 btn-press"
+              className="motion-button flex w-full items-center justify-center gap-2 rounded-xl bg-accent py-3 text-sm font-medium text-white transition-all hover:bg-accent-hover hover:shadow-lg hover:shadow-accent/25 btn-press"
             >
               <Play className="h-4 w-4" />
               {comic.lastReadPage > 0 ? t.comicDetail.continueReading.replace("{page}", String(comic.lastReadPage + 1)) : t.comicDetail.startReading}

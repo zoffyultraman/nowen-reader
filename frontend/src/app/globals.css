@@ -435,6 +435,27 @@ html.light .tag-default { background: rgba(113, 113, 122, 0.1); color: #52525b; 
   transform: scale(0.97);
 }
 
+
+/* ── Detail Page Hero ── */
+.detail-hero-bg {
+  position: relative;
+  overflow: hidden;
+}
+
+.detail-hero-bg::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 50% 0%, rgba(var(--accent-rgb, 99 102 241), 0.08), transparent 70%);
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .detail-hero-bg::before {
+    display: none;
+  }
+}
+
 /* ── Reduced Motion ── */
 @media (prefers-reduced-motion: reduce) {
   .surface-card,
