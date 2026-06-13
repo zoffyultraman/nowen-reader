@@ -247,7 +247,7 @@ export default function ReaderPage() {
     }
 
     saveTimerRef.current = setTimeout(() => {
-      saveReadingProgress(comicId, currentPage);
+      saveReadingProgress(comicId, currentPage, pages.length);
     }, 1000);
 
     return () => {
@@ -259,7 +259,7 @@ export default function ReaderPage() {
   useEffect(() => {
     return () => {
       if (useRealData && readerOpts.progressTracking) {
-        saveReadingProgress(comicId, currentPage);
+        saveReadingProgress(comicId, currentPage, pages.length);
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

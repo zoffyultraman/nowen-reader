@@ -289,7 +289,7 @@ func GetAllComics(opts ComicListOptions) (*ComicListResult, error) {
 		       COALESCE(ucs."isFavorite",   c."isFavorite")   AS isfav,
 		       COALESCE(ucs."rating",       c."rating")       AS rt,
 		       c."sortOrder",
-		       COALESCE(ucs."totalReadTime", c."totalReadTime") AS trt,
+		       COALESCE(NULLIF(ucs."totalReadTime", 0), c."totalReadTime") AS trt,
 		       c."author", c."publisher", c."year", c."description",
 		       c."language", c."genre", c."metadataSource",
 		       COALESCE(ucs."readingStatus", '') AS readingStatus, c."type", c."coverAspectRatio"
@@ -593,7 +593,7 @@ func GetComicByIDForUser(comicID string, userID string) (*ComicListItem, error) 
 		       COALESCE(ucs."isFavorite",   c."isFavorite")   AS isfav,
 		       COALESCE(ucs."rating",       c."rating")       AS rt,
 		       c."sortOrder",
-		       COALESCE(ucs."totalReadTime", c."totalReadTime") AS trt,
+		       COALESCE(NULLIF(ucs."totalReadTime", 0), c."totalReadTime") AS trt,
 		       c."author", c."publisher", c."year", c."description",
 		       c."language", c."genre", c."metadataSource",
 		       COALESCE(ucs."readingStatus", '') AS readingStatus,

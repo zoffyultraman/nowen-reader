@@ -173,7 +173,8 @@ func (h *ComicHandler) UpdateProgress(c *gin.Context) {
 		return
 	}
 	var body struct {
-		Page int `json:"page"`
+		Page       int `json:"page"`
+		TotalPages int `json:"totalPages,omitempty"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
@@ -183,6 +184,10 @@ func (h *ComicHandler) UpdateProgress(c *gin.Context) {
 	if err := store.UpdateReadingProgress(id, body.Page, getUserID(c)); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update progress"})
 		return
+	}
+	// Backfill pageCount from reader if DB value is stale
+	if body.TotalPages > 0 {
+		_ = store.UpdateComicPageCountIfStale(id, body.TotalPages)
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true})
 }

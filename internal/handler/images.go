@@ -105,6 +105,12 @@ func (h *ImageHandler) GetPages(c *gin.Context) {
 		pageList[i] = pi
 	}
 
+	// Backfill pageCount if DB value is stale but we just resolved real count
+	totalPages := len(result.Entries)
+	if totalPages > 0 && comic.PageCount <= 0 {
+		_ = store.UpdateComicPageCount(id, totalPages)
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"comicId":    id,
 		"title":      comic.Title,

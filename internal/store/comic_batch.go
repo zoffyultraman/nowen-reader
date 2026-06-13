@@ -350,6 +350,16 @@ func UpdateComicPageCount(comicID string, pageCount int) error {
 	return err
 }
 
+// UpdateComicPageCountIfStale only updates pageCount when the current value is 0 or -1.
+// Used for lazy backfill from the reader/progress endpoints.
+func UpdateComicPageCountIfStale(comicID string, pageCount int) error {
+	if pageCount <= 0 {
+		return nil
+	}
+	_, err := db.Exec(`UPDATE "Comic" SET "pageCount" = ? WHERE "id" = ? AND ("pageCount" <= 0 OR "pageCount" IS NULL)`, pageCount, comicID)
+	return err
+}
+
 // UpdateComicType 更新单个漫画的内容类型（comic/novel）。
 func UpdateComicType(comicID string, comicType string) error {
 	_, err := db.Exec(`UPDATE "Comic" SET "type" = ? WHERE "id" = ?`, comicType, comicID)

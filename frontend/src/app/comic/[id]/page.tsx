@@ -1203,7 +1203,7 @@ export default function ComicDetailPage() {
                   <span className="text-[11px] sm:text-xs">{t.comicDetail.readTime}</span>
                 </div>
                 <p className="mt-1 text-xs sm:text-sm font-semibold text-foreground">
-                  {formatDuration(comic.totalReadTime || 0)}
+                  {comic.totalReadTime > 0 ? formatDuration(comic.totalReadTime) : "--"}
                 </p>
               </div>
 

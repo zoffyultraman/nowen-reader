@@ -459,6 +459,107 @@ func TestReadingSessionOperations(t *testing.T) {
 	}
 }
 
+
+func TestUpdateComicPageCount(t *testing.T) {
+	setupTestDB(t)
+
+	comics := []struct {
+		ID       string
+		Filename string
+		Title    string
+		FileSize int64
+	}{
+		{"pc-comic-1", "pc-test.cbz", "PC Test", 1000},
+	}
+	if err := BulkCreateComics(comics); err != nil {
+		t.Fatalf("BulkCreateComics failed: %v", err)
+	}
+
+	// Initially pageCount should be 0
+	comic, err := GetComicByID("pc-comic-1")
+	if err != nil {
+		t.Fatalf("GetComicByID failed: %v", err)
+	}
+	if comic.PageCount != 0 {
+		t.Errorf("Expected initial pageCount=0, got %d", comic.PageCount)
+	}
+
+	// Update pageCount
+	if err := UpdateComicPageCount("pc-comic-1", 120); err != nil {
+		t.Fatalf("UpdateComicPageCount failed: %v", err)
+	}
+
+	comic, _ = GetComicByID("pc-comic-1")
+	if comic.PageCount != 120 {
+		t.Errorf("Expected pageCount=120, got %d", comic.PageCount)
+	}
+
+	// UpdateComicPageCountIfStale should NOT overwrite when already set
+	if err := UpdateComicPageCountIfStale("pc-comic-1", 50); err != nil {
+		t.Fatalf("UpdateComicPageCountIfStale failed: %v", err)
+	}
+	comic, _ = GetComicByID("pc-comic-1")
+	if comic.PageCount != 120 {
+		t.Errorf("Expected pageCount=120 (not overwritten), got %d", comic.PageCount)
+	}
+
+	// UpdateComicPageCountIfStale SHOULD update when pageCount is 0
+	if err := UpdateComicPageCount("pc-comic-1", 0); err != nil {
+		t.Fatalf("Reset pageCount failed: %v", err)
+	}
+	if err := UpdateComicPageCountIfStale("pc-comic-1", 200); err != nil {
+		t.Fatalf("UpdateComicPageCountIfStale failed: %v", err)
+	}
+	comic, _ = GetComicByID("pc-comic-1")
+	if comic.PageCount != 200 {
+		t.Errorf("Expected pageCount=200 (backfilled), got %d", comic.PageCount)
+	}
+}
+
+func TestReadingSessionTotalReadTime(t *testing.T) {
+	setupTestDB(t)
+
+	comics := []struct {
+		ID       string
+		Filename string
+		Title    string
+		FileSize int64
+	}{
+		{"trt-comic-1", "trt-test.cbz", "TRT Test", 1000},
+	}
+	if err := BulkCreateComics(comics); err != nil {
+		t.Fatalf("BulkCreateComics failed: %v", err)
+	}
+
+	// Start and end a session
+	sessionID, err := StartReadingSession("trt-comic-1", 0)
+	if err != nil {
+		t.Fatalf("StartReadingSession failed: %v", err)
+	}
+
+	if err := EndReadingSession(int(sessionID), 10, 300); err != nil {
+		t.Fatalf("EndReadingSession failed: %v", err)
+	}
+
+	// Verify Comic.totalReadTime was incremented
+	comic, err := GetComicByID("trt-comic-1")
+	if err != nil {
+		t.Fatalf("GetComicByID failed: %v", err)
+	}
+	if comic.TotalReadTime != 300 {
+		t.Errorf("Expected Comic.totalReadTime=300, got %d", comic.TotalReadTime)
+	}
+
+	// Second session
+	sessionID2, _ := StartReadingSession("trt-comic-1", 10)
+	EndReadingSession(int(sessionID2), 20, 600)
+
+	comic, _ = GetComicByID("trt-comic-1")
+	if comic.TotalReadTime != 900 {
+		t.Errorf("Expected Comic.totalReadTime=900 (accumulated), got %d", comic.TotalReadTime)
+	}
+}
+
 func TestBatchOperations(t *testing.T) {
 	setupTestDB(t)
 
