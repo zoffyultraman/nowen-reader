@@ -184,4 +184,15 @@ func registerContentRoutes(api *gin.RouterGroup) {
 		exportRead.GET("/csv/sessions", export.ExportCSV)
 		exportRead.GET("/csv/comics", export.ExportComicsCSV)
 	}
+
+	// ============================================================
+	// Data QA — read-only scan, requires admin
+	// ============================================================
+	dataQA := NewDataQAHandler()
+	dataQAGroup := api.Group("/admin/data-qa")
+	dataQAGroup.Use(middleware.AdminRequired())
+	{
+		dataQAGroup.GET("/summary", dataQA.GetSummary)
+		dataQAGroup.GET("/issues", dataQA.GetIssues)
+	}
 }
