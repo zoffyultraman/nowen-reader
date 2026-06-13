@@ -149,11 +149,9 @@ export default function TagFilter({
 
         {allTags.length === 0 ? (
           /* 无标签时：显示空状态提示 */
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-muted">
-              {t.tagFilter.empty || "暂无标签，可在标签与分类管理页面添加"}
+          <span className="text-[11px] text-muted/60 italic">
+              {t.tagFilter.empty || "暂无标签"}
             </span>
-          </div>
         ) : collapsed && allTags.length > FOLD_THRESHOLD ? (
           /* 折叠时：仅显示已选中标签 + 数量提示 */
           <div className="flex items-center gap-2 flex-wrap">

@@ -1186,9 +1186,9 @@ export default function Home() {
             <RecommendationStrip contentType={contentType} />
 
             {/* Library Control Console */}
-            <section className="surface-glass-panel rounded-2xl border border-border/30 p-4 sm:p-5 space-y-3">
+            <section className="rounded-xl bg-card/60 backdrop-blur-md border border-border/20 px-3 py-2.5 sm:px-4 sm:py-3 space-y-2">
             {/* Stats + Sort Controls */}
-            <div className="flex flex-col sm:flex-row sm:flex-wrap items-start sm:items-center justify-between gap-3 sm:gap-4">
+            <div className="flex flex-col sm:flex-row sm:flex-wrap items-start sm:items-center justify-between gap-2 sm:gap-3">
               <StatsBar
                 totalComics={showGroupView ? filteredGroups.length : filteredGroups.length + looseComics.length}
                 filteredCount={showGroupView ? filteredGroups.length : filteredGroups.length + looseComics.length}
@@ -1196,7 +1196,7 @@ export default function Home() {
 
               {/* Sort & Filter Controls — horizontally scrollable on mobile */}
               <div className="w-full sm:w-auto overflow-x-auto scrollbar-hide" style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
-                <div className="flex items-center gap-2 sm:gap-3 min-w-max">
+                <div className="flex items-center gap-1.5 sm:gap-2 min-w-max">
                 {/* Detect Duplicates */}
                 <button
                   onClick={() => setShowDuplicates(true)}
@@ -1318,7 +1318,7 @@ export default function Home() {
 
             {/* Category Filter */}
             {effectiveCategories.length > 0 && (
-              <div className="mt-4">
+              <div className="mt-1.5">
                 <CategoryFilter
                   categories={effectiveCategories}
                   selectedCategory={selectedCategory}
@@ -1328,7 +1328,7 @@ export default function Home() {
             )}
 
             {/* Tag Filter */}
-            <div className="mt-4 mb-8">
+            <div className="mt-1.5">
               <TagFilter
                 allTags={allTags}
                 selectedTags={selectedTags}
@@ -1408,7 +1408,7 @@ export default function Home() {
             )}
 
             {/* Library Content Header */}
-            <div className="mb-4 flex flex-col sm:flex-row sm:items-end justify-between gap-1">
+            <div className="mt-6 mb-5 flex flex-col sm:flex-row sm:items-end justify-between gap-1">
               <div>
                 <h2 className="text-base font-semibold text-foreground">
                   {contentType === "novel" ? "全部小说" : "全部漫画"}
