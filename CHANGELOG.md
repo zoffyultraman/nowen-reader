@@ -53,6 +53,16 @@
 - SimilarComics loading 骨架屏可见状态：不再 return null，显示 5 个封面骨架 + 标题骨架
 - 详情页 not-found 状态 surface-card 容器美化
 - detail-hero-bg utility：radial-gradient 光晕 + reduced-motion 降级
+
+- 阅读器顶部工具栏和底部进度栏统一 motion 交互：所有按钮加 `.motion-button`，容器加 `border-white/5`
+- ReaderOptionsPanel 设置面板毛玻璃视觉：`bg-zinc-900/95 backdrop-blur-xl`，分组容器 hover 阴影，slider / 预设按钮统一 pill 风格
+- BookmarkPanel 书签面板毛玻璃视觉：`backdrop-blur-xl` 容器，列表 item `interactive-scale`，删除按钮 `motion-button`，空状态紧凑
+- 阅读器 loading / error / 404 状态视觉增强：ambient glow + 毛玻璃卡片容器 + `.motion-button` 操作按钮
+- Webtoon 缩放指示器毛玻璃 pill：`bg-zinc-900/80 backdrop-blur-xl border-white/[0.08] shadow-lg`
+- PDF canvas 纸张质感：`shadow-2xl shadow-black/40 rounded-sm`，容器 `bg-[#080808]` 深色背景
+- PDF 缩放指示器升级为毛玻璃 pill，日/暗色模式统一
+- 小说阅读器容器升级：`max-w-prose` 行宽、`leading-[1.85] tracking-wide` 排版、`text-2xl tracking-tight` 章节标题
+- 小说页面 loading / error / 404 状态和漫画 reader 页面风格统一
 ### Changed
 
 - 站点目录配置入口迁移到书库管理，原入口改为引导提示
@@ -88,6 +98,12 @@
 - 阅读状态按钮统一 motion-button + border-border/40 边框
 - 元数据卡片统一 surface-card 风格，标签/分类区域包裹 surface-card 容器
 - 合集卡片和 AI 结果容器统一 surface-card rounded-xl
+
+- 阅读器整体背景从纯黑 `bg-black` 升级为更沉浸的深灰黑 `bg-[#0a0a0a]`
+- ReaderToolbar 按钮统一 `.motion-button`，阅读模式切换 active 状态增加 `shadow-accent/25`
+- 设置面板 overlay 增加 `backdrop-blur-sm`，关闭按钮加 `.focus-ring`
+- 书签列表 item hover 从 `bg-white/8` 升级为 `bg-white/[0.06]`，当前页高亮加 `ring-1 ring-accent/20`
+- PDF / 小说 loading spinner 从 `h-8 w-8` 增大为 `h-10 w-10`，边框弱化 `border-white/10`
 - 描述文字升级为 text-foreground/80 leading-relaxed 增强可读性
 ### Fixed
 
@@ -110,6 +126,25 @@
 - 验证阅读入口（getReaderUrl）和管理员操作未受影响
 - 验证移动端无横向溢出（375px / 390px / 430px / iPad）
 - 验证 prefers-reduced-motion 覆盖所有详情页新 utility class
+
+#### UI-R4 阅读器视觉优化验证
+
+- 验证单页 / 双页 / Webtoon / PDF / 小说模式均正常
+- 验证 Webtoon pinch / pan / double tap 未受影响（touchAction、passive:false、snap-to-1 逻辑未改动）
+- 验证小屏双页退化单页逻辑未受影响（effectiveMode = isSmallScreen && mode === "double" ? "single" : mode）
+- 验证 PDF retry 逻辑未受影响（setError(null) + retryCount++）
+- 验证书签 localStorage、跳转、删除逻辑未受影响
+- 验证图片滤镜只影响漫画图片，不影响 PDF / 小说
+- 验证 safe-area 未回退（ReaderToolbar 1 处、ReaderOptionsPanel 3 处、BookmarkPanel 2 处）
+- 验证 reduced-motion 支持正常
+- 验证移动端和横屏无明显溢出问题
+
+#### BUG-UI-HomeFilter-01 首页筛选控制台修复
+
+- 修复首页筛选控制台在列表模式下过高、阴影过重（`surface-glass-panel` 的 `shadow-float` 太强）、标签空状态占用空间过大的视觉问题
+- 将筛选控制台从大浮层视觉压缩为轻量工具栏：`rounded-xl bg-card/60 backdrop-blur-md border-border/20`
+- 标签空状态改为更紧凑的 inline muted 提示（`text-[11px] text-muted/60 italic`，文案缩短为"暂无标签"）
+- 内容区标题与筛选控制台间距从 `mb-4` 增加为 `mt-6 mb-5`，视觉层级更清晰
 
 - `UserCanViewComic()` 对 NULL libraryId 和不存在书库返回异常的问题
 - 最后一页/最后章节显示 99% 的问题（漫画详情、漫画阅读器、小说阅读页、小说底栏）
@@ -207,3 +242,14 @@
 | `ec647a0` | fix(reader): 小屏双页模式自动退化为单页 |
 | `e632336` | feat(reader): 移动端缩放手势首次提示 |
 | `f0b722b` | feat(reader): 设置面板滤镜 slider 数值显示和触控优化 |
+
+### Key Commits (UI-R4 Reader Visual)
+
+| Commit | Description |
+|:---|:---|
+| `b31a2c3` | feat(ui): ReaderToolbar / 底部栏视觉统一 |
+| `bb5007d` | feat(ui): ReaderOptionsPanel 设置面板毛玻璃视觉 |
+| `39f9f14` | feat(ui): BookmarkPanel 书签面板毛玻璃视觉 |
+| `700a5da` | feat(ui): 阅读区背景 / loading / error / Webtoon 缩放指示器视觉升级 |
+| `dc2d5e8` | feat(ui): PDF canvas 纸张质感 + 小说阅读容器行宽/行高优化 |
+| `32a58b9` | fix(ui): 首页筛选控制台展示异常修复（BUG-UI-HomeFilter-01） |
