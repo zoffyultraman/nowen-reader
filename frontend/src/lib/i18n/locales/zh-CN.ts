@@ -342,6 +342,7 @@ const zhCN = {
     moreInfo: "详情",
     fullscreen: "全屏",
     exitFullscreen: "退出全屏",
+    gestureHint: "双击放大，双指缩放，放大后可拖拽移动",
   },
 
   // 书签面板
@@ -1517,6 +1518,7 @@ export interface Translations {
     moreInfo: string;
     fullscreen: string;
     exitFullscreen: string;
+    gestureHint: string;
   };
   readerBookmarks: {
     title: string;

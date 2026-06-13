@@ -346,6 +346,7 @@ const en: Translations = {
     moreInfo: "Info",
     fullscreen: "Fullscreen",
     exitFullscreen: "Exit Fullscreen",
+    gestureHint: "Double-tap to zoom, pinch to scale, drag to pan",
   },
 
   // Bookmarks Panel

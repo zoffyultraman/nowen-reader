@@ -102,6 +102,19 @@ export default function ReaderPage() {
     return () => mql.removeEventListener("change", handler);
   }, []);
   const effectiveMode: ComicReadingMode = isSmallScreen && mode === "double" ? "single" : mode;
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const isMobile = window.matchMedia("(max-width: 639px)").matches;
+    if (!isMobile) return;
+    const KEY = "nowen-reader:gesture-hint-seen";
+    if (localStorage.getItem(KEY)) return;
+    const timer = setTimeout(() => {
+      setShowGestureHint(true);
+      localStorage.setItem(KEY, "1");
+      setTimeout(() => setShowGestureHint(false), 5000);
+    }, 1200);
+    return () => clearTimeout(timer);
+  }, []);
   const [direction, setDirection] = useState<ReadingDirection>("ltr");
   const [toolbarVisible, setToolbarVisible] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -109,6 +122,7 @@ export default function ReaderPage() {
   const [showBookmarkPanel, setShowBookmarkPanel] = useState(false);
   const [showOptionsPanel, setShowOptionsPanel] = useState(false);
   const [showOverlay, setShowOverlay] = useState(false);
+  const [showGestureHint, setShowGestureHint] = useState(false);
   const [autoPageActive, setAutoPageActive] = useState(false);
   const [newTag, setNewTag] = useState("");
   const [isFavorite, setIsFavorite] = useState(false);
@@ -717,6 +731,16 @@ export default function ReaderPage() {
           }`}>
             {currentPage + 1} / {pages.length}
           </span>
+        </div>
+      )}
+
+
+      {/* Gesture hint — mobile only, shown once */}
+      {showGestureHint && (
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[70] max-w-[85vw] pointer-events-none">
+          <div className="rounded-xl bg-white/10 backdrop-blur-xl border border-white/10 px-4 py-2.5 shadow-2xl">
+            <p className="text-xs text-white/80 text-center whitespace-nowrap">{t.readerToolbar.gestureHint}</p>
+          </div>
         </div>
       )}
 
