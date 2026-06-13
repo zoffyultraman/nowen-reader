@@ -1248,7 +1248,7 @@ export default function ComicDetailPage() {
               const nextUnread = group.comics.find(c => c.id !== comicId && !isReadingFinished(c.lastReadPage, c.pageCount));
 
               return (
-                <div key={group.id} className="rounded-xl border border-border/40 bg-card/50 overflow-hidden min-w-0">
+                <div key={group.id} className="surface-card rounded-xl overflow-hidden min-w-0">
                   {/* 合集头部 */}
                   <Link
                     href={`/group/${group.id}${comic?.type ? `?contentType=${comic.type}` : ''}`}
@@ -1394,7 +1394,7 @@ export default function ComicDetailPage() {
                 <button
                   onClick={handleAddTag}
                   disabled={!newTag.trim()}
-                  className="rounded-lg bg-accent/20 px-3 py-2 text-accent transition-colors hover:bg-accent/30 disabled:opacity-30"
+                  className="motion-button rounded-lg bg-accent/20 px-3 py-2 text-accent transition-colors hover:bg-accent/30 disabled:opacity-30"
                 >
                   <Plus className="h-4 w-4" />
                 </button>
@@ -1402,7 +1402,7 @@ export default function ComicDetailPage() {
                   <button
                     onClick={handleAiSuggestTags}
                     disabled={aiSuggestLoading}
-                    className="flex items-center gap-1.5 rounded-lg bg-purple-500/15 px-3 py-2 text-xs font-medium text-purple-400 transition-colors hover:bg-purple-500/25 disabled:opacity-50"
+                    className="motion-button flex items-center gap-1.5 rounded-lg bg-purple-500/15 px-3 py-2 text-xs font-medium text-purple-400 transition-colors hover:bg-purple-500/25 disabled:opacity-50"
                     title={t.comicDetail.aiSuggestTags || "AI Suggest Tags"}
                   >
                     {aiSuggestLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Brain className="h-3.5 w-3.5" />}
@@ -1485,7 +1485,7 @@ export default function ComicDetailPage() {
                 {comic.categories?.map((cat) => (
                   <span
                     key={cat.slug}
-                    className="flex items-center gap-1.5 rounded-lg bg-accent/15 px-3 py-1.5 text-xs font-medium text-accent"
+                    className="motion-button flex items-center gap-1.5 rounded-lg bg-accent/15 px-3 py-1.5 text-xs font-medium text-accent"
                   >
                     <span>{cat.icon}</span>
                     {cat.name}
@@ -1525,7 +1525,7 @@ export default function ComicDetailPage() {
               ) : (
                 <button
                   onClick={() => setShowCategoryPicker(true)}
-                  className="flex items-center gap-2 rounded-lg bg-card px-4 py-2.5 text-sm text-foreground transition-colors hover:bg-card-hover"
+                  className="motion-button flex items-center gap-2 rounded-lg bg-card px-4 py-2.5 text-sm text-foreground transition-colors hover:bg-card-hover"
                 >
                   <Layers className="h-4 w-4 text-muted" />
                   <Plus className="h-3 w-3 text-muted" />
@@ -1751,7 +1751,7 @@ export default function ComicDetailPage() {
                     </div>
                   )}
                   {comic.description && (
-                    <div className="mt-2 text-sm text-muted leading-relaxed">
+                    <div className="mt-3 text-sm text-foreground/80 leading-relaxed">
                       {comic.description}
                     </div>
                   )}
@@ -1763,7 +1763,7 @@ export default function ComicDetailPage() {
                 </div>
               ) : (
                 /* 无元数据时显示提示 */
-                <div className="rounded-xl bg-card p-4 text-center text-sm text-muted">
+                <div className="rounded-xl border border-border/30 p-6 text-center text-sm text-muted">
                   {t.comicDetail.noMetadata || "No metadata"}
                   <button
                     onClick={startEditMetadata}
@@ -1777,7 +1777,7 @@ export default function ComicDetailPage() {
 
             {/* AI 解析结果展示 */}
             {aiParsedResult && (
-              <div className="rounded-xl border border-purple-500/20 bg-purple-500/5 p-4">
+              <div className="surface-card rounded-xl border-purple-500/20 p-4">
                 <div className="mb-3 flex items-center justify-between">
                   <div className="flex items-center gap-2 text-sm font-medium text-purple-400">
                     <FileText className="h-4 w-4" />
@@ -1811,7 +1811,7 @@ export default function ComicDetailPage() {
 
             {/* AI 封面分析结果展示 */}
             {aiCoverResult && (
-              <div className="rounded-xl border border-purple-500/20 bg-purple-500/5 p-4">
+              <div className="surface-card rounded-xl border-purple-500/20 p-4">
                 <div className="mb-3 flex items-center justify-between">
                   <div className="flex items-center gap-2 text-sm font-medium text-purple-400">
                     <Eye className="h-4 w-4" />
