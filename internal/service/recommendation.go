@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"log"
+
 	"github.com/nowen-reader/nowen-reader/internal/store"
 )
 
@@ -28,7 +30,12 @@ type ScoredComic struct {
 // seed > 0 时会在评分上添加随机扰动，使每次刷新结果不同。
 func GetRecommendations(limit int, excludeRead bool, contentType string, seed int64, libraryIDs ...string) ([]ScoredComic, error) {
 	allComics, err := store.GetAllComicsForRecommendation(libraryIDs...)
-	if err != nil || len(allComics) == 0 {
+	if err != nil {
+		log.Printf("[Recommendation] GetAllComicsForRecommendation error: %v (libraryIDs=%v)", err, libraryIDs)
+		return nil, err
+	}
+	if len(allComics) == 0 {
+		log.Printf("[Recommendation] no comics found (libraryIDs=%v)", libraryIDs)
 		return []ScoredComic{}, nil
 	}
 
@@ -36,14 +43,23 @@ func GetRecommendations(limit int, excludeRead bool, contentType string, seed in
 	// 这样可以确保：1) 画像仅反映目标类型的用户偏好；2) 无匹配内容时直接返回空结果
 	var candidates []store.RecommendationComic
 	for _, comic := range allComics {
+		// Legacy data may have empty type; treat empty as "comic" since most content is comics
 		if contentType == "novel" && comic.Type != "novel" {
 			continue
 		}
-		if contentType == "comic" && comic.Type != "comic" {
+		if contentType == "comic" && comic.Type != "comic" && comic.Type != "" {
 			continue
 		}
 		candidates = append(candidates, comic)
 	}
+
+	// Debug: log type distribution
+	typeCounts := map[string]int{}
+	for _, c := range allComics {
+		typeCounts[c.Type]++
+	}
+	log.Printf("[Recommendation] allComics=%d, contentType=%q, candidates=%d, typeDistribution=%v, libraryIDs=%v",
+		len(allComics), contentType, len(candidates), typeCounts, libraryIDs)
 
 	// 过滤后无匹配内容，直接返回空结果
 	if len(candidates) == 0 {
