@@ -7,6 +7,7 @@ import LazyImage from "@/components/LazyImage";
 import Link from "next/link";
 import {
   useComicDetail,
+  setReadingStatus,
   toggleComicFavorite,
   updateComicRating,
   addComicTags,
@@ -281,6 +282,24 @@ export default function ComicDetailPage() {
       }
     },
     [comicId, comic?.rating, refetch, toast, t]
+  );
+
+  const handleReadingStatus = useCallback(
+    async (status: string) => {
+      try {
+        await setReadingStatus(comicId, status);
+        refetch();
+      } catch (e: unknown) {
+        if ((e as { status?: number })?.status === 403) {
+          toast.error(t.common.noPermissionAction);
+        } else if ((e as { status?: number })?.status === 401) {
+          toast.error(t.common.noPermissionAction);
+        } else {
+          toast.error("Failed to update reading status");
+        }
+      }
+    },
+    [comicId, refetch, toast, t]
   );
 
   const handleAddTag = useCallback(async () => {
@@ -791,7 +810,37 @@ export default function ComicDetailPage() {
                   <div key={i} className="skeleton-shimmer h-7 w-7 rounded-md" />
                 ))}
               </div>
-              {/* Meta Info Grid */}
+              {/* Reading Status */}
+            <div>
+              <h3 className="mb-2 text-xs font-medium uppercase tracking-wider text-muted">{t.comicDetail.readingStatus}</h3>
+              <div className="flex flex-wrap gap-1.5">
+                {[{ key: "want", label: t.comicDetail.statusWant },
+                  { key: "reading", label: t.comicDetail.statusReading },
+                  { key: "finished", label: t.comicDetail.statusFinished }].map((s) => (
+                  <button
+                    key={s.key}
+                    onClick={() => handleReadingStatus(s.key)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                      (comic?.readingStatus ?? "") === s.key
+                        ? "bg-blue-600 text-white shadow-sm shadow-blue-500/25"
+                        : "bg-card text-muted hover:text-foreground hover:bg-card/80"
+                    }`}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+                {comic?.readingStatus && comic.readingStatus !== "" && (
+                  <button
+                    onClick={() => handleReadingStatus("")}
+                    className="px-3 py-1.5 rounded-lg text-xs font-medium bg-card text-muted hover:text-foreground hover:bg-card/80 transition-all"
+                  >
+                    {t.comicDetail.statusClear}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Meta Info Grid */}
               <div className="grid grid-cols-2 gap-2.5 sm:gap-4 sm:grid-cols-3">
                 {Array.from({ length: 6 }).map((_, i) => (
                   <div key={i} className="rounded-xl bg-card p-3 sm:p-4 space-y-2">

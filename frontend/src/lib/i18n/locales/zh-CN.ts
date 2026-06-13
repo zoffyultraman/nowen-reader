@@ -136,6 +136,11 @@ const zhCN = {
     startReading: "开始阅读",
     deleteComic: "删除漫画",
     rating: "评分",
+    readingStatus: "阅读状态",
+    statusWant: "想读",
+    statusReading: "在读",
+    statusFinished: "已读完",
+    statusClear: "清除状态",
     pages: "页数",
     fileSize: "文件大小",
     addedAt: "添加时间",
@@ -1302,6 +1307,11 @@ export interface Translations {
     startReading: string;
     deleteComic: string;
     rating: string;
+    readingStatus: string;
+    statusWant: string;
+    statusReading: string;
+    statusFinished: string;
+    statusClear: string;
     pages: string;
     fileSize: string;
     addedAt: string;

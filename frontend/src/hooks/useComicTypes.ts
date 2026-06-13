@@ -34,6 +34,7 @@ export interface ApiComic {
   genre: string;
   metadataSource: string;
   type: string; // 内容类型："comic" | "novel"
+  readingStatus?: string; // 用户级阅读状态
 }
 
 export interface ComicsResponse {
