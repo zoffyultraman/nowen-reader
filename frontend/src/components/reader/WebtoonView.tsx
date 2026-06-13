@@ -76,6 +76,7 @@ export default function WebtoonView({
   const pinchStartDistRef = useRef<number | null>(null);
   const pinchStartScaleRef = useRef(1);
   const isPinchingRef = useRef(false);
+  const scaleRef = useRef(1);
 
   // Preload images ahead of current page
   useImagePreloader(pages, currentPage, preloadCount, comicId);
@@ -157,6 +158,9 @@ export default function WebtoonView({
       isScrollingRef.current = false;
     }, 150);
 
+    // Skip virtualization range update during an active pinch gesture
+    if (isPinchingRef.current) return;
+
     const centerPage = updateRenderRange();
 
     // When zoomed in, suppress page-change reporting to avoid
@@ -171,6 +175,26 @@ export default function WebtoonView({
       onPageChange(centerPage);
     }
   }, [currentPage, onPageChange, updateRenderRange, scale]);
+
+  // Sync scale to ref for use in non-React event listeners
+  useEffect(() => {
+    scaleRef.current = scale;
+  }, [scale]);
+
+  // Native touchmove with passive:false to reliably call preventDefault on iOS Safari.
+  // React synthetic touch events are passive by default and cannot prevent browser gestures.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const onTouchMove = (e: globalThis.TouchEvent) => {
+      // Prevent Safari rubber-band / zoom during pinch or when zoomed in
+      if (e.touches.length >= 2 || isPinchingRef.current || scaleRef.current > 1) {
+        e.preventDefault();
+      }
+    };
+    el.addEventListener("touchmove", onTouchMove, { passive: false });
+    return () => el.removeEventListener("touchmove", onTouchMove);
+  }, []);
 
   // Record actual image height after load
   const handleImageLoad = useCallback((index: number, e: React.SyntheticEvent<HTMLImageElement>) => {
@@ -307,7 +331,7 @@ export default function WebtoonView({
   return (
     <div
       ref={containerRef}
-      className={`h-dvh w-full overflow-y-auto select-none transition-colors duration-300 ${
+      className={`h-dvh w-full overflow-x-hidden overflow-y-auto select-none transition-colors duration-300 ${
         readerTheme === "day" ? "bg-gray-100" : "bg-black"
       }`}
       onScroll={handleScroll}
