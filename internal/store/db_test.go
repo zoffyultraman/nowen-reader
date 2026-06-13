@@ -294,7 +294,7 @@ func TestComicCRUD(t *testing.T) {
 
 	// Search
 	result, err = GetAllComics(ComicListOptions{
-		Search: "Comic 2",
+		Search: "2",
 	})
 	if err != nil {
 		t.Fatalf("GetAllComics search failed: %v", err)
