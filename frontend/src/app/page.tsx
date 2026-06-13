@@ -1236,7 +1236,7 @@ export default function Home() {
                   }}
                   className={`flex h-8 items-center gap-1.5 rounded-lg px-2.5 sm:px-3 text-xs font-medium transition-all ${
                     batchMode
-                      ? "bg-accent text-white"
+                      ? "motion-button bg-accent text-white shadow-sm shadow-accent/25"
                       : "bg-card text-muted hover:text-foreground"
                   }`}
                   title={t.navbar.batch}
@@ -1407,6 +1407,20 @@ export default function Home() {
               </div>
             )}
 
+            {/* Library Content Header */}
+            <div className="mb-4 flex flex-col sm:flex-row sm:items-end justify-between gap-1">
+              <div>
+                <h2 className="text-base font-semibold text-foreground">
+                  {contentType === "novel" ? "全部小说" : "全部漫画"}
+                </h2>
+                <p className="text-[11px] text-muted mt-0.5">
+                  {showGroupView
+                    ? `${filteredGroups.length} 个合集`
+                    : `${filteredGroups.length + looseComics.length} 项内容`}
+                  {activePage > 1 ? ` · 第 ${activePage} 页` : ""}
+                </p>
+              </div>
+            </div>
             {/* Comics Grid */}
             <div className={`transition-opacity duration-200 ${fetching ? "opacity-50 pointer-events-none" : "opacity-100"}`}>
             {/* 合集视图模式：只显示合集卡片 */}
@@ -1438,7 +1452,7 @@ export default function Home() {
                   ))}
                 </div>
               ) : (
-                <div className="flex flex-col items-center justify-center py-24 sm:py-32 text-center">
+              <div className="flex flex-col items-center justify-center py-16 sm:py-20 text-center surface-card rounded-2xl">
                   <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-2xl bg-card">
                     <Layers className="h-10 w-10 text-muted/30" />
                   </div>
@@ -1573,7 +1587,7 @@ export default function Home() {
                 <button
                   onClick={() => setActivePage(1)}
                   disabled={activePage === 1}
-                  className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg border border-border/60 text-sm text-muted transition-colors hover:border-border hover:text-foreground disabled:opacity-30 disabled:pointer-events-none"
+                  className="motion-button flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg border border-border/60 text-sm text-muted transition-colors hover:border-border hover:text-foreground disabled:opacity-30 disabled:pointer-events-none"
                   title={t.home.firstPage}
                 >
                   «
@@ -1581,7 +1595,7 @@ export default function Home() {
                 <button
                   onClick={() => setActivePage((p) => Math.max(1, p - 1))}
                   disabled={activePage === 1}
-                  className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg border border-border/60 text-sm text-muted transition-colors hover:border-border hover:text-foreground disabled:opacity-30 disabled:pointer-events-none"
+                  className="motion-button flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg border border-border/60 text-sm text-muted transition-colors hover:border-border hover:text-foreground disabled:opacity-30 disabled:pointer-events-none"
                   title={t.home.prevPage}
                 >
                   ‹
@@ -1613,7 +1627,7 @@ export default function Home() {
                         className={`flex h-8 min-w-[32px] sm:h-9 sm:min-w-[36px] items-center justify-center rounded-lg px-1.5 sm:px-2 text-xs sm:text-sm font-medium transition-colors ${
                           activePage === p
                             ? "bg-accent text-white"
-                            : "border border-border/60 text-muted hover:border-border hover:text-foreground"
+                            : "motion-button border border-border/60 text-muted hover:border-border hover:text-foreground"
                         }`}
                       >
                         {p}
@@ -1625,7 +1639,7 @@ export default function Home() {
                 <button
                   onClick={() => setActivePage((p) => Math.min(effectiveTotalPages, p + 1))}
                   disabled={activePage === effectiveTotalPages}
-                  className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg border border-border/60 text-sm text-muted transition-colors hover:border-border hover:text-foreground disabled:opacity-30 disabled:pointer-events-none"
+                  className="motion-button flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg border border-border/60 text-sm text-muted transition-colors hover:border-border hover:text-foreground disabled:opacity-30 disabled:pointer-events-none"
                   title={t.home.nextPage}
                 >
                   ›
@@ -1633,7 +1647,7 @@ export default function Home() {
                 <button
                   onClick={() => setActivePage(effectiveTotalPages)}
                   disabled={activePage === effectiveTotalPages}
-                  className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg border border-border/60 text-sm text-muted transition-colors hover:border-border hover:text-foreground disabled:opacity-30 disabled:pointer-events-none"
+                  className="motion-button flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg border border-border/60 text-sm text-muted transition-colors hover:border-border hover:text-foreground disabled:opacity-30 disabled:pointer-events-none"
                   title={t.home.lastPage}
                 >
                   »
@@ -1678,7 +1692,7 @@ export default function Home() {
                         input.value = "";
                       }
                     }}
-                    className="rounded-lg border border-border/60 px-2 py-1 text-xs text-muted hover:text-foreground hover:border-border transition-colors"
+                    className="motion-button rounded-lg border border-border/60 px-2 py-1 text-xs text-muted hover:text-foreground hover:border-border transition-colors"
                   >
                     {t.home.goToPage || "跳转"}
                   </button>
@@ -1704,7 +1718,7 @@ export default function Home() {
                         })
                         .catch(() => {});
                     }}
-                    className="rounded-lg border border-border/60 bg-card px-2 py-1 text-xs text-foreground outline-none focus:border-accent/50 transition-colors"
+                    className="motion-button rounded-lg border border-border/60 bg-card px-2 py-1 text-xs text-foreground outline-none focus:border-accent/50 transition-colors"
                   >
                     {[12, 24, 36, 48, 60, 96].map((n) => (
                       <option key={n} value={n}>{n}</option>
