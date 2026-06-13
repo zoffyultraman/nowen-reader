@@ -231,30 +231,30 @@ export default function ReaderPage() {
   const finishSessionRef = useRef<(() => void) | null>(null);
   useEffect(() => {
     finishSessionRef.current = () => {
-      if (sessionIdRef.current) {
-        const duration = Math.round((Date.now() - sessionStartTimeRef.current) / 1000);
-        if (duration > 2) {
-          endSession(sessionIdRef.current, currentPageRef.current, duration);
-        }
-        sessionIdRef.current = null;
+      if (!sessionIdRef.current) return;
+      const duration = Math.round((Date.now() - sessionStartTimeRef.current) / 1000);
+      if (duration > 2) {
+        endSession(sessionIdRef.current, currentPageRef.current, duration);
       }
+      sessionIdRef.current = null;
     };
     return () => { finishSessionRef.current = null; };
-  });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [useRealData, comicId]);
 
   // beforeunload 兜底：浏览器崩溃/强制关闭时用 sendBeacon 保存会话
   useEffect(() => {
     const handleBeforeUnload = () => {
-      if (sessionIdRef.current) {
-        const duration = Math.round((Date.now() - sessionStartTimeRef.current) / 1000);
-        if (duration > 2) {
-          endSessionBeacon(sessionIdRef.current, currentPageRef.current, duration);
-        }
+      if (!sessionIdRef.current) return;
+      const duration = Math.round((Date.now() - sessionStartTimeRef.current) / 1000);
+      if (duration > 2) {
+        endSessionBeacon(sessionIdRef.current, currentPageRef.current, duration);
       }
     };
     window.addEventListener("beforeunload", handleBeforeUnload);
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [useRealData, comicId]);
 
   // Save progress on page change (debounced) — 仅在进度跟踪启用时
   useEffect(() => {
