@@ -128,6 +128,7 @@ export default function ReaderPage() {
   const [isFavorite, setIsFavorite] = useState(false);
   const [rating, setRating] = useState<number>(0);
   const [readerTheme, setReaderTheme] = useState<ReaderTheme>("night");
+  const [sessionDiag, setSessionDiag] = useState<string | null>(null);
   const { theme: globalTheme, toggleTheme: globalToggleTheme } = useTheme();
 
   // 系列跨卷连续阅读
@@ -212,18 +213,22 @@ export default function ReaderPage() {
     sessionStartTimeRef.current = Date.now();
     currentPageRef.current = currentPage;
     console.debug("[reader] starting session", { comicId, currentPage });
+    if (!cancelled) setSessionDiag("starting session");
     startSession(comicId, currentPage)
       .then((id) => {
         if (cancelled) return;
         if (id) {
           sessionIdRef.current = id;
           console.debug("[reader] started session", { sessionId: id });
+          setSessionDiag(`started session ${id}`);
         } else {
           console.warn("[reader] startSession returned null", { comicId, currentPage });
+          setSessionDiag("startSession returned null");
         }
       })
       .catch((error) => {
         console.warn("[reader] startSession failed", { comicId, currentPage, error });
+        setSessionDiag(`startSession failed: ${error instanceof Error ? error.message : String(error)}`);
       });
 
     return () => {
@@ -697,6 +702,13 @@ export default function ReaderPage() {
           nextVolumeTitle={nextVolume?.title}
           imageFilter={imageFilter}
         />
+      )}
+
+      {/* 临时阅读会话诊断提示 */}
+      {sessionDiag && (
+        <div className="pointer-events-none fixed left-1/2 top-4 z-[2147483647] -translate-x-1/2 rounded-full bg-red-600/90 px-3 py-1 text-xs font-medium text-white shadow-lg">
+          {sessionDiag}
+        </div>
       )}
 
       {/* 无感跳转过渡提示（底部 toast 样式） */}
