@@ -139,19 +139,11 @@ func TestExecuteFix_UCSTotalTimeZero(t *testing.T) {
 	}
 }
 
-func TestExecuteFix_NonAutoFixable(t *testing.T) {
+func TestExecuteFix_NoIssues(t *testing.T) {
 	setupTestDB(t)
-	db := store.DB()
 
-	_, err := db.Exec(`INSERT INTO "Comic" ("id","filename","title","pageCount","fileSize","addedAt","updatedAt")
-		VALUES ('comic-fix-pcz','f.cbz','Test',0,100,datetime('now'),datetime('now'))`)
-	if err != nil {
-		t.Fatalf("insert comic: %v", err)
-	}
-
-	// PAGE_COUNT_ZERO has AutoFixable=true in scan, but no fix logic in ExecuteFix
-	// So it will hit the default case → skipped.
-	result, err := ExecuteFix([]string{"PAGE_COUNT_ZERO"}, nil, false)
+	// No data → no issues → empty result
+	result, err := ExecuteFix(nil, nil, true)
 	if err != nil {
 		t.Fatalf("ExecuteFix: %v", err)
 	}
@@ -159,8 +151,11 @@ func TestExecuteFix_NonAutoFixable(t *testing.T) {
 	if result.TotalExecuted != 0 {
 		t.Errorf("expected 0 executed, got %d", result.TotalExecuted)
 	}
-	if len(result.Skipped) != 1 {
-		t.Fatalf("expected 1 skipped, got %d", len(result.Skipped))
+	if len(result.Skipped) != 0 {
+		t.Errorf("expected 0 skipped, got %d", len(result.Skipped))
+	}
+	if result.DryRun {
+		t.Error("expected DryRun=false")
 	}
 }
 

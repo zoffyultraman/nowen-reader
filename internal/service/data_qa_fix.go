@@ -548,3 +548,43 @@ func fixZeroDurationSession(iss DataQAIssue) (DataQAFixResultItem, error) {
 		Success:    true,
 	}, nil
 }
+
+// PageCountRescanResult is the response for a page count rescan trigger.
+type PageCountRescanResult struct {
+	Queued    int      `json:"queued"`
+	ComicIDs  []string `json:"comicIds"`
+	Message   string   `json:"message"`
+}
+
+// TriggerPageCountRescan identifies comics needing page count and returns them.
+// It does NOT directly parse files — the existing scanner handles that.
+func TriggerPageCountRescan(limit int, includeNegative bool) (*PageCountRescanResult, error) {
+	db := store.DB()
+	if db == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+
+	if limit <= 0 {
+		limit = 100
+	}
+	if limit > 500 {
+		limit = 500
+	}
+
+	comics, err := store.GetComicsNeedingPageCount(limit)
+	if err != nil {
+		return nil, fmt.Errorf("query comics needing page count: %w", err)
+	}
+
+	result := &PageCountRescanResult{
+		Queued:   len(comics),
+		ComicIDs: make([]string, 0, len(comics)),
+		Message:  fmt.Sprintf("Found %d comics needing page count. The background scanner will process these on next sync.", len(comics)),
+	}
+
+	for _, c := range comics {
+		result.ComicIDs = append(result.ComicIDs, c.ID)
+	}
+
+	return result, nil
+}

@@ -80,3 +80,27 @@ func (h *DataQAHandler) Fix(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, result)
 }
+
+// PageCountRescan returns comics needing page count rescan.
+func (h *DataQAHandler) PageCountRescan(c *gin.Context) {
+	var body struct {
+		Confirm         bool `json:"confirm"`
+		Limit           int  `json:"limit"`
+		IncludeNegative bool `json:"includeNegative"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body: " + err.Error()})
+		return
+	}
+	if !body.Confirm {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "confirm must be true to trigger rescan"})
+		return
+	}
+
+	result, err := service.TriggerPageCountRescan(body.Limit, body.IncludeNegative)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Rescan failed: " + err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, result)
+}

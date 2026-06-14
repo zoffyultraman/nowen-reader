@@ -125,7 +125,29 @@ func BuildFixPreview(issueTypes []string, issueIDs []string, fixAll bool) (*Data
 				Message:    "Would delete orphan ComicCategory row",
 			})
 
-		case "SESSION_ORPHAN":
+		case "PAGE_COUNT_ZERO":
+			result.Plans = append(result.Plans, DataQAFixPlan{
+				IssueID:    iss.ID,
+				IssueType:  iss.IssueType,
+				EntityType: iss.EntityType,
+				EntityID:   iss.EntityID,
+				Action:     "TRIGGER_PAGE_COUNT_RESCAN",
+				Safe:       true,
+				Message:    "Comic needs page count rescan via background scanner",
+			})
+
+		case "PAGE_COUNT_NEGATIVE":
+			result.Plans = append(result.Plans, DataQAFixPlan{
+				IssueID:    iss.ID,
+				IssueType:  iss.IssueType,
+				EntityType: iss.EntityType,
+				EntityID:   iss.EntityID,
+				Action:     "TRIGGER_PAGE_COUNT_RESCAN",
+				Safe:       true,
+				Message:    "Comic has scan failure marker (-1), needs rescan",
+			})
+
+				case "SESSION_ORPHAN":
 			result.Plans = append(result.Plans, DataQAFixPlan{
 				IssueID:    iss.ID,
 				IssueType:  iss.IssueType,

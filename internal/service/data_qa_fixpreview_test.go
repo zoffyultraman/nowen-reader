@@ -200,19 +200,11 @@ func TestBuildFixPreview_OrphanCategory(t *testing.T) {
 	t.Logf("OrphanCategory test: TotalPlanned=%d, Skipped=%d", result.TotalPlanned, len(result.Skipped))
 }
 
-func TestBuildFixPreview_NonAutoFixable(t *testing.T) {
+func TestBuildFixPreview_NoIssues(t *testing.T) {
 	setupTestDB(t)
-	db := store.DB()
 
-	_, err := db.Exec(`INSERT INTO "Comic" ("id","filename","title","pageCount","fileSize","addedAt","updatedAt")
-		VALUES ('comic-pcz','f.cbz','Test',0,100,datetime('now'),datetime('now'))`)
-	if err != nil {
-		t.Fatalf("insert comic: %v", err)
-	}
-
-	// PAGE_COUNT_ZERO has AutoFixable=true in scan but no dry-run logic
-	// so it will be skipped by BuildFixPreview default case
-	result, err := BuildFixPreview([]string{"PAGE_COUNT_ZERO"}, nil, false)
+	// No data inserted → no issues → empty preview
+	result, err := BuildFixPreview(nil, nil, true)
 	if err != nil {
 		t.Fatalf("BuildFixPreview: %v", err)
 	}
@@ -220,10 +212,10 @@ func TestBuildFixPreview_NonAutoFixable(t *testing.T) {
 	if result.TotalPlanned != 0 {
 		t.Errorf("expected 0 plans, got %d", result.TotalPlanned)
 	}
-	if len(result.Skipped) != 1 {
-		t.Fatalf("expected 1 skipped, got %d", len(result.Skipped))
+	if len(result.Skipped) != 0 {
+		t.Errorf("expected 0 skipped, got %d", len(result.Skipped))
 	}
-	if result.Skipped[0].IssueID == "" {
-		t.Error("expected non-empty IssueID in skipped")
+	if !result.DryRun {
+		t.Error("expected DryRun=true")
 	}
 }

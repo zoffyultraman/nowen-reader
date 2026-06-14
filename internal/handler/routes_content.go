@@ -196,5 +196,6 @@ func registerContentRoutes(api *gin.RouterGroup) {
 		dataQAGroup.GET("/issues", dataQA.GetIssues)
 		dataQAGroup.POST("/fix-preview", dataQA.FixPreview)
 		dataQAGroup.POST("/fix", dataQA.Fix)
+		dataQAGroup.POST("/pagecount-rescan", dataQA.PageCountRescan)
 	}
 }
