@@ -3,7 +3,7 @@
 import { useState, useMemo, useCallback } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { Shuffle, ChevronRight, BookOpen, Clock, Sparkles, Library } from "lucide-react";
+import { Shuffle, ChevronRight, BookOpen, Clock, Library, Settings, Database, Play } from "lucide-react";
 import type { ApiComic } from "@/hooks/useComics";
 import { calculateReadingProgress } from "@/lib/progress";
 
@@ -31,6 +31,16 @@ export default function PersonalSidebar({ comics, contentType, totalItems }: Per
     [readable]
   );
 
+  // Continue reading list (in-progress comics)
+  const continueReading = useMemo(() => {
+    return readable
+      .filter(c => {
+        const pct = calculateReadingProgress(c.lastReadPage, c.pageCount);
+        return pct > 0 && pct < 100;
+      })
+      .slice(0, 3);
+  }, [readable]);
+
   const randomComic = useMemo(() => {
     if (readable.length === 0) return null;
     return readable[Math.floor(Math.random() * readable.length)];
@@ -56,104 +66,151 @@ export default function PersonalSidebar({ comics, contentType, totalItems }: Per
   if (readable.length === 0) return null;
 
   return (
-    <aside className="hidden xl:block space-y-3 sticky top-20 self-start">
-      {/* Random pick */}
-      <div className="rounded-2xl border border-border/30 bg-card/70 backdrop-blur-xl p-4 shadow-sm">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-1.5">
-            <span className="text-sm">🎲</span>
-            <h3 className="text-sm font-semibold text-foreground">随机盲盒</h3>
+    <aside className="hidden xl:block">
+      <div className="sticky top-20 max-h-[calc(100vh-6rem)] overflow-y-auto space-y-3 pr-1 scrollbar-hide" style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
+
+        {/* Random pick */}
+        <div className="rounded-2xl border border-border/30 bg-card/70 backdrop-blur-xl p-4 shadow-sm hover:shadow-md transition-shadow">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-1.5">
+              <span className="text-sm">🎲</span>
+              <h3 className="text-sm font-semibold text-foreground">随机盲盒</h3>
+            </div>
+            <button
+              onClick={handleShuffleRandom}
+              className="flex items-center gap-1 text-[11px] text-muted hover:text-accent transition-colors"
+            >
+              <Shuffle className="h-3 w-3" /> 换一个
+            </button>
           </div>
-          <button
-            onClick={handleShuffleRandom}
-            className="flex items-center gap-1 text-[11px] text-muted hover:text-accent transition-colors"
-          >
-            <Shuffle className="h-3 w-3" /> 换一个
-          </button>
+          {randomComic && (
+            <Link href={`/comic/${randomComic.id}`} className="group flex items-center gap-3 rounded-xl bg-background/40 p-2 transition-all hover:bg-background/60">
+              <div className="relative w-14 h-20 rounded-lg overflow-hidden shadow-md flex-shrink-0 bg-gradient-to-br from-muted/20 to-card">
+                <Image src={randomComic.coverUrl || "/api/placeholder/112/160"} alt="" fill className="object-contain" sizes="56px" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-foreground line-clamp-2">{randomComic.title}</p>
+                <p className="text-[11px] text-muted mt-0.5">
+                  {randomComic.pageCount ? `${randomComic.pageCount} 页` : ""}
+                </p>
+              </div>
+              <ChevronRight className="h-4 w-4 text-muted flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+            </Link>
+          )}
         </div>
-        {randomComic && (
-          <Link href={`/comic/${randomComic.id}`} className="group flex items-center gap-3 rounded-xl bg-background/40 p-2 transition-all hover:bg-background/60">
-            <div className="relative w-14 h-20 rounded-lg overflow-hidden shadow-md flex-shrink-0 bg-gradient-to-br from-muted/20 to-card">
-              <Image src={randomComic.coverUrl || "/api/placeholder/112/160"} alt="" fill className="object-contain" sizes="56px" />
+
+        {/* Continue reading */}
+        {continueReading.length > 0 && (
+          <div className="rounded-2xl border border-border/30 bg-card/70 backdrop-blur-xl p-4 shadow-sm hover:shadow-md transition-shadow">
+            <div className="flex items-center gap-1.5 mb-3">
+              <Play className="h-3.5 w-3.5 text-accent" />
+              <h3 className="text-sm font-semibold text-foreground">继续阅读</h3>
             </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-foreground line-clamp-2">{randomComic.title}</p>
-              <p className="text-[11px] text-muted mt-0.5">
-                {randomComic.pageCount ? `${randomComic.pageCount} 页` : ""}
-              </p>
+            <div className="space-y-2">
+              {continueReading.map((comic) => {
+                const pct = calculateReadingProgress(comic.lastReadPage, comic.pageCount);
+                return (
+                  <Link key={comic.id} href={`/comic/${comic.id}`} className="group flex items-center gap-2.5 rounded-lg bg-background/30 p-1.5 transition-all hover:bg-background/50">
+                    <div className="relative w-9 h-[50px] rounded-md overflow-hidden flex-shrink-0 bg-gradient-to-br from-muted/20 to-card shadow-sm">
+                      <Image src={comic.coverUrl || "/api/placeholder/72/100"} alt="" fill className="object-contain" sizes="36px" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-medium text-foreground line-clamp-1">{comic.title}</p>
+                      <div className="mt-1 h-1 w-full rounded-full bg-background/60 overflow-hidden">
+                        <div className="h-full bg-accent rounded-full transition-all" style={{ width: `${Math.min(pct, 100)}%` }} />
+                      </div>
+                      <p className="text-[10px] text-muted mt-0.5">{pct}%</p>
+                    </div>
+                  </Link>
+                );
+              })}
             </div>
-            <ChevronRight className="h-4 w-4 text-muted flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
-          </Link>
+          </div>
         )}
-      </div>
 
-      {/* Unread treasures */}
-      {unreadCovers.length > 0 && (
-        <div className="rounded-2xl border border-border/30 bg-card/70 backdrop-blur-xl p-4 shadow-sm">
+        {/* Unread treasures */}
+        {unreadCovers.length > 0 && (
+          <div className="rounded-2xl border border-border/30 bg-card/70 backdrop-blur-xl p-4 shadow-sm hover:shadow-md transition-shadow">
+            <div className="flex items-center gap-1.5 mb-3">
+              <span className="text-sm">📚</span>
+              <h3 className="text-sm font-semibold text-foreground">未读宝藏</h3>
+              <span className="ml-auto text-[11px] text-muted">{unreadCount} 本</span>
+            </div>
+            <div className="grid grid-cols-4 gap-1.5">
+              {unreadCovers.map((comic) => (
+                <Link key={comic.id} href={`/comic/${comic.id}`} className="group">
+                  <div className="relative aspect-[5/7] rounded-lg overflow-hidden bg-gradient-to-br from-muted/20 to-card shadow-sm transition-transform group-hover:scale-105">
+                    <Image src={comic.coverUrl || "/api/placeholder/80/112"} alt="" fill className="object-contain" sizes="60px" />
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Latest arrivals */}
+        {latestComics.length > 0 && (
+          <div className="rounded-2xl border border-border/30 bg-card/70 backdrop-blur-xl p-4 shadow-sm hover:shadow-md transition-shadow">
+            <div className="flex items-center gap-1.5 mb-3">
+              <span className="text-sm">🆕</span>
+              <h3 className="text-sm font-semibold text-foreground">最近入库</h3>
+            </div>
+            <div className="space-y-2">
+              {latestComics.map((comic) => (
+                <Link key={comic.id} href={`/comic/${comic.id}`} className="group flex items-center gap-2.5 rounded-lg bg-background/30 p-1.5 transition-all hover:bg-background/50">
+                  <div className="relative w-9 h-[50px] rounded-md overflow-hidden flex-shrink-0 bg-gradient-to-br from-muted/20 to-card shadow-sm">
+                    <Image src={comic.coverUrl || "/api/placeholder/72/100"} alt="" fill className="object-contain" sizes="36px" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-medium text-foreground line-clamp-1">{comic.title}</p>
+                    <p className="text-[10px] text-muted">{comic.pageCount ? `${comic.pageCount} 页` : ""}</p>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Library stats */}
+        <div className="rounded-2xl border border-border/30 bg-card/70 backdrop-blur-xl p-4 shadow-sm hover:shadow-md transition-shadow">
           <div className="flex items-center gap-1.5 mb-3">
-            <span className="text-sm">📚</span>
-            <h3 className="text-sm font-semibold text-foreground">未读宝藏</h3>
-            <span className="ml-auto text-[11px] text-muted">{unreadCount} 本</span>
+            <Library className="h-4 w-4 text-muted" />
+            <h3 className="text-sm font-semibold text-foreground">书库状态</h3>
           </div>
-          <div className="grid grid-cols-4 gap-1.5">
-            {unreadCovers.map((comic) => (
-              <Link key={comic.id} href={`/comic/${comic.id}`} className="group">
-                <div className="relative aspect-[5/7] rounded-lg overflow-hidden bg-gradient-to-br from-muted/20 to-card shadow-sm transition-transform group-hover:scale-105">
-                  <Image src={comic.coverUrl || "/api/placeholder/80/112"} alt="" fill className="object-contain" sizes="60px" />
-                </div>
-              </Link>
-            ))}
+          <div className="grid grid-cols-2 gap-2">
+            <div className="rounded-lg bg-background/40 p-2 text-center">
+              <p className="text-lg font-bold text-foreground">{totalItems || readable.length}</p>
+              <p className="text-[10px] text-muted">总内容</p>
+            </div>
+            <div className="rounded-lg bg-background/40 p-2 text-center">
+              <p className="text-lg font-bold text-accent">{readingCount}</p>
+              <p className="text-[10px] text-muted">在读</p>
+            </div>
+            <div className="rounded-lg bg-background/40 p-2 text-center">
+              <p className="text-lg font-bold text-emerald-500">{unreadCount}</p>
+              <p className="text-[10px] text-muted">未读</p>
+            </div>
+            <div className="rounded-lg bg-background/40 p-2 text-center">
+              <p className="text-lg font-bold text-foreground">{contentType === "novel" ? "小说" : "漫画"}</p>
+              <p className="text-[10px] text-muted">当前类型</p>
+            </div>
           </div>
         </div>
-      )}
 
-      {/* Latest arrivals */}
-      {latestComics.length > 0 && (
-        <div className="rounded-2xl border border-border/30 bg-card/70 backdrop-blur-xl p-4 shadow-sm">
-          <div className="flex items-center gap-1.5 mb-3">
-            <span className="text-sm">🆕</span>
-            <h3 className="text-sm font-semibold text-foreground">最近入库</h3>
-          </div>
-          <div className="space-y-2">
-            {latestComics.map((comic) => (
-              <Link key={comic.id} href={`/comic/${comic.id}`} className="group flex items-center gap-2.5 rounded-lg bg-background/30 p-1.5 transition-all hover:bg-background/50">
-                <div className="relative w-9 h-[50px] rounded-md overflow-hidden flex-shrink-0 bg-gradient-to-br from-muted/20 to-card shadow-sm">
-                  <Image src={comic.coverUrl || "/api/placeholder/72/100"} alt="" fill className="object-contain" sizes="36px" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs font-medium text-foreground line-clamp-1">{comic.title}</p>
-                  <p className="text-[10px] text-muted">{comic.pageCount ? `${comic.pageCount} 页` : ""}</p>
-                </div>
-              </Link>
-            ))}
+        {/* Quick actions */}
+        <div className="rounded-2xl border border-border/30 bg-card/70 backdrop-blur-xl p-3 shadow-sm">
+          <div className="flex items-center gap-2">
+            <Link href="/data-qa" className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-background/40 px-3 py-2 text-xs font-medium text-muted hover:text-accent hover:bg-background/60 transition-all">
+              <Database className="h-3.5 w-3.5" />
+              巡检
+            </Link>
+            <Link href="/settings" className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-background/40 px-3 py-2 text-xs font-medium text-muted hover:text-accent hover:bg-background/60 transition-all">
+              <Settings className="h-3.5 w-3.5" />
+              设置
+            </Link>
           </div>
         </div>
-      )}
 
-      {/* Library stats */}
-      <div className="rounded-2xl border border-border/30 bg-card/70 backdrop-blur-xl p-4 shadow-sm">
-        <div className="flex items-center gap-1.5 mb-3">
-          <Library className="h-4 w-4 text-muted" />
-          <h3 className="text-sm font-semibold text-foreground">书库状态</h3>
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <div className="rounded-lg bg-background/40 p-2 text-center">
-            <p className="text-lg font-bold text-foreground">{totalItems || readable.length}</p>
-            <p className="text-[10px] text-muted">总内容</p>
-          </div>
-          <div className="rounded-lg bg-background/40 p-2 text-center">
-            <p className="text-lg font-bold text-accent">{readingCount}</p>
-            <p className="text-[10px] text-muted">在读</p>
-          </div>
-          <div className="rounded-lg bg-background/40 p-2 text-center">
-            <p className="text-lg font-bold text-emerald-500">{unreadCount}</p>
-            <p className="text-[10px] text-muted">未读</p>
-          </div>
-          <div className="rounded-lg bg-background/40 p-2 text-center">
-            <p className="text-lg font-bold text-foreground">{contentType === "novel" ? "小说" : "漫画"}</p>
-            <p className="text-[10px] text-muted">当前类型</p>
-          </div>
-        </div>
       </div>
     </aside>
   );
