@@ -32,6 +32,8 @@ import {
 } from "lucide-react";
 import { useTranslation } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth-context";
+import { useReaderOptions } from "@/hooks/useReaderOptions";
+import { defaultReaderOptions } from "@/types/reader";
 import dynamic from "next/dynamic";
 
 /* ── 懒加载面板 ── */
@@ -480,13 +482,42 @@ export default function SettingsPage() {
 
 /* ── Reader Preferences Panel ── */
 function ReaderPreferencesPanel() {
-  const [direction, setDirection] = useState<'ltr' | 'rtl' | 'vertical'>('ltr');
-  const [zoom, setZoom] = useState<'fit-width' | 'fit-height' | 'original'>('fit-width');
-  const [animation, setAnimation] = useState<'none' | 'fade' | 'slide'>('fade');
-  const [background, setBackground] = useState<'system' | 'light' | 'dark' | 'paper'>('system');
-  const [showProgress, setShowProgress] = useState(true);
-  const [showPageNumber, setShowPageNumber] = useState(true);
-  const [autoSave, setAutoSave] = useState(true);
+  const { options, updateOptions, loaded } = useReaderOptions();
+  const [resetConfirm, setResetConfirm] = useState(false);
+
+  // Derive UI state from real ReaderOptions
+  const directionUI = options.direction === "rtl" ? "rtl" : options.infiniteScroll ? "vertical" : "ltr";
+  const zoomUI = options.fitMode === "width" ? "fit-width" : options.fitMode === "height" ? "fit-height" : "original";
+
+  const handleDirectionChange = (val: string) => {
+    if (val === "ltr") updateOptions({ direction: "ltr", infiniteScroll: false, mode: "single" });
+    else if (val === "rtl") updateOptions({ direction: "rtl", infiniteScroll: false, mode: "single" });
+    else if (val === "vertical") updateOptions({ direction: "ttb", infiniteScroll: true, mode: "webtoon" });
+  };
+
+  const handleZoomChange = (val: string) => {
+    if (val === "fit-width") updateOptions({ fitMode: "width" });
+    else if (val === "fit-height") updateOptions({ fitMode: "height" });
+    else if (val === "original") updateOptions({ fitMode: "container", containerWidth: "100%" });
+  };
+
+  const handleResetDefaults = () => {
+    if (!resetConfirm) {
+      setResetConfirm(true);
+      return;
+    }
+    updateOptions({ ...defaultReaderOptions });
+    setResetConfirm(false);
+  };
+
+  if (!loaded) {
+    return (
+      <div className="space-y-4 p-2">
+        <div className="h-24 animate-pulse rounded-2xl bg-card" />
+        <div className="h-48 animate-pulse rounded-2xl bg-card" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5 max-w-2xl">
@@ -497,24 +528,25 @@ function ReaderPreferencesPanel() {
           </span>
           <div>
             <h2 className="text-base font-semibold text-foreground">阅读器偏好</h2>
-            <p className="text-xs text-muted">调整阅读方向、缩放、翻页与阅读背景，先以本地预览形式呈现。</p>
+            <p className="text-xs text-muted">调整阅读方向、缩放与进度跟踪，设置会保存到当前浏览器并在阅读器中自动生效。</p>
           </div>
         </div>
         <p className="mt-3 rounded-xl bg-card/60 p-3 text-xs text-muted/80 border border-border/30">
-          当前为界面预览设置，后续会接入真实用户配置 API。
+          跨设备同步将在后续版本支持。
         </p>
       </div>
 
       <div className="rounded-2xl border border-border/40 bg-card overflow-hidden">
         <div className="divide-y divide-border/25">
+          {/* Direction */}
           <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
             <div>
               <div className="text-sm font-medium text-foreground">默认阅读方向</div>
               <div className="text-xs text-muted">控制漫画翻页和小说排版的主要阅读流向。</div>
             </div>
             <select
-              value={direction}
-              onChange={(e) => setDirection(e.target.value as typeof direction)}
+              value={directionUI}
+              onChange={(e) => handleDirectionChange(e.target.value)}
               className="h-9 w-full rounded-lg border border-border/50 bg-card/60 px-3 text-sm outline-none focus:border-accent/40 sm:w-56"
             >
               <option value="ltr">从左到右</option>
@@ -523,14 +555,15 @@ function ReaderPreferencesPanel() {
             </select>
           </div>
 
+          {/* Zoom */}
           <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
             <div>
               <div className="text-sm font-medium text-foreground">默认缩放模式</div>
               <div className="text-xs text-muted">决定打开阅读器时的默认页面适配方式。</div>
             </div>
             <select
-              value={zoom}
-              onChange={(e) => setZoom(e.target.value as typeof zoom)}
+              value={zoomUI}
+              onChange={(e) => handleZoomChange(e.target.value)}
               className="h-9 w-full rounded-lg border border-border/50 bg-card/60 px-3 text-sm outline-none focus:border-accent/40 sm:w-56"
             >
               <option value="fit-width">适应宽度</option>
@@ -539,43 +572,31 @@ function ReaderPreferencesPanel() {
             </select>
           </div>
 
-          <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+          {/* Animation — disabled, coming soon */}
+          <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4 opacity-50">
             <div>
-              <div className="text-sm font-medium text-foreground">翻页动画</div>
+              <div className="text-sm font-medium text-foreground">翻页动画 <span className="ml-1 text-[10px] text-muted">即将支持</span></div>
               <div className="text-xs text-muted">选择更克制或更流畅的页面切换体验。</div>
             </div>
-            <select
-              value={animation}
-              onChange={(e) => setAnimation(e.target.value as typeof animation)}
-              className="h-9 w-full rounded-lg border border-border/50 bg-card/60 px-3 text-sm outline-none focus:border-accent/40 sm:w-56"
-            >
-              <option value="none">关闭</option>
-              <option value="fade">淡入</option>
-              <option value="slide">滑动</option>
+            <select disabled className="h-9 w-full rounded-lg border border-border/50 bg-card/60 px-3 text-sm outline-none sm:w-56">
+              <option>淡入</option>
             </select>
           </div>
 
-          <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+          {/* Background — disabled, coming soon */}
+          <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4 opacity-50">
             <div>
-              <div className="text-sm font-medium text-foreground">阅读背景</div>
+              <div className="text-sm font-medium text-foreground">阅读背景 <span className="ml-1 text-[10px] text-muted">即将支持</span></div>
               <div className="text-xs text-muted">为长时间阅读选择更舒适的背景主题。</div>
             </div>
-            <select
-              value={background}
-              onChange={(e) => setBackground(e.target.value as typeof background)}
-              className="h-9 w-full rounded-lg border border-border/50 bg-card/60 px-3 text-sm outline-none focus:border-accent/40 sm:w-56"
-            >
-              <option value="system">跟随主题</option>
-              <option value="light">浅色</option>
-              <option value="dark">暗色</option>
-              <option value="paper">纸张色</option>
+            <select disabled className="h-9 w-full rounded-lg border border-border/50 bg-card/60 px-3 text-sm outline-none sm:w-56">
+              <option>跟随主题</option>
             </select>
           </div>
 
+          {/* Toggle: progress tracking */}
           {[
-            { label: '显示阅读进度', desc: '在阅读器中展示当前章节 / 全书进度。', checked: showProgress, onChange: setShowProgress },
-            { label: '显示页码', desc: '在底部状态栏或工具栏显示当前页码。', checked: showPageNumber, onChange: setShowPageNumber },
-            { label: '自动保存阅读进度', desc: '关闭阅读器时自动记录最后阅读位置。', checked: autoSave, onChange: setAutoSave },
+            { label: "自动保存阅读进度", desc: "跟踪并自动记录最后阅读位置，下次打开继续阅读。", checked: options.progressTracking, onChange: (v: boolean) => updateOptions({ progressTracking: v }) },
           ].map((item) => (
             <div key={item.label} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
               <div>
@@ -587,21 +608,38 @@ function ReaderPreferencesPanel() {
                 role="switch"
                 aria-checked={item.checked}
                 onClick={() => item.onChange(!item.checked)}
-                className={`relative h-6 w-11 flex-shrink-0 rounded-full transition-colors ${item.checked ? 'bg-accent' : 'bg-muted/40'}`}
+                className={`relative h-6 w-11 flex-shrink-0 rounded-full transition-colors ${item.checked ? "bg-accent" : "bg-muted/40"}`}
               >
                 <span
                   aria-hidden
-                  className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${item.checked ? 'translate-x-5' : 'translate-x-0'}`}
+                  className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${item.checked ? "translate-x-5" : "translate-x-0"}`}
                 />
               </button>
             </div>
           ))}
+
+          {/* Reset button */}
+          <div className="p-4 flex items-center gap-2">
+            <button
+              onClick={handleResetDefaults}
+              className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition-all ${
+                resetConfirm
+                  ? "bg-red-500/10 text-red-500 hover:bg-red-500/20"
+                  : "border border-border/40 text-muted hover:text-foreground hover:bg-card-hover"
+              }`}
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+              {resetConfirm ? "确认恢复默认设置" : "恢复默认阅读器设置"}
+            </button>
+            {resetConfirm && (
+              <button onClick={() => setResetConfirm(false)} className="text-xs text-muted hover:text-foreground">取消</button>
+            )}
+          </div>
         </div>
       </div>
     </div>
   );
 }
-
 /* ── Data QA Settings Panel ── */
 function DataQASettingsPanel() {
   const router = useRouter();
