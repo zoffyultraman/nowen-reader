@@ -1,4 +1,4 @@
-﻿package store
+package store
 
 import (
 	"database/sql"
@@ -58,6 +58,8 @@ type ComicListOptions struct {
 	MetaFilter     string // "all" | "with" | "missing" — 按元数据状态过滤
 	UserID         string // 当前用户ID — 用于按用户取 lastReadAt/lastReadPage/isFavorite
 	LibraryIDs     []string // 书库过滤 — 只返回这些书库下的漫画（空=不过滤）
+	Uncategorized   bool    // 筛选没有分类关联的作品
+	Untagged        bool    // 筛选没有标签关联的作品
 }
 
 // ComicListItem 是漫画在列表结果中的序列化表示。
@@ -183,6 +185,17 @@ func GetAllComics(opts ComicListOptions) (*ComicListResult, error) {
 	if opts.ExcludeGrouped {
 		conditions = append(conditions, `c."id" NOT IN (SELECT gi."comicId" FROM "ComicGroupItem" gi INNER JOIN "ComicGroup" g ON g."id" = gi."groupId")`)
 	}
+
+	// Uncategorized: 筛选没有分类关联的作品
+	if opts.Uncategorized {
+		conditions = append(conditions, `c."id" NOT IN (SELECT "comicId" FROM "ComicCategory")`)
+	}
+
+	// Untagged: 筛选没有标签关联的作品
+	if opts.Untagged {
+		conditions = append(conditions, `c."id" NOT IN (SELECT "comicId" FROM "ComicTag")`)
+	}
+
 
 	// MetaFilter: 按元数据状态过滤
 	if opts.MetaFilter == "with" {

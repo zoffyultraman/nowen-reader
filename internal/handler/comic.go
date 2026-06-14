@@ -1,4 +1,4 @@
-﻿package handler
+package handler
 
 import (
 	"fmt"
@@ -73,6 +73,8 @@ func (h *ComicHandler) ListComics(c *gin.Context) {
 		ExcludeGrouped: c.Query("excludeGrouped") == "true",
 		UserID:         getUserID(c),
 		LibraryIDs:     libraryIDs,
+		Uncategorized:  c.Query("uncategorized") == "true",
+		Untagged:       c.Query("untagged") == "true",
 	})
 	if err != nil {
 		log.Printf("[API] ListComics error: %v (sortBy=%s, contentType=%s, readingStatus=%s)",
@@ -341,6 +343,7 @@ func (h *ComicHandler) BatchOperation(c *gin.Context) {
 		Tags          []string `json:"tags"`
 		CategorySlugs []string `json:"categorySlugs"`
 		DeleteFiles   bool     `json:"deleteFiles"`
+		ReadingStatus  string   `json:"readingStatus"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
@@ -399,6 +402,35 @@ func (h *ComicHandler) BatchOperation(c *gin.Context) {
 		}
 		if err := store.BatchSetCategory(body.ComicIDs, body.CategorySlugs); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Batch set category failed"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"success": true})
+
+
+	case "removeTags":
+		if len(body.Tags) == 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "tags array required"})
+			return
+		}
+		if err := store.BatchRemoveTags(body.ComicIDs, body.Tags); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Batch remove tags failed"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"success": true})
+
+	case "setReadingStatus":
+		uid := getUserID(c)
+		if uid == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "User ID required for reading status"})
+			return
+		}
+		validStatuses := map[string]bool{"": true, "want": true, "reading": true, "finished": true, "shelved": true}
+		if !validStatuses[body.ReadingStatus] {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid reading status"})
+			return
+		}
+		if err := store.BatchSetReadingStatus(uid, body.ComicIDs, body.ReadingStatus); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Batch set reading status failed"})
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"success": true})

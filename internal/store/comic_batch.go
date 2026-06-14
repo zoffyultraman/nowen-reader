@@ -118,6 +118,95 @@ func BatchSetCategory(comicIDs []string, categorySlugs []string) error {
 	return nil
 }
 
+// BatchRemoveTags 批量移除漫画上的标签（幂等：标签不存在时跳过）。
+func BatchRemoveTags(comicIDs []string, tagNames []string) error {
+	if len(comicIDs) == 0 || len(tagNames) == 0 {
+		return nil
+	}
+
+	// 构建 comic ID IN 子句
+	cph := make([]string, len(comicIDs))
+	cargs := make([]interface{}, len(comicIDs))
+	for i, id := range comicIDs {
+		cph[i] = "?"
+		cargs[i] = id
+	}
+	cidIn := strings.Join(cph, ",")
+
+	// 构建 tag name IN 子句
+	tph := make([]string, len(tagNames))
+	targs := make([]interface{}, len(tagNames))
+	for i, name := range tagNames {
+		tph[i] = "?"
+		targs[i] = name
+	}
+	tnameIn := strings.Join(tph, ",")
+
+	// 删除匹配的 ComicTag 记录
+	_, err := db.Exec(
+		fmt.Sprintf(`DELETE FROM "ComicTag" WHERE "comicId" IN (%s) AND "tagId" IN (SELECT "id" FROM "Tag" WHERE "name" IN (%s))`, cidIn, tnameIn),
+		append(cargs, targs...)...,
+	)
+	if err != nil {
+		return err
+	}
+
+	// 清理孤立标签
+	for _, name := range tagNames {
+		var tagID int
+		err := db.QueryRow(`SELECT "id" FROM "Tag" WHERE "name" = ?`, name).Scan(&tagID)
+		if err != nil {
+			continue // 标签不存在，跳过
+		}
+		var count int
+		_ = db.QueryRow(`SELECT COUNT(*) FROM "ComicTag" WHERE "tagId" = ?`, tagID).Scan(&count)
+		if count == 0 {
+			_, _ = db.Exec(`DELETE FROM "Tag" WHERE "id" = ?`, tagID)
+		}
+	}
+
+	return nil
+}
+
+// BatchSetReadingStatus 批量设置用户级阅读状态（幂等）。
+// 仅写入 UserComicState.readingStatus，不修改 lastReadPage / totalReadTime。
+func BatchSetReadingStatus(userID string, comicIDs []string, status string) error {
+	if len(comicIDs) == 0 {
+		return nil
+	}
+
+	// 校验合法状态
+	validStatuses := map[string]bool{
+		"":        true, // 清空状态
+		"want":    true,
+		"reading": true,
+		"finished": true,
+		"shelved": true,
+	}
+	if !validStatuses[status] {
+		return fmt.Errorf("invalid reading status: %s", status)
+	}
+
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	for _, comicID := range comicIDs {
+		_, err := tx.Exec(`
+			INSERT INTO "UserComicState" ("userId", "comicId", "readingStatus")
+			VALUES (?, ?, ?)
+			ON CONFLICT("userId", "comicId") DO UPDATE SET "readingStatus" = ?
+		`, userID, comicID, status, status)
+		if err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
+}
+
 // ============================================================
 // 排序操作
 // ============================================================
