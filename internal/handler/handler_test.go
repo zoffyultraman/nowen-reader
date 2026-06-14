@@ -587,3 +587,162 @@ func TestNoUnprotectedEndpoints(t *testing.T) {
 		})
 	}
 }
+
+func TestDataQAHandler_FixPreview_Unauthorized(t *testing.T) {
+	r := setupTestRouter(t)
+
+	// No cookie → should get 401
+	w := performRequest(r, "POST", "/api/admin/data-qa/fix-preview", map[string]interface{}{
+		"issueTypes": []string{"TOTAL_TIME_ZERO"},
+		"fixAll":     false,
+	})
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("Expected 401, got %d", w.Code)
+	}
+}
+
+func TestDataQAHandler_FixPreview_AdminOK(t *testing.T) {
+	r := setupTestRouter(t)
+	cookie := registerAndLogin(t, r)
+
+	w := performAuthedRequest(r, "POST", "/api/admin/data-qa/fix-preview", map[string]interface{}{
+		"issueTypes": []string{},
+		"fixAll":     true,
+	}, cookie)
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("Failed to parse response: %v", err)
+	}
+	if _, ok := resp["dryRun"]; !ok {
+		t.Error("Expected 'dryRun' field in response")
+	}
+	if _, ok := resp["plans"]; !ok {
+		t.Error("Expected 'plans' field in response")
+	}
+}
+
+func TestDataQAHandler_Fix_NoConfirm(t *testing.T) {
+	r := setupTestRouter(t)
+	cookie := registerAndLogin(t, r)
+
+	// Missing confirm → should get 400
+	w := performAuthedRequest(r, "POST", "/api/admin/data-qa/fix", map[string]interface{}{
+		"issueTypes": []string{"TOTAL_TIME_ZERO"},
+		"fixAll":     false,
+	}, cookie)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("Expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "confirm") {
+		t.Error("Expected error message about confirm")
+	}
+}
+
+func TestDataQAHandler_Fix_ConfirmTrue(t *testing.T) {
+	r := setupTestRouter(t)
+	cookie := registerAndLogin(t, r)
+
+	w := performAuthedRequest(r, "POST", "/api/admin/data-qa/fix", map[string]interface{}{
+		"issueTypes": []string{},
+		"fixAll":     true,
+		"confirm":    true,
+	}, cookie)
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("Failed to parse response: %v", err)
+	}
+	if _, ok := resp["dryRun"]; !ok {
+		t.Error("Expected 'dryRun' field")
+	}
+	if resp["dryRun"] != false {
+		t.Error("Expected dryRun=false for real fix")
+	}
+	if _, ok := resp["executed"]; !ok {
+		t.Error("Expected 'executed' field")
+	}
+}
+
+func TestDataQAHandler_PageCountRescan_ConfirmTrue(t *testing.T) {
+	r := setupTestRouter(t)
+	cookie := registerAndLogin(t, r)
+
+	w := performAuthedRequest(r, "POST", "/api/admin/data-qa/pagecount-rescan", map[string]interface{}{
+		"confirm":         true,
+		"limit":           100,
+		"includeNegative": true,
+	}, cookie)
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("Failed to parse response: %v", err)
+	}
+	if _, ok := resp["queued"]; !ok {
+		t.Error("Expected 'queued' field in response")
+	}
+	if _, ok := resp["message"]; !ok {
+		t.Error("Expected 'message' field in response")
+	}
+}
+
+func TestDataQAHandler_PageCountRescan_NoConfirm(t *testing.T) {
+	r := setupTestRouter(t)
+	cookie := registerAndLogin(t, r)
+
+	w := performAuthedRequest(r, "POST", "/api/admin/data-qa/pagecount-rescan", map[string]interface{}{
+		"limit":           100,
+		"includeNegative": true,
+	}, cookie)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("Expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "confirm") {
+		t.Error("Expected error message about confirm")
+	}
+}
+
+func TestDataQAHandler_Summary_AdminOK(t *testing.T) {
+	r := setupTestRouter(t)
+	cookie := registerAndLogin(t, r)
+
+	w := performAuthedRequest(r, "GET", "/api/admin/data-qa/summary", nil, cookie)
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("Failed to parse response: %v", err)
+	}
+	if _, ok := resp["totalIssues"]; !ok {
+		t.Error("Expected 'totalIssues' field")
+	}
+}
+
+func TestDataQAHandler_Issues_AdminOK(t *testing.T) {
+	r := setupTestRouter(t)
+	cookie := registerAndLogin(t, r)
+
+	w := performAuthedRequest(r, "GET", "/api/admin/data-qa/issues", nil, cookie)
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("Failed to parse response: %v", err)
+	}
+	if _, ok := resp["issues"]; !ok {
+		t.Error("Expected 'issues' field")
+	}
+}

@@ -296,3 +296,104 @@ func TestExecuteFix_ZeroDurationSession(t *testing.T) {
 		t.Errorf("expected totalReadTime=%d, got %d", duration, totalTime)
 	}
 }
+
+func TestExecuteFix_ZeroDurationSession_TooSmall(t *testing.T) {
+	setupTestDB(t)
+	db := store.DB()
+
+	_, err := db.Exec(`INSERT INTO "Comic" ("id","filename","title","pageCount","fileSize","addedAt","updatedAt")
+		VALUES ('comic-zds-small','f.cbz','Test',100,100,datetime('now'),datetime('now'))`)
+	if err != nil {
+		t.Fatalf("insert comic: %v", err)
+	}
+
+	// startedAt and endedAt are 1 second apart (<= 2s threshold)
+	now := time.Now().UTC()
+	startedAt := now.Add(-1 * time.Second).Format(time.RFC3339)
+	endedAt := now.Format(time.RFC3339)
+	_, err = db.Exec(`INSERT INTO "ReadingSession" ("comicId","startedAt","endedAt","duration","startPage","endPage")
+		VALUES ('comic-zds-small',?,?,0,0,5)`, startedAt, endedAt)
+	if err != nil {
+		t.Fatalf("insert session: %v", err)
+	}
+
+	result, err := ExecuteFix([]string{"SESSION_ZERO_DURATION"}, nil, false)
+	if err != nil {
+		t.Fatalf("ExecuteFix: %v", err)
+	}
+
+	// Should have 1 error (too small), 0 executed
+	if result.TotalExecuted != 0 {
+		t.Errorf("expected 0 executed, got %d", result.TotalExecuted)
+	}
+	if len(result.Errors) != 1 {
+		t.Fatalf("expected 1 error (duration too small), got %d", len(result.Errors))
+	}
+	if result.Errors[0].Success {
+		t.Error("expected error item Success=false")
+	}
+}
+
+func TestExecuteFix_ZeroDurationSession_TooLarge(t *testing.T) {
+	setupTestDB(t)
+	db := store.DB()
+
+	_, err := db.Exec(`INSERT INTO "Comic" ("id","filename","title","pageCount","fileSize","addedAt","updatedAt")
+		VALUES ('comic-zds-large','f.cbz','Test',100,100,datetime('now'),datetime('now'))`)
+	if err != nil {
+		t.Fatalf("insert comic: %v", err)
+	}
+
+	// startedAt is 13 hours ago, endedAt is now (> 12h threshold)
+	now := time.Now().UTC()
+	startedAt := now.Add(-13 * time.Hour).Format(time.RFC3339)
+	endedAt := now.Format(time.RFC3339)
+	_, err = db.Exec(`INSERT INTO "ReadingSession" ("comicId","startedAt","endedAt","duration","startPage","endPage")
+		VALUES ('comic-zds-large',?,?,0,0,5)`, startedAt, endedAt)
+	if err != nil {
+		t.Fatalf("insert session: %v", err)
+	}
+
+	result, err := ExecuteFix([]string{"SESSION_ZERO_DURATION"}, nil, false)
+	if err != nil {
+		t.Fatalf("ExecuteFix: %v", err)
+	}
+
+	// Should have 1 error (too large), 0 executed
+	if result.TotalExecuted != 0 {
+		t.Errorf("expected 0 executed, got %d", result.TotalExecuted)
+	}
+	if len(result.Errors) != 1 {
+		t.Fatalf("expected 1 error (duration exceeds 12h), got %d", len(result.Errors))
+	}
+}
+
+func TestExecuteFix_ZeroDurationSession_Idempotent(t *testing.T) {
+	setupTestDB(t)
+	db := store.DB()
+
+	_, err := db.Exec(`INSERT INTO "Comic" ("id","filename","title","pageCount","fileSize","addedAt","updatedAt")
+		VALUES ('comic-zds-idem','f.cbz','Test',100,100,datetime('now'),datetime('now'))`)
+	if err != nil {
+		t.Fatalf("insert comic: %v", err)
+	}
+
+	// Session already has valid duration > 0 — should not be found as zero-duration
+	oneHourAgo := time.Now().UTC().Add(-1 * time.Hour).Format(time.RFC3339)
+	fiftyMinAgo := time.Now().UTC().Add(-50 * time.Minute).Format(time.RFC3339)
+	_, err = db.Exec(`INSERT INTO "ReadingSession" ("comicId","startedAt","endedAt","duration","startPage","endPage")
+		VALUES ('comic-zds-idem',?,?,600,0,5)`, oneHourAgo, fiftyMinAgo)
+	if err != nil {
+		t.Fatalf("insert session: %v", err)
+	}
+
+	result, err := ExecuteFix([]string{"SESSION_ZERO_DURATION"}, nil, false)
+	if err != nil {
+		t.Fatalf("ExecuteFix: %v", err)
+	}
+
+	// Already has duration=600, so no issues found
+	if result.TotalExecuted != 0 {
+		t.Errorf("expected 0 executed (already fixed), got %d", result.TotalExecuted)
+	}
+}
