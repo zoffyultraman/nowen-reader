@@ -16,6 +16,7 @@
 - PAGE_COUNT 重扫触发 API（`POST /api/admin/data-qa/pagecount-rescan`）：列出需要重扫的漫画，复用已有 scanner
 - `/data-qa` 管理页面集成高风险操作按钮（PageCount Rescan）
 - 所有 8 类 issue 现在均有 dry-run 支持，6 类支持真实修复
+- DATA-QA-02 补充测试覆盖：SESSION_ZERO_DURATION 边界测试（<=2s / >12h skipped）、幂等测试、handler 层 8 个 DataQA 端点测试（auth / confirm / fix-preview / fix / rescan）
 
 - 上传功能支持选择目标书库：管理员可在首页上传区域选择目标书库，文件直接写入该书库的 rootPath
 - `POST /api/upload` 新增可选参数 `libraryId`，传入时上传到对应书库，不传时兼容旧 `comicsDir` / `novelsDir` 逻辑
