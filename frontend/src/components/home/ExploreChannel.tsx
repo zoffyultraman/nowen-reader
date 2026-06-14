@@ -20,14 +20,15 @@ type ExploreTab = "latest" | "unread" | "random" | "short";
 interface TabDef {
   key: ExploreTab;
   label: string;
+  mobileLabel: string;
   icon: React.ReactNode;
 }
 
 const TABS: TabDef[] = [
-  { key: "latest", label: "最近入库", icon: <Clock className="h-3 w-3" /> },
-  { key: "unread", label: "未读宝藏", icon: <BookOpen className="h-3 w-3" /> },
-  { key: "random", label: "随机发现", icon: <Sparkles className="h-3 w-3" /> },
-  { key: "short", label: "短篇速读", icon: <Zap className="h-3 w-3" /> },
+  { key: "latest", label: "最近入库", mobileLabel: "入库", icon: <Clock className="h-3 w-3" /> },
+  { key: "unread", label: "未读宝藏", mobileLabel: "未读", icon: <BookOpen className="h-3 w-3" /> },
+  { key: "random", label: "随机发现", mobileLabel: "随机", icon: <Sparkles className="h-3 w-3" /> },
+  { key: "short", label: "短篇速读", mobileLabel: "短篇", icon: <Zap className="h-3 w-3" /> },
 ];
 
 // ============================================================
@@ -81,34 +82,43 @@ export default function ExploreChannel({ comics, contentType }: ExploreChannelPr
   return (
     <section className="mb-4">
       {/* Tab header */}
-      <div className="mb-2 flex items-center justify-between">
-        <div className="flex items-center gap-1">
-          <h3 className="mr-2 text-sm font-semibold text-foreground sm:text-base">
+      <div className="mb-2">
+        {/* Title + shuffle row */}
+        <div className="flex items-center justify-between mb-2 sm:mb-0">
+          <h3 className="text-sm font-semibold text-foreground sm:text-base">
             探索频道
           </h3>
-          {TABS.map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
-              className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all duration-200 ${
-                activeTab === tab.key
-                  ? "bg-accent/10 text-accent"
-                  : "text-muted hover:text-foreground hover:bg-card-hover"
-              }`}
-            >
-              {tab.icon}
-              {tab.label}
-            </button>
-          ))}
+          <button
+            onClick={handleShuffle}
+            className="inline-flex items-center gap-1 text-xs text-muted hover:text-accent transition-colors shrink-0"
+          >
+            <Shuffle className="h-3 w-3" />
+            <span className="hidden sm:inline">换一批</span>
+            <span className="sm:hidden">换</span>
+          </button>
         </div>
-        <button
-          onClick={handleShuffle}
-          className="inline-flex items-center gap-1 text-xs text-muted hover:text-accent transition-colors"
-        >
-          <Shuffle className="h-3 w-3" />
-          换一批
-        </button>
+        {/* Tabs — horizontal scroll on mobile */}
+        <div className="-mx-4 overflow-x-auto px-4 scrollbar-hide sm:mx-0 sm:px-0" style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
+          <div className="flex items-center gap-1.5 sm:gap-1 min-w-max">
+            {TABS.map((tab) => (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                className={`inline-flex items-center gap-1 shrink-0 whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-medium transition-all duration-200 ${
+                  activeTab === tab.key
+                    ? "bg-accent/10 text-accent"
+                    : "text-muted hover:text-foreground hover:bg-card-hover"
+                }`}
+              >
+                {tab.icon}
+                <span className="sm:hidden">{tab.mobileLabel}</span>
+                <span className="hidden sm:inline">{tab.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
+
 
       {/* Horizontal shelf */}
       <ContentShelf title="" className="mb-0">
