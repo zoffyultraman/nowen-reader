@@ -22,6 +22,7 @@ import {
   fetchIssues,
   fetchFixPreview,
   executeFix,
+  triggerPageCountRescan,
   type DataQASummary,
   type DataQAIssue,
   type DataQAFixPreviewResult,
@@ -96,6 +97,7 @@ export default function DataQAPage() {
   // Action state
   const [previewResult, setPreviewResult] = useState<DataQAFixPreviewResult | null>(null);
   const [fixResult, setFixResult] = useState<DataQAFixResult | null>(null);
+  const [rescanResult, setRescanResult] = useState<{ queued: number; message: string } | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [confirmDialog, setConfirmDialog] = useState(false);
   const [toast, setToast] = useState<{ msg: string; tone: "ok" | "err" } | null>(null);
@@ -185,6 +187,21 @@ export default function DataQAPage() {
       setActionLoading(null);
     }
   }, [filterType, load]);
+  // PageCount rescan
+  const handleRescan = useCallback(async () => {
+    setActionLoading("rescan");
+    setRescanResult(null);
+    try {
+      const r = await triggerPageCountRescan({ confirm: true, limit: 100, includeNegative: true });
+      setRescanResult(r);
+      setToast({ msg: `Found ${r.queued} comics needing rescan`, tone: "ok" });
+    } catch (e) {
+      setToast({ msg: e instanceof Error ? e.message : "Rescan failed", tone: "err" });
+    } finally {
+      setActionLoading(null);
+    }
+  }, []);
+
 
   return (
     <div className="min-h-screen bg-background pb-16">
@@ -293,6 +310,18 @@ export default function DataQAPage() {
               <Wrench className="h-3.5 w-3.5" />
             )}
             Execute Fix
+          </button>
+          <button
+            onClick={handleRescan}
+            disabled={actionLoading !== null}
+            className="motion-button flex items-center gap-1.5 rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-card-hover"
+          >
+            {actionLoading === "rescan" ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <RefreshCw className="h-3.5 w-3.5" />
+            )}
+            PageCount Rescan
           </button>
           <div className="ml-auto text-xs text-muted">
             {filtered.length} / {issues.length} issues
@@ -436,6 +465,24 @@ export default function DataQAPage() {
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+          </div>
+        )}
+
+{/* PageCount Rescan result */}
+        {rescanResult && (
+          <div className="surface-card rounded-xl p-4">
+            <div className="flex items-center justify-between">
+              <div className="text-sm font-medium">PageCount Rescan</div>
+              <button onClick={() => setRescanResult(null)} className="text-muted hover:text-foreground">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="mt-2 text-xs text-muted">{rescanResult.message}</div>
+            {rescanResult.queued > 0 && (
+              <div className="mt-1 text-xs text-amber-500">
+                {rescanResult.queued} comics queued for background scanner
               </div>
             )}
           </div>

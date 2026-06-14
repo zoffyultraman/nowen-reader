@@ -74,6 +74,12 @@ export interface DataQAFixResult {
   errors: DataQAFixResultItem[];
 }
 
+
+export interface PageCountRescanResult {
+  queued: number;
+  comicIds: string[];
+  message: string;
+}
 // ============================================================
 // API calls
 // ============================================================
@@ -118,5 +124,20 @@ export async function executeFix(body: {
     body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error("Fix execution failed: " + res.status);
+  return res.json();
+}
+
+export async function triggerPageCountRescan(body: {
+  confirm: boolean;
+  limit?: number;
+  includeNegative?: boolean;
+}): Promise<PageCountRescanResult> {
+  const res = await fetch(BASE + "/pagecount-rescan", {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error("PageCount rescan failed: " + res.status);
   return res.json();
 }
