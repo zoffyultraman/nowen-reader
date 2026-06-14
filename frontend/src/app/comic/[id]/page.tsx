@@ -870,8 +870,8 @@ export default function ComicDetailPage() {
       {comic?.coverUrl && (
         <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden" aria-hidden="true">
           <div
-            className="absolute inset-0 scale-110 bg-cover bg-center opacity-25 blur-2xl"
-            style={{ backgroundImage: `url(/api/comics/${comic.id}/thumbnail?v=${coverKey})` }}
+            className="absolute inset-0 scale-110 bg-cover bg-center bg-no-repeat opacity-25 blur-2xl"
+            style={{ backgroundImage: `url(/api/comics/${comic.id}/thumbnail?v=${coverKey})`, backgroundSize: "cover", backgroundPosition: "center", backgroundRepeat: "no-repeat" }}
           />
           <div className="absolute inset-0 bg-gradient-to-b from-background/60 via-background/80 to-background" />
         </div>
