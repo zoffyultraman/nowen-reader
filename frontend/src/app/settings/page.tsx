@@ -605,12 +605,14 @@ function ReaderPreferencesPanel() {
 /* ── Data QA Settings Panel ── */
 function DataQASettingsPanel() {
   const router = useRouter();
+  const t = useTranslation();
+  const d = t.dataQa;
 
   const capabilities = [
-    { icon: <Eye className="h-3.5 w-3.5" />, text: '只读扫描：检查 pageCount、阅读时长、孤儿标签 / 分类、异常 session' },
-    { icon: <Wand2 className="h-3.5 w-3.5" />, text: 'dry-run 预览：先查看修复计划，不直接修改数据' },
-    { icon: <Shield className="h-3.5 w-3.5" />, text: '安全修复：仅在 confirm:true 时执行低风险修复' },
-    { icon: <AlertTriangle className="h-3.5 w-3.5" />, text: '高风险问题仅 skipped / 半自动策略，避免误伤数据' },
+    { icon: <Eye className="h-3.5 w-3.5" />, text: d?.capReadOnly ?? '只读扫描：检查 pageCount、阅读时长、孤儿标签 / 分类、异常 session' },
+    { icon: <Wand2 className="h-3.5 w-3.5" />, text: d?.capDryRun ?? 'dry-run 预览：先查看修复计划，不直接修改数据' },
+    { icon: <Shield className="h-3.5 w-3.5" />, text: d?.capSafeFix ?? '安全修复：仅在 confirm:true 时执行低风险修复' },
+    { icon: <AlertTriangle className="h-3.5 w-3.5" />, text: d?.capHighRisk ?? '高风险问题仅 skipped / 半自动策略，避免误伤数据' },
   ];
 
   return (
@@ -621,18 +623,18 @@ function DataQASettingsPanel() {
             <Database className="h-4 w-4" />
           </span>
           <div>
-            <h2 className="text-base font-semibold text-foreground">数据巡检</h2>
-            <p className="text-xs text-muted">用于检查 pageCount、阅读时长、孤儿标签、孤儿分类、异常 session 等问题。</p>
+            <h2 className="text-base font-semibold text-foreground">{d?.settingsTitle ?? '数据巡检'}</h2>
+            <p className="text-xs text-muted">{d?.settingsDesc ?? '用于检查 pageCount、阅读时长、孤儿标签、孤儿分类、异常 session 等问题。'}</p>
           </div>
         </div>
         <p className="mt-3 text-xs text-muted/80">
-          如果需要执行真实扫描、预览修复计划或执行安全修复，请前往独立的 Data QA 管理页。
+          {d?.settingsHint ?? '如果需要执行真实扫描、预览修复计划或执行安全修复，请前往独立的 Data QA 管理页。'}
         </p>
       </div>
 
       <div className="rounded-2xl border border-border/40 bg-card overflow-hidden">
         <div className="px-5 py-3.5 border-b border-border/30">
-          <h3 className="text-sm font-semibold text-foreground">能力总览</h3>
+          <h3 className="text-sm font-semibold text-foreground">{d?.capabilitiesTitle ?? '能力总览'}</h3>
         </div>
         <div className="divide-y divide-border/20">
           {capabilities.map((item) => (
@@ -652,9 +654,9 @@ function DataQASettingsPanel() {
           className="inline-flex items-center gap-2 rounded-xl bg-accent px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-accent/90"
         >
           <ExternalLink className="h-4 w-4" />
-          打开 Data QA 管理页
+          {d?.openDataQaPage ?? '打开 Data QA 管理页'}
         </button>
-        <span className="text-xs text-muted/60">独立页面中包含 summary、issues、fix-preview、真实修复和 pagecount-rescan。</span>
+        <span className="text-xs text-muted/60">{d?.openDataQaHint ?? '独立页面中包含 summary、issues、fix-preview、真实修复和 pagecount-rescan。'}</span>
       </div>
     </div>
   );

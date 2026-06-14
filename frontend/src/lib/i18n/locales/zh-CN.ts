@@ -1138,6 +1138,74 @@ autoDetect: "智能合集",
     collectionItemAdded: "已添加到合集",
     collectionItemRemoved: "已从合集移除",
   },
+  dataQa: {
+    // Header
+    title: "数据巡检",
+    refresh: "刷新",
+    // Summary cards
+    totalIssues: "问题总数",
+    p1Label: "P1",
+    p2Label: "P2",
+    p3Label: "P3",
+    autoFixable: "可自动修复",
+    // Filters
+    filters: "筛选",
+    issueType: "问题类型",
+    severity: "严重性",
+    autoFixableFilter: "可自动修复",
+    entityType: "实体类型",
+    searchPlaceholder: "搜索问题...",
+    all: "全部",
+    onlyAutoFixable: "仅可自动修复",
+    notAutoFixable: "不可自动修复",
+    // Actions
+    dryRunPreview: "Dry-run 预览",
+    executeFix: "执行修复",
+    pageCountRescan: "页数重扫",
+    // Confirm dialog
+    confirmFix: "确认修复",
+    confirmFixMessage: "此操作将修改数据库。受影响的记录将被更新或删除。此操作是幂等且安全的，但请确保您有备份。",
+    cancel: "取消",
+    confirmExecute: "确认执行",
+    // Issue list
+    scanning: "扫描中...",
+    noIssues: "未发现问题",
+    autoFixBadge: "自动修复",
+    currentLabel: "当前值：",
+    expectedLabel: "预期值：",
+    idLabel: "ID：",
+    // Result panels
+    previewResult: "预览结果",
+    skipped: "已跳过：",
+    fixResult: "修复结果",
+    executed: "已执行",
+    errors: "错误",
+    rescanTitle: "页数重扫",
+    comicsQueued: "本漫画已加入后台扫描队列",
+    // Issue type display names
+    pageCountZero: "页数为零",
+    pageCountNegative: "页数为负",
+    sessionOrphan: "孤儿会话",
+    sessionZeroDuration: "零时长会话",
+    totalTimeZero: "总阅读时长为零",
+    ucsTotalTimeZero: "用户状态阅读时长为零",
+    orphanTag: "孤儿标签关联",
+    orphanCategory: "孤儿分类关联",
+    // Settings panel
+    settingsTitle: "数据巡检",
+    settingsDesc: "用于检查 pageCount、阅读时长、孤儿标签、孤儿分类、异常 session 等问题。",
+    settingsHint: "如果需要执行真实扫描、预览修复计划或执行安全修复，请前往独立的 Data QA 管理页。",
+    capabilitiesTitle: "能力总览",
+    capReadOnly: "只读扫描：检查 pageCount、阅读时长、孤儿标签 / 分类、异常 session",
+    capDryRun: "dry-run 预览：先查看修复计划，不直接修改数据",
+    capSafeFix: "安全修复：仅在 confirm:true 时执行低风险修复",
+    capHighRisk: "高风险问题仅 skipped / 半自动策略，避免误伤数据",
+    openDataQaPage: "打开 Data QA 管理页",
+    openDataQaHint: "独立页面中包含 summary、issues、fix-preview、真实修复和 pagecount-rescan。",
+    // Error states
+    failedToLoad: "加载失败",
+    retry: "重试",
+  },
   tagManager: {
     title: "标签与分类管理",
     tagsTab: "标签",
@@ -2265,6 +2333,64 @@ export interface Translations {
     collectionDeleted: string;
     collectionItemAdded: string;
     collectionItemRemoved: string;
+  };
+  dataQa?: {
+    title: string;
+    refresh: string;
+    totalIssues: string;
+    p1Label: string;
+    p2Label: string;
+    p3Label: string;
+    autoFixable: string;
+    filters: string;
+    issueType: string;
+    severity: string;
+    autoFixableFilter: string;
+    entityType: string;
+    searchPlaceholder: string;
+    all: string;
+    onlyAutoFixable: string;
+    notAutoFixable: string;
+    dryRunPreview: string;
+    executeFix: string;
+    pageCountRescan: string;
+    confirmFix: string;
+    confirmFixMessage: string;
+    cancel: string;
+    confirmExecute: string;
+    scanning: string;
+    noIssues: string;
+    autoFixBadge: string;
+    currentLabel: string;
+    expectedLabel: string;
+    idLabel: string;
+    previewResult: string;
+    skipped: string;
+    fixResult: string;
+    executed: string;
+    errors: string;
+    rescanTitle: string;
+    comicsQueued: string;
+    pageCountZero: string;
+    pageCountNegative: string;
+    sessionOrphan: string;
+    sessionZeroDuration: string;
+    totalTimeZero: string;
+    ucsTotalTimeZero: string;
+    orphanTag: string;
+    orphanCategory: string;
+    settingsTitle: string;
+    settingsDesc: string;
+    settingsHint: string;
+    capabilitiesTitle: string;
+    capReadOnly: string;
+    capDryRun: string;
+    capSafeFix: string;
+    capHighRisk: string;
+    openDataQaPage: string;
+    openDataQaHint: string;
+    failedToLoad: string;
+    retry: string;
   };
   tagManager?: {
     title: string;

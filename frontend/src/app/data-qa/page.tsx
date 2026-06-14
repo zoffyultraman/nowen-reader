@@ -27,7 +27,29 @@ import {
   type DataQAIssue,
   type DataQAFixPreviewResult,
   type DataQAFixResult,
+  type DataQAFixResultItem,
+  type DataQASkip,
 } from "@/api/dataQa";
+import { useTranslation } from "@/lib/i18n";
+
+// ============================================================
+// Issue type display name map
+// ============================================================
+
+function useIssueTypeLabel(issueType: string): string {
+  const t = useTranslation();
+  const map: Record<string, string | undefined> = {
+    PAGE_COUNT_ZERO: t.dataQa?.pageCountZero,
+    PAGE_COUNT_NEGATIVE: t.dataQa?.pageCountNegative,
+    SESSION_ORPHAN: t.dataQa?.sessionOrphan,
+    SESSION_ZERO_DURATION: t.dataQa?.sessionZeroDuration,
+    TOTAL_TIME_ZERO: t.dataQa?.totalTimeZero,
+    UCS_TOTAL_TIME_ZERO: t.dataQa?.ucsTotalTimeZero,
+    ORPHAN_TAG: t.dataQa?.orphanTag,
+    ORPHAN_CATEGORY: t.dataQa?.orphanCategory,
+  };
+  return map[issueType] ?? issueType;
+}
 
 // ============================================================
 // Severity helpers
@@ -54,12 +76,13 @@ function SeverityBadge({ level }: { level: string }) {
 // ============================================================
 
 function SummaryCards({ summary }: { summary: DataQASummary }) {
+  const t = useTranslation();
   const items = [
-    { label: "Total Issues", value: summary.totalIssues, tone: summary.totalIssues > 0 ? "text-foreground" : "text-emerald-500" },
-    { label: "P1", value: summary.p1, tone: summary.p1 > 0 ? "text-red-500" : "text-muted" },
-    { label: "P2", value: summary.p2, tone: summary.p2 > 0 ? "text-amber-500" : "text-muted" },
-    { label: "P3", value: summary.p3, tone: summary.p3 > 0 ? "text-sky-500" : "text-muted" },
-    { label: "Auto-fixable", value: summary.autoFixable, tone: "text-foreground" },
+    { label: t.dataQa?.totalIssues ?? "Total Issues", value: summary.totalIssues, tone: summary.totalIssues > 0 ? "text-foreground" : "text-emerald-500" },
+    { label: t.dataQa?.p1Label ?? "P1", value: summary.p1, tone: summary.p1 > 0 ? "text-red-500" : "text-muted" },
+    { label: t.dataQa?.p2Label ?? "P2", value: summary.p2, tone: summary.p2 > 0 ? "text-amber-500" : "text-muted" },
+    { label: t.dataQa?.p3Label ?? "P3", value: summary.p3, tone: summary.p3 > 0 ? "text-sky-500" : "text-muted" },
+    { label: t.dataQa?.autoFixable ?? "Auto-fixable", value: summary.autoFixable, tone: "text-foreground" },
   ];
 
   return (
@@ -82,6 +105,7 @@ function SummaryCards({ summary }: { summary: DataQASummary }) {
 
 export default function DataQAPage() {
   const router = useRouter();
+  const t = useTranslation();
   const [summary, setSummary] = useState<DataQASummary | null>(null);
   const [issues, setIssues] = useState<DataQAIssue[]>([]);
   const [loading, setLoading] = useState(false);
@@ -117,11 +141,11 @@ export default function DataQAPage() {
       setSummary(s);
       setIssues(d.issues ?? []);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load");
+      setError(e instanceof Error ? e.message : (t.dataQa?.failedToLoad ?? "Failed to load"));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t.dataQa?.failedToLoad]);
 
   useEffect(() => {
     load();
@@ -143,245 +167,222 @@ export default function DataQAPage() {
       if (searchText) {
         const q = searchText.toLowerCase();
         if (
+          !i.issueType.toLowerCase().includes(q) &&
+          !i.entityType.toLowerCase().includes(q) &&
           !i.entityId.toLowerCase().includes(q) &&
           !(i.title ?? "").toLowerCase().includes(q) &&
-          !i.message.toLowerCase().includes(q)
-        )
+          !(i.message ?? "").toLowerCase().includes(q)
+        ) {
           return false;
+        }
       }
       return true;
     });
   }, [issues, filterType, filterSeverity, filterAutoFixable, searchText]);
 
-  // Fix preview
-  const handlePreview = useCallback(async () => {
+  // Actions
+  const handleDryRun = async () => {
     setActionLoading("preview");
     setPreviewResult(null);
-    setFixResult(null);
     try {
-      const types = filterType ? [filterType] : undefined;
-      const r = await fetchFixPreview({ issueTypes: types, fixAll: !filterType });
-      setPreviewResult(r);
+      const types = filterType ? [filterType] : [];
+      const result = await fetchFixPreview({ issueTypes: types, issueIds: [], fixAll: !filterType });
+      setPreviewResult(result);
     } catch (e) {
       setToast({ msg: e instanceof Error ? e.message : "Preview failed", tone: "err" });
     } finally {
       setActionLoading(null);
     }
-  }, [filterType]);
+  };
 
-  // Execute fix (after confirm)
-  const handleFix = useCallback(async () => {
+  const handleExecuteFix = async () => {
     setConfirmDialog(false);
     setActionLoading("fix");
     setFixResult(null);
     try {
-      const types = filterType ? [filterType] : undefined;
-      const r = await executeFix({ issueTypes: types, fixAll: !filterType, confirm: true });
-      setFixResult(r);
-      setToast({ msg: `Fixed ${r.totalExecuted} issues`, tone: "ok" });
-      // Refresh after fix
+      const types = filterType ? [filterType] : [];
+      const result = await executeFix({ issueTypes: types, issueIds: [], fixAll: !filterType, confirm: true });
+      setFixResult(result);
       await load();
+      setToast({ msg: `Fix executed: ${result.totalExecuted} succeeded, ${result.skipped.length} skipped, ${result.errors.length} errors`, tone: result.errors.length > 0 ? "err" : "ok" });
     } catch (e) {
       setToast({ msg: e instanceof Error ? e.message : "Fix failed", tone: "err" });
     } finally {
       setActionLoading(null);
     }
-  }, [filterType, load]);
-  // PageCount rescan
-  const handleRescan = useCallback(async () => {
+  };
+
+  const handlePageCountRescan = async () => {
     setActionLoading("rescan");
     setRescanResult(null);
     try {
-      const r = await triggerPageCountRescan({ confirm: true, limit: 100, includeNegative: true });
-      setRescanResult(r);
-      setToast({ msg: `Found ${r.queued} comics needing rescan`, tone: "ok" });
+      const result = await triggerPageCountRescan({ confirm: true, limit: 100, includeNegative: true });
+      setRescanResult(result);
+      setToast({ msg: result.message, tone: "ok" });
     } catch (e) {
       setToast({ msg: e instanceof Error ? e.message : "Rescan failed", tone: "err" });
     } finally {
       setActionLoading(null);
     }
-  }, []);
+  };
 
+  const dataQa = t.dataQa;
 
   return (
-    <div className="min-h-screen bg-background pb-16">
+    <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6">
       {/* Toast */}
       {toast && (
         <div
-          className={`fixed left-1/2 top-4 z-50 -translate-x-1/2 rounded-md px-4 py-2 text-sm shadow-lg ${
+          className={`fixed top-4 right-4 z-50 rounded-xl border px-4 py-3 text-sm shadow-lg backdrop-blur ${
             toast.tone === "ok"
-              ? "bg-emerald-600 text-white"
-              : "bg-red-600 text-white"
+              ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-600"
+              : "border-red-500/30 bg-red-500/10 text-red-600"
           }`}
         >
           {toast.msg}
         </div>
       )}
 
-      {/* Confirm dialog */}
+      {/* Confirm Dialog */}
       {confirmDialog && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="surface-card mx-4 max-w-sm rounded-2xl p-6 shadow-xl">
-            <div className="flex items-center gap-2 text-lg font-semibold">
-              <AlertTriangle className="h-5 w-5 text-amber-500" />
-              Confirm Fix
-            </div>
-            <p className="mt-3 text-sm text-muted">
-              This will modify the database. Affected records will be updated or deleted.
-              This action is idempotent and safe, but please ensure you have a backup.
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="mx-4 w-full max-w-md rounded-2xl border border-border/40 bg-card p-6 shadow-xl">
+            <h3 className="text-lg font-semibold text-foreground">{dataQa?.confirmFix ?? "Confirm Fix"}</h3>
+            <p className="mt-2 text-sm text-muted">
+              {dataQa?.confirmFixMessage ?? "This will modify the database. Affected records will be updated or deleted. This action is idempotent and safe, but please ensure you have a backup."}
             </p>
-            <div className="mt-5 flex justify-end gap-3">
+            <div className="mt-4 flex justify-end gap-3">
               <button
                 onClick={() => setConfirmDialog(false)}
-                className="motion-button rounded-lg px-4 py-2 text-sm text-muted hover:text-foreground"
+                className="rounded-xl px-4 py-2 text-sm text-muted hover:bg-card-hover"
               >
-                Cancel
+                {dataQa?.cancel ?? "Cancel"}
               </button>
               <button
-                onClick={handleFix}
-                className="motion-button rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700"
+                onClick={handleExecuteFix}
+                className="rounded-xl bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent/90"
               >
-                Execute Fix
+                {dataQa?.confirmExecute ?? "Confirm Execute"}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Header */}
-      <div className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3">
-          <button
-            onClick={() => router.back()}
-            className="motion-button flex h-8 w-8 items-center justify-center rounded-lg text-muted hover:text-foreground"
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </button>
-          <div className="flex items-center gap-2">
-            <Shield className="h-5 w-5 text-muted" />
-            <h1 className="text-base font-semibold">Data QA</h1>
-          </div>
-          <div className="ml-auto flex items-center gap-2">
-            <button
-              onClick={load}
-              disabled={loading}
-              className="motion-button flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-muted hover:text-foreground"
-            >
-              <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
-              Refresh
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <button onClick={() => router.back()} className="rounded-xl p-2 text-muted hover:bg-card-hover">
+              <ArrowLeft className="h-5 w-5" />
             </button>
+            <div>
+              <h1 className="text-xl font-bold text-foreground">{dataQa?.title ?? "Data QA"}</h1>
+              <p className="text-xs text-muted">
+                {dataQa?.settingsDesc ?? "Check pageCount, read time, orphan tags/categories, and abnormal sessions."}
+              </p>
+            </div>
           </div>
+          <button
+            onClick={load}
+            disabled={loading}
+            className="inline-flex items-center gap-2 rounded-xl border border-border/40 px-3 py-2 text-sm text-muted hover:bg-card-hover disabled:opacity-50"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+            {dataQa?.refresh ?? "Refresh"}
+          </button>
         </div>
-      </div>
-
-      <div className="mx-auto max-w-6xl space-y-6 px-4 pt-6">
-        {/* Error */}
-        {error && (
-          <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-4 text-sm text-red-400">
-            {error}
-          </div>
-        )}
 
         {/* Summary */}
         {summary && <SummaryCards summary={summary} />}
 
-        {/* Action bar */}
-        <div className="flex flex-wrap items-center gap-3">
+        {/* Actions bar */}
+        <div className="flex flex-wrap gap-2">
           <button
-            onClick={handlePreview}
-            disabled={actionLoading !== null}
-            className="motion-button flex items-center gap-1.5 rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-card-hover"
+            onClick={handleDryRun}
+            disabled={!!actionLoading}
+            className="inline-flex items-center gap-2 rounded-xl border border-border/40 px-3 py-2 text-sm text-muted hover:bg-card-hover disabled:opacity-50"
           >
-            {actionLoading === "preview" ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <Eye className="h-3.5 w-3.5" />
-            )}
-            Dry-run Preview
+            {actionLoading === "preview" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />}
+            {dataQa?.dryRunPreview ?? "Dry-run Preview"}
           </button>
           <button
             onClick={() => setConfirmDialog(true)}
-            disabled={actionLoading !== null}
-            className="motion-button flex items-center gap-1.5 rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700"
+            disabled={!!actionLoading}
+            className="inline-flex items-center gap-2 rounded-xl bg-accent px-3 py-2 text-sm font-medium text-white hover:bg-accent/90 disabled:opacity-50"
           >
-            {actionLoading === "fix" ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <Wrench className="h-3.5 w-3.5" />
-            )}
-            Execute Fix
+            {actionLoading === "fix" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Shield className="h-4 w-4" />}
+            {dataQa?.executeFix ?? "Execute Fix"}
           </button>
           <button
-            onClick={handleRescan}
-            disabled={actionLoading !== null}
-            className="motion-button flex items-center gap-1.5 rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-card-hover"
+            onClick={handlePageCountRescan}
+            disabled={!!actionLoading}
+            className="inline-flex items-center gap-2 rounded-xl border border-border/40 px-3 py-2 text-sm text-muted hover:bg-card-hover disabled:opacity-50"
           >
-            {actionLoading === "rescan" ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <RefreshCw className="h-3.5 w-3.5" />
-            )}
-            PageCount Rescan
+            {actionLoading === "rescan" ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+            {dataQa?.pageCountRescan ?? "PageCount Rescan"}
           </button>
-          <div className="ml-auto text-xs text-muted">
-            {filtered.length} / {issues.length} issues
-          </div>
         </div>
 
         {/* Filters */}
         <div className="surface-card rounded-xl p-4">
           <button
+            className="flex w-full items-center justify-between text-sm font-medium text-foreground"
             onClick={() => setShowFilters((v) => !v)}
-            className="flex w-full items-center gap-2 text-sm font-medium text-muted hover:text-foreground"
           >
-            <Filter className="h-3.5 w-3.5" />
-            Filters
-            {showFilters ? <ChevronUp className="ml-auto h-3.5 w-3.5" /> : <ChevronDown className="ml-auto h-3.5 w-3.5" />}
+            <span className="flex items-center gap-2">
+              <Filter className="h-4 w-4" />
+              {dataQa?.filters ?? "Filters"}
+            </span>
+            {showFilters ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
           </button>
           {showFilters && (
-            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-4">
+            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
               {/* Search */}
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted" />
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
                 <input
                   type="text"
-                  placeholder="Search entity/message..."
+                  placeholder={dataQa?.searchPlaceholder ?? "Search issues..."}
                   value={searchText}
                   onChange={(e) => setSearchText(e.target.value)}
-                  className="w-full rounded-lg border border-border bg-background py-2 pl-9 pr-3 text-sm outline-none focus:border-primary"
+                  className="w-full rounded-xl border border-border/40 bg-background py-2 pl-9 pr-3 text-sm placeholder:text-muted focus:border-accent focus:outline-none"
                 />
               </div>
+
               {/* Issue type */}
               <select
                 value={filterType}
                 onChange={(e) => setFilterType(e.target.value)}
-                className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+                className="rounded-xl border border-border/40 bg-background px-3 py-2 text-sm focus:border-accent focus:outline-none"
               >
-                <option value="">All types</option>
-                {issueTypes.map((t) => (
-                  <option key={t} value={t}>{t}</option>
+                <option value="">{dataQa?.issueType ?? "Issue Type"}: {dataQa?.all ?? "All"}</option>
+                {issueTypes.map((type) => (
+                  <option key={type} value={type}>{type}</option>
                 ))}
               </select>
+
               {/* Severity */}
               <select
                 value={filterSeverity}
                 onChange={(e) => setFilterSeverity(e.target.value)}
-                className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+                className="rounded-xl border border-border/40 bg-background px-3 py-2 text-sm focus:border-accent focus:outline-none"
               >
-                <option value="">All severities</option>
+                <option value="">{dataQa?.severity ?? "Severity"}: {dataQa?.all ?? "All"}</option>
                 <option value="p1">P1</option>
                 <option value="p2">P2</option>
                 <option value="p3">P3</option>
               </select>
+
               {/* Auto-fixable */}
               <select
                 value={filterAutoFixable}
                 onChange={(e) => setFilterAutoFixable(e.target.value)}
-                className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+                className="rounded-xl border border-border/40 bg-background px-3 py-2 text-sm focus:border-accent focus:outline-none"
               >
-                <option value="">All</option>
-                <option value="yes">Auto-fixable</option>
-                <option value="no">Not auto-fixable</option>
+                <option value="">{dataQa?.autoFixableFilter ?? "Auto-fixable"}: {dataQa?.all ?? "All"}</option>
+                <option value="yes">{dataQa?.onlyAutoFixable ?? "Only auto-fixable"}</option>
+                <option value="no">{dataQa?.notAutoFixable ?? "Not auto-fixable"}</option>
               </select>
             </div>
           )}
@@ -391,35 +392,29 @@ export default function DataQAPage() {
         {previewResult && (
           <div className="surface-card rounded-xl p-4">
             <div className="flex items-center justify-between">
-              <div className="text-sm font-medium">Dry-run Preview</div>
+              <div className="text-sm font-medium">{dataQa?.previewResult ?? "Preview Result"} ({previewResult.totalPlanned})</div>
               <button onClick={() => setPreviewResult(null)} className="text-muted hover:text-foreground">
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <div className="mt-2 text-xs text-muted">
-              {previewResult.totalPlanned} fixes planned, {previewResult.skipped.length} skipped
-            </div>
             {previewResult.plans.length > 0 && (
-              <div className="mt-3 max-h-60 space-y-2 overflow-y-auto">
-                {previewResult.plans.map((p, i) => (
-                  <div key={i} className="flex items-start gap-2 rounded-lg border border-border p-2 text-xs">
-                    <Wrench className="mt-0.5 h-3 w-3 flex-shrink-0 text-amber-500" />
-                    <div>
-                      <span className="font-medium">{p.action}</span>
-                      <span className="ml-2 text-muted">{p.entityId}</span>
-                      {p.currentVal && p.expectedVal && (
-                        <span className="ml-2 text-muted">
-                          {p.currentVal} → {p.expectedVal}
-                        </span>
-                      )}
-                    </div>
+              <div className="mt-2 space-y-1.5">
+                {previewResult.plans.map((p) => (
+                  <div key={p.issueId} className="flex flex-wrap items-center gap-2 rounded-lg border border-border/20 bg-background/50 px-3 py-2 text-xs">
+                    <span className="font-medium text-foreground">{p.action}</span>
+                    <span className="text-muted">{p.entityType} #{p.entityId}</span>
+                    {p.currentVal && <span className="text-muted">{dataQa?.currentLabel ?? "Current:"} {p.currentVal}</span>}
+                    {p.expectedVal && <span className="text-emerald-500">{dataQa?.expectedLabel ?? "Expected:"} {p.expectedVal}</span>}
+                    <span className={`rounded-full px-1.5 py-0.5 text-[10px] ${p.safe ? "bg-emerald-500/10 text-emerald-500" : "bg-amber-500/10 text-amber-500"}`}>
+                      {p.safe ? "safe" : "review"}
+                    </span>
                   </div>
                 ))}
               </div>
             )}
             {previewResult.skipped.length > 0 && (
               <div className="mt-2 text-xs text-muted">
-                Skipped: {previewResult.skipped.map((s) => s.reason).join("; ")}
+                {dataQa?.skipped ?? "Skipped:"} {previewResult.skipped.map((s) => `${s.issueId} (${s.reason})`).join(", ")}
               </div>
             )}
           </div>
@@ -429,20 +424,19 @@ export default function DataQAPage() {
         {fixResult && (
           <div className="surface-card rounded-xl p-4">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-sm font-medium">
-                <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                Fix Result
-              </div>
+              <div className="text-sm font-medium">{dataQa?.fixResult ?? "Fix Result"}</div>
               <button onClick={() => setFixResult(null)} className="text-muted hover:text-foreground">
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <div className="mt-2 text-xs text-muted">
-              {fixResult.totalExecuted} executed, {fixResult.skipped.length} skipped, {fixResult.errors.length} errors
+            <div className="mt-2 flex gap-4 text-xs">
+              <span className="text-emerald-500">{fixResult.totalExecuted} {dataQa?.executed ?? "executed"}</span>
+              <span className="text-muted">{fixResult.skipped.length} {dataQa?.skipped ?? "skipped"}</span>
+              <span className="text-red-500">{fixResult.errors.length} {dataQa?.errors ?? "errors"}</span>
             </div>
             {fixResult.executed.length > 0 && (
-              <div className="mt-3 max-h-60 space-y-2 overflow-y-auto">
-                {fixResult.executed.map((e, i) => (
+              <div className="mt-3 max-h-40 space-y-2 overflow-y-auto">
+                {fixResult.executed.map((e: DataQAFixResultItem, i: number) => (
                   <div key={i} className="flex items-start gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-2 text-xs">
                     <CheckCircle2 className="mt-0.5 h-3 w-3 flex-shrink-0 text-emerald-500" />
                     <div>
@@ -454,9 +448,22 @@ export default function DataQAPage() {
                 ))}
               </div>
             )}
+            {fixResult.skipped.length > 0 && (
+              <div className="mt-3 max-h-40 space-y-2 overflow-y-auto">
+                {fixResult.skipped.map((e: DataQASkip, i: number) => (
+                  <div key={i} className="flex items-start gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 p-2 text-xs">
+                    <AlertTriangle className="mt-0.5 h-3 w-3 flex-shrink-0 text-amber-500" />
+                    <div>
+                      <span className="font-medium">{e.issueId}</span>
+                      <span className="ml-2 text-muted">{e.reason}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
             {fixResult.errors.length > 0 && (
               <div className="mt-3 max-h-40 space-y-2 overflow-y-auto">
-                {fixResult.errors.map((e, i) => (
+                {fixResult.errors.map((e: DataQAFixResultItem, i: number) => (
                   <div key={i} className="flex items-start gap-2 rounded-lg border border-red-500/20 bg-red-500/5 p-2 text-xs">
                     <AlertTriangle className="mt-0.5 h-3 w-3 flex-shrink-0 text-red-500" />
                     <div>
@@ -474,7 +481,7 @@ export default function DataQAPage() {
         {rescanResult && (
           <div className="surface-card rounded-xl p-4">
             <div className="flex items-center justify-between">
-              <div className="text-sm font-medium">PageCount Rescan</div>
+              <div className="text-sm font-medium">{dataQa?.rescanTitle ?? "PageCount Rescan"}</div>
               <button onClick={() => setRescanResult(null)} className="text-muted hover:text-foreground">
                 <X className="h-4 w-4" />
               </button>
@@ -482,7 +489,7 @@ export default function DataQAPage() {
             <div className="mt-2 text-xs text-muted">{rescanResult.message}</div>
             {rescanResult.queued > 0 && (
               <div className="mt-1 text-xs text-amber-500">
-                {rescanResult.queued} comics queued for background scanner
+                {rescanResult.queued} {dataQa?.comicsQueued ?? "comics queued for background scanner"}
               </div>
             )}
           </div>
@@ -493,12 +500,12 @@ export default function DataQAPage() {
           {loading && issues.length === 0 ? (
             <div className="flex items-center justify-center py-12 text-muted">
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Scanning...
+              {dataQa?.scanning ?? "Scanning..."}
             </div>
           ) : filtered.length === 0 ? (
             <div className="surface-card flex flex-col items-center justify-center rounded-xl py-12">
               <CheckCircle2 className="h-8 w-8 text-emerald-500" />
-              <div className="mt-2 text-sm text-muted">No issues found</div>
+              <div className="mt-2 text-sm text-muted">{dataQa?.noIssues ?? "No issues found"}</div>
             </div>
           ) : (
             filtered.map((issue) => (
@@ -517,6 +524,9 @@ export default function DataQAPage() {
 
 function IssueRow({ issue }: { issue: DataQAIssue }) {
   const [expanded, setExpanded] = useState(false);
+  const t = useTranslation();
+  const typeLabel = useIssueTypeLabel(issue.issueType);
+  const dataQa = t.dataQa;
 
   return (
     <div className="surface-card rounded-xl p-4 transition-colors hover:bg-card-hover">
@@ -534,10 +544,10 @@ function IssueRow({ issue }: { issue: DataQAIssue }) {
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <SeverityBadge level={issue.severity} />
-            <span className="text-xs font-medium text-foreground">{issue.issueType}</span>
+            <span className="text-xs font-medium text-foreground" title={issue.issueType}>{typeLabel}</span>
             <span className="text-xs text-muted">{issue.entityType}</span>
             {issue.autoFixable && (
-              <span className="text-xs text-amber-500">auto-fix</span>
+              <span className="text-xs text-amber-500">{dataQa?.autoFixBadge ?? "auto-fix"}</span>
             )}
           </div>
           <div className="mt-1 truncate text-sm text-muted">{issue.entityId}</div>
@@ -558,17 +568,17 @@ function IssueRow({ issue }: { issue: DataQAIssue }) {
             <div className="flex gap-4 text-xs">
               {issue.currentVal && (
                 <span>
-                  Current: <span className="font-mono text-foreground">{issue.currentVal}</span>
+                  {dataQa?.currentLabel ?? "Current:"} <span className="font-mono text-foreground">{issue.currentVal}</span>
                 </span>
               )}
               {issue.expectedVal && (
                 <span>
-                  Expected: <span className="font-mono text-foreground">{issue.expectedVal}</span>
+                  {dataQa?.expectedLabel ?? "Expected:"} <span className="font-mono text-foreground">{issue.expectedVal}</span>
                 </span>
               )}
             </div>
           )}
-          <div className="text-xs text-muted/60">ID: {issue.id}</div>
+          <div className="text-xs text-muted/60">{dataQa?.idLabel ?? "ID:"} {issue.id}</div>
         </div>
       )}
     </div>
