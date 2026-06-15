@@ -1257,7 +1257,7 @@ export default function ReaderPage() {
                   <span>F</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>{t.reader.infoPanel}</span>
+                  <span>{t.reader.immersiveMode || "沉浸模式"}</span>
                   <span>I</span>
                 </div>
                 <div className="flex justify-between">
@@ -1284,7 +1284,9 @@ export default function ReaderPage() {
               {[
                 [t.reader.turnPage, "← → / A D / Scroll"],
                 [t.reader.fullscreen, "F"],
-                [t.reader.infoPanel, "I"],
+                [t.reader.immersiveMode || "沉浸模式", "I"],
+                [t.reader.thumbnailNav || "缩略图", "T"],
+                [t.reader.infoPanel, "工具栏 → 详情"],
                 [t.reader.shortcuts, "?"],
                 [t.reader.goBack, "Esc"],
               ].map(([label, keys]) => (

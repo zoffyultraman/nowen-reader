@@ -259,6 +259,7 @@ const en: Translations = {
     goBack: "Back",
     mobileAutoSingle: "Switched to single page on mobile",
     thumbnailNav: "Thumbnail Navigation",
+    immersiveMode: "Immersive Mode",
     reachedLastPage: "Reached the last page",
     loading: "Loading...",
     loadError: "Failed to load",

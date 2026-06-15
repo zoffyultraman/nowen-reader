@@ -255,6 +255,7 @@ const zhCN = {
     goBack: "返回",
     mobileAutoSingle: "移动端已自动切换为单页阅读",
     thumbnailNav: "缩略图导航",
+    immersiveMode: "沉浸模式",
     reachedLastPage: "已到达最后一页",
     loading: "正在加载...",
     loadError: "加载失败",
@@ -1503,6 +1504,7 @@ export interface Translations {
     goBack: string;
     mobileAutoSingle: string;
     thumbnailNav: string;
+    immersiveMode: string;
     reachedLastPage: string;
     loading: string;
     loadError: string;
