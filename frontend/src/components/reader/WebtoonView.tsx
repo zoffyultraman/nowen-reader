@@ -392,7 +392,7 @@ export default function WebtoonView({
                         <p className={`text-xs ${readerTheme === "day" ? "text-gray-400" : "text-white/40"}`}>第 {index + 1} 页加载失败</p>
                         <button
                           onClick={(e) => { e.stopPropagation(); setErrorPages(prev => { const next = new Set(prev); next.delete(index); return next; }); }}
-                          className="text-xs text-accent hover:text-accent/80"
+                        className="min-h-[44px] rounded-lg bg-accent/20 px-4 py-2 text-xs font-medium text-accent hover:bg-accent/30 active:bg-accent/40 transition-colors"
                         >重试</button>
                       </div>
                     </div>
@@ -400,7 +400,7 @@ export default function WebtoonView({
                     <img
                       src={pageUrl}
                       alt={`Page ${index + 1}`}
-                      className="w-full h-auto"
+                      className="w-full h-auto block"
                       style={imageFilter ? { filter: imageFilter } : undefined}
                       loading={Math.abs(index - currentPage) < 3 ? "eager" : "lazy"}
                       onLoad={(e) => handleImageLoad(index, e)}
@@ -444,7 +444,7 @@ export default function WebtoonView({
           return null;
         })()}
 
-        <div className="flex items-center justify-center py-16">
+        <div className="flex items-center justify-center py-16 pb-[calc(env(safe-area-inset-bottom)+4rem)]">
           <div className="text-center">
             <p className={`text-sm ${readerTheme === "day" ? "text-gray-400" : "text-white/40"}`}>{t.reader.reachedLastPage}</p>
             {nextVolumeTitle && onBoundaryReached && (

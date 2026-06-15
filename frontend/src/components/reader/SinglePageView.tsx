@@ -398,7 +398,7 @@ export default function SinglePageView({
               </p>
               <button
                 onClick={(e) => { e.stopPropagation(); setImageError(false); setImageLoaded(false); }}
-                className="mt-1 rounded-lg bg-accent/20 px-4 py-1.5 text-xs text-accent hover:bg-accent/30 transition-colors"
+                className="mt-2 min-h-[44px] rounded-lg bg-accent/20 px-5 py-2 text-sm font-medium text-accent hover:bg-accent/30 active:bg-accent/40 transition-colors"
               >
                 重试
               </button>

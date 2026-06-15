@@ -94,11 +94,19 @@ export default function ReaderPage() {
   const [currentPage, setCurrentPage] = useState(0);
   const [mode, setMode] = useState<ComicReadingMode>("single");
   const [isSmallScreen, setIsSmallScreen] = useState(() => typeof window !== "undefined" && window.innerWidth < 640);
+  const [isLandscape, setIsLandscape] = useState(() => typeof window !== "undefined" && window.innerWidth > window.innerHeight)
   useEffect(() => {
     const mql = window.matchMedia("(max-width: 767px)");
     const handler = (e: MediaQueryListEvent) => setIsSmallScreen(e.matches);
     mql.addEventListener("change", handler);
     setIsSmallScreen(mql.matches);
+    return () => mql.removeEventListener("change", handler);
+  }, []);
+  useEffect(() => {
+    const mql = window.matchMedia("(orientation: landscape)");
+    const handler = (e: MediaQueryListEvent) => setIsLandscape(e.matches);
+    mql.addEventListener("change", handler);
+    setIsLandscape(mql.matches);
     return () => mql.removeEventListener("change", handler);
   }, []);
   const effectiveMode: ComicReadingMode = isSmallScreen && mode === "double" ? "single" : mode;
@@ -630,7 +638,7 @@ export default function ReaderPage() {
       <div className="flex h-dvh items-center justify-center bg-black relative overflow-hidden">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(59,130,246,0.04)_0%,transparent_70%)] pointer-events-none" />
         <div className="flex flex-col items-center gap-5">
-          <div className="h-10 w-10 animate-spin rounded-full border-2 border-white/10 border-t-accent" />
+          <div className="h-8 w-8 sm:h-10 sm:w-10 animate-spin rounded-full border-2 border-white/10 border-t-accent" />
           <p className="text-sm font-medium text-white/50">{t.reader.loading || "正在加载..."}</p>
         </div>
       </div>
@@ -653,7 +661,7 @@ export default function ReaderPage() {
           <div className="mt-4 flex gap-3 justify-center">
             <button
               onClick={() => window.location.reload()}
-              className="rounded-xl bg-accent px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-accent/25 transition-all duration-150 motion-button active:scale-[0.97]"
+              className="rounded-xl bg-accent px-5 py-2.5 min-h-[44px] text-sm font-medium text-white shadow-lg shadow-accent/25 transition-all duration-150 motion-button active:scale-[0.97]"
             >
               {t.reader.retry || "重试"}
             </button>
@@ -689,7 +697,7 @@ export default function ReaderPage() {
   }
 
   return (
-    <div className={`relative h-dvh w-full overflow-hidden transition-colors duration-300 ${
+    <div className={`relative h-dvh w-full overflow-hidden overflow-x-hidden transition-colors duration-300 ${
       readerTheme === "day" ? "bg-gray-100" : "bg-[#0a0a0a]"
     }`}>
       {/* Reading View */}
@@ -839,7 +847,7 @@ export default function ReaderPage() {
       />
 
       {/* Page number indicator (页码指示器可见性控制) */}
-      {readerOpts.headerVisible && mode !== "webtoon" && !toolbarVisible && (
+      {readerOpts.headerVisible && mode !== "webtoon" && !toolbarVisible && !(isSmallScreen && isLandscape) && (
         <div className={`pointer-events-none fixed bottom-4 left-1/2 -translate-x-1/2 rounded-full px-3.5 py-1.5 backdrop-blur-xl border border-white/[0.06] shadow-lg shadow-black/30 ${
           readerTheme === "day" ? "bg-white/80 shadow-md" : "bg-zinc-900/80"
         }`}>

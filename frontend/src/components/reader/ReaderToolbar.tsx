@@ -154,7 +154,7 @@ export default function ReaderToolbar({
             : "-translate-y-full opacity-0 pointer-events-none"
         }`}
       >
-        <div className="flex h-14 items-center justify-between bg-black/70 px-4 backdrop-blur-xl border-b border-white/5">
+        <div className="flex h-12 sm:h-14 items-center justify-between bg-black/70 px-3 sm:px-4 backdrop-blur-xl border-b border-white/5">
           {/* Left: Back + Title */}
           <div className="flex items-center gap-3 min-w-0">
             <button
@@ -286,13 +286,13 @@ export default function ReaderToolbar({
             : "translate-y-full opacity-0 pointer-events-none"
         }`}
       >
-        <div className="bg-black/70 px-4 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] backdrop-blur-xl border-t border-white/5">
+        <div className="bg-black/70 px-3 sm:px-4 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] backdrop-blur-xl border-t border-white/5">
           {/* Page Slider */}
-          <div className="flex items-center gap-4 py-3">
+          <div className="flex items-center gap-3 sm:gap-4 py-2 sm:py-3">
             <button
               onClick={() => onPageChange(Math.max(0, currentPage - 1))}
               disabled={currentPage === 0}
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-white/70 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-30"
+              className="flex h-9 w-9 sm:h-8 sm:w-8 shrink-0 items-center justify-center rounded-lg text-white/70 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-30"
             >
               <ChevronLeft className="h-5 w-5" />
             </button>
@@ -316,7 +316,7 @@ export default function ReaderToolbar({
             <button
               onClick={() => onPageChange(Math.min(totalPages - 1, currentPage + 1))}
               disabled={currentPage >= totalPages - 1}
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-white/70 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-30"
+              className="flex h-9 w-9 sm:h-8 sm:w-8 shrink-0 items-center justify-center rounded-lg text-white/70 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-30"
             >
               <ChevronRight className="h-5 w-5" />
             </button>
