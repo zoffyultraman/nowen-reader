@@ -237,7 +237,7 @@ export default function SettingsPage() {
 
   const allTabs = groups.flatMap((g) => g.tabs);
   const currentTab = allTabs.find((tab) => tab.id === activeTab);
-  const isFullWidthTab = ["stats", "file-stats", "logs"].includes(activeTab);
+  const isFullWidthTab = ["stats", "file-stats", "logs", "libraries"].includes(activeTab);
 
   /* ── 搜索过滤 ── */
   const filteredGroups = useMemo(() => {

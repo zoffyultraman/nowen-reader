@@ -57,16 +57,16 @@ function StatusChip({ status }: { status: NormalizedStatus }) {
   );
 }
 
-function VaultCardShell({ active, disabled, children }: { active?: boolean; disabled?: boolean; children: React.ReactNode }) {
+function VaultCardShell({ active, disabled, className = "", children }: { active?: boolean; disabled?: boolean; className?: string; children: React.ReactNode }) {
   return (
     <div
-      className={`group relative overflow-hidden rounded-[20px] border bg-white/80 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md ${
+      className={`group relative overflow-hidden rounded-[22px] border bg-white/80 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg ${
         active
           ? "border-indigo-200/80 ring-1 ring-indigo-100"
           : "border-slate-200/70"
-      } ${disabled ? "opacity-70" : ""}`}
+      } ${disabled ? "opacity-70" : ""} ${className}`}
     >
-      <div className="pointer-events-none absolute inset-x-8 -top-20 h-40 rounded-full bg-indigo-100/40 blur-3xl opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+      <div className="pointer-events-none absolute inset-x-10 -top-24 h-44 rounded-full bg-indigo-100/30 blur-3xl opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
       {children}
     </div>
   );
@@ -74,13 +74,13 @@ function VaultCardShell({ active, disabled, children }: { active?: boolean; disa
 
 function VaultMetric({ icon, label, value }: { icon: React.ReactNode; label: string; value: React.ReactNode }) {
   return (
-    <div className="flex items-center gap-3 rounded-2xl border border-slate-200/70 bg-white/80 p-4">
-      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
+    <div className="flex items-center gap-3 rounded-2xl border border-transparent bg-white/60 p-4">
+      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50/70 text-indigo-600">
         {icon}
       </div>
       <div>
         <div className="text-xs text-slate-500">{label}</div>
-        <div className="text-lg font-semibold text-slate-900">{value}</div>
+        <div className="text-xl font-semibold tracking-tight text-slate-900">{value}</div>
       </div>
     </div>
   );
@@ -105,6 +105,45 @@ function MoreMenu({ children }: { children: React.ReactNode }) {
       </div>
     </div>
   );
+}
+
+type LibraryTypeKey = "comic" | "novel" | "mixed" | "default";
+
+const typePalette: Record<LibraryTypeKey, {
+  iconWrap: string;
+  accentText: string;
+  tag: string;
+  glow: string;
+}> = {
+  comic: {
+    iconWrap: "bg-gradient-to-br from-indigo-50 to-violet-50 text-indigo-600",
+    accentText: "text-indigo-600",
+    tag: "bg-indigo-50 text-indigo-700",
+    glow: "group-hover:shadow-indigo-100/60",
+  },
+  novel: {
+    iconWrap: "bg-gradient-to-br from-amber-50 to-stone-50 text-amber-600",
+    accentText: "text-amber-600",
+    tag: "bg-amber-50 text-amber-700",
+    glow: "group-hover:shadow-amber-100/60",
+  },
+  mixed: {
+    iconWrap: "bg-gradient-to-br from-slate-50 to-sky-50 text-slate-600",
+    accentText: "text-slate-600",
+    tag: "bg-slate-100 text-slate-700",
+    glow: "group-hover:shadow-slate-100/60",
+  },
+  default: {
+    iconWrap: "bg-gradient-to-br from-slate-50 to-blue-50 text-slate-600",
+    accentText: "text-slate-600",
+    tag: "bg-slate-100 text-slate-700",
+    glow: "group-hover:shadow-slate-100/60",
+  },
+};
+
+function useTypePalette(type: string) {
+  const key: LibraryTypeKey = type in typePalette ? (type as LibraryTypeKey) : "default";
+  return typePalette[key];
 }
 export function LibraryManagementPanel() {
   const { user: currentUser } = useAuth();
@@ -383,7 +422,7 @@ export function LibraryManagementPanel() {
             </div>
           </div>
 
-          <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-4">
             <VaultMetric icon={<Database className="h-4 w-4" />} label="书库数量" value={summary.total} />
             <VaultMetric icon={<BookOpen className="h-4 w-4" />} label="总内容" value={summary.content} />
             <VaultMetric icon={<Activity className="h-4 w-4" />} label="自动扫描" value={`${summary.scanEnabledCount} 个开启`} />
@@ -520,7 +559,7 @@ export function LibraryManagementPanel() {
           {filteredLibraries.map((lib) => {
             const statuses = getStatuses(lib);
             return (
-              <VaultCardShell key={lib.id} active={editingId === lib.id} disabled={!lib.enabled}>
+              <VaultCardShell key={lib.id} active={editingId === lib.id} disabled={!lib.enabled} className={useTypePalette(lib.type).glow}>
                 <MoreMenu>
                   <button
                     type="button"
@@ -678,13 +717,13 @@ export function LibraryManagementPanel() {
                 ) : (
                   <div className="p-5 sm:p-6">
                     <div className="flex flex-wrap items-start gap-4">
-                      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-50 to-sky-50 text-indigo-600">
+                      <div className={`flex h-12 w-12 items-center justify-center rounded-2xl ${useTypePalette(lib.type).iconWrap}`}>
                         {getTypeIcon(lib.type)}
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="truncate text-lg font-semibold text-slate-900">{lib.name}</h3>
-                          <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">
+                          <h3 className={`truncate text-lg font-semibold ${useTypePalette(lib.type).accentText}`}>{lib.name}</h3>
+                          <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${useTypePalette(lib.type).tag}`}>
                             {getTypeName(lib.type)}
                           </span>
                         </div>
@@ -703,36 +742,32 @@ export function LibraryManagementPanel() {
                       ))}
                     </div>
 
-                    <div className="mt-5 grid grid-cols-2 gap-3 text-sm text-slate-600 sm:grid-cols-4">
-                      <div className="rounded-xl border border-slate-200/70 bg-slate-50/60 p-3">
-                        <div className="text-xs text-slate-400">内容数</div>
-                        <div className="mt-1 text-base font-semibold text-slate-900">{lib.comicCount ?? 0}</div>
+                    <div className="mt-5 grid grid-cols-2 gap-x-6 gap-y-3 text-sm text-slate-600 sm:grid-cols-4">
+                      <div className="space-y-0.5">
+                        <div className="text-[11px] uppercase tracking-wide text-slate-400">内容数</div>
+                        <div className="text-base font-semibold text-slate-900">{lib.comicCount ?? 0}</div>
                       </div>
-                      <div className="rounded-xl border border-slate-200/70 bg-slate-50/60 p-3">
-                        <div className="text-xs text-slate-400">上次扫描</div>
-                        <div className="mt-1 font-medium text-slate-800">{formatDate(lib.lastScanAt)}</div>
+                      <div className="space-y-0.5">
+                        <div className="text-[11px] uppercase tracking-wide text-slate-400">上次扫描</div>
+                        <div className="font-medium text-slate-800">{formatDate(lib.lastScanAt)}</div>
                       </div>
-                      <div className="rounded-xl border border-slate-200/70 bg-slate-50/60 p-3">
-                        <div className="text-xs text-slate-400">上次新增</div>
-                        <div className="mt-1 text-base font-semibold text-slate-900">{lib.lastScanAdded ?? 0}</div>
+                      <div className="space-y-0.5">
+                        <div className="text-[11px] uppercase tracking-wide text-slate-400">上次新增</div>
+                        <div className="text-base font-semibold text-slate-900">{lib.lastScanAdded ?? 0}</div>
                       </div>
-                      <div className="rounded-xl border border-slate-200/70 bg-slate-50/60 p-3">
-                        <div className="text-xs text-slate-400">文件数</div>
-                        <div className="mt-1 text-base font-semibold text-slate-900">{lib.lastScanTotal ?? 0}</div>
+                      <div className="space-y-0.5">
+                        <div className="text-[11px] uppercase tracking-wide text-slate-400">文件数</div>
+                        <div className="text-base font-semibold text-slate-900">{lib.lastScanTotal ?? 0}</div>
                       </div>
                     </div>
 
                     <div className="mt-5 flex flex-wrap items-center gap-2">
-                      <InlineButton variant="soft" onClick={() => handleScan(lib.id)} disabled={scanningId === lib.id}>
+                      <InlineButton variant="primary" onClick={() => handleScan(lib.id)} disabled={scanningId === lib.id}>
                         {scanningId === lib.id ? <RefreshCw className="h-4 w-4 animate-spin" /> : <ScanLine className="h-4 w-4" />}
                         立即扫描
                       </InlineButton>
                       <InlineButton variant="ghost" onClick={() => startEdit(lib)}>
                         <Edit className="h-4 w-4" /> 编辑
-                      </InlineButton>
-                      <InlineButton variant="ghost" onClick={() => toggleEnabled(lib.id, lib.enabled)}>
-                        {lib.enabled ? <ToggleLeft className="h-4 w-4" /> : <ToggleRight className="h-4 w-4" />}
-                        {lib.enabled ? "禁用" : "启用"}
                       </InlineButton>
                     </div>
                   </div>
