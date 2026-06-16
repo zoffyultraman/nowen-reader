@@ -63,6 +63,10 @@ interface ReaderToolbarProps {
   onShowShortcutsHelp?: () => void;
   isImmersive?: boolean;
   onToggleImmersive?: () => void;
+  /** Experimental realistic book flip */
+  realisticFlipEnabled?: boolean;
+  canUseRealisticFlip?: boolean;
+  onToggleRealisticFlip?: () => void;
   onShowThumbnails?: () => void;
 }
 
@@ -94,6 +98,9 @@ export default function ReaderToolbar({
   onShowShortcutsHelp,
   isImmersive,
   onToggleImmersive,
+  realisticFlipEnabled,
+  canUseRealisticFlip,
+  onToggleRealisticFlip,
   onShowThumbnails,
 }: ReaderToolbarProps) {
   const t = useTranslation();
@@ -288,7 +295,16 @@ export default function ReaderToolbar({
                       <span>{isImmersive ? "退出沉浸" : "沉浸模式"}</span>
                     </button>
                   )}
-<button
+{onToggleRealisticFlip && canUseRealisticFlip && (
+                    <button
+                      onClick={() => { onToggleRealisticFlip(); setShowMoreMenu(false); }}
+                      className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-sm reader-text-secondary hover:bg-white/[0.06] hover:text-white transition-colors"
+                    >
+                      <span className="font-mono text-xs">F</span>
+                      <span>{realisticFlipEnabled ? (t.readerToolbar?.exitRealisticFlip || "关闭真实翻页") : (t.readerToolbar?.realisticFlip || "真实翻页（实验）")}</span>
+                    </button>
+                  )}
+                  <button
                     onClick={() => { onToggleFullscreen(); setShowMoreMenu(false); }}
                     className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-sm reader-text-secondary hover:bg-white/[0.06] hover:text-white transition-colors"
                   >

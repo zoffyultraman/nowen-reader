@@ -35,6 +35,7 @@ import { useReaderOptions } from "@/hooks/useReaderOptions";
 import { useComicBookmarks } from "@/hooks/useComicBookmarks";
 import { useCoverAmbientColor } from "@/hooks/useCoverAmbientColor";
 import BookmarkPanel from "@/components/reader/BookmarkPanel";
+import RealisticBookView from "@/components/reader/RealisticBookView";
 import { fetchGroupedComicMap, fetchGroupDetail } from "@/api/groups";
 
 // 跨卷导航信息
@@ -137,6 +138,8 @@ export default function ReaderPage() {
   const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
   const [immersiveMode, setImmersiveMode] = useState(false);
   const [showThumbnails, setShowThumbnails] = useState(false);
+  // Experimental: realistic book flip (session-only, defaults off)
+  const [realisticFlipEnabled, setRealisticFlipEnabled] = useState(false);
   const [newTag, setNewTag] = useState("");
   const [isFavorite, setIsFavorite] = useState(false);
   const [rating, setRating] = useState<number>(0);
@@ -607,6 +610,32 @@ export default function ReaderPage() {
       : `${readerOpts.containerWidth}px`)
     : undefined;
 
+  // Realistic flip guard: only image comics in single/double mode, non-small screen, no reduced-motion
+  const [reducedMotion, setReducedMotion] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const handler = () => setReducedMotion(mq.matches);
+    handler();
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
+
+  const canUseRealisticFlip =
+    !isNovel &&
+    !isPdf &&
+    !usePdfView &&
+    (effectiveMode === "single" || effectiveMode === "double") &&
+    pages.length > 1 &&
+    !isSmallScreen &&
+    !reducedMotion;
+
+  // Auto-disable realistic flip if conditions become invalid
+  useEffect(() => {
+    if (realisticFlipEnabled && !canUseRealisticFlip) {
+      setRealisticFlipEnabled(false);
+    }
+  }, [realisticFlipEnabled, canUseRealisticFlip]);
+
   // Theme toggle
   const handleToggleTheme = useCallback(() => {
     globalToggleTheme();
@@ -732,7 +761,19 @@ export default function ReaderPage() {
       )}
 
       {/* Reading View */}
-      {usePdfView && effectiveMode === "single" ? (
+      {realisticFlipEnabled && canUseRealisticFlip ? (
+        <RealisticBookView
+          pages={pages}
+          currentPage={currentPage}
+          totalPages={pages.length}
+          direction={direction === "rtl" ? "rtl" : "ltr"}
+          readerTheme={readerTheme}
+          fitMode={readerOpts.fitMode}
+          containerWidth={containerWidthStyle}
+          onPageChange={handlePageChange}
+          onTapCenter={handleTapCenter}
+        />
+      ) : usePdfView && effectiveMode === "single" ? (
         <PdfView
           comicId={comicId}
           totalPages={pages.length}
@@ -878,6 +919,9 @@ export default function ReaderPage() {
             isImmersive={immersiveMode}
             onToggleImmersive={() => setImmersiveMode((v) => !v)}
             onShowThumbnails={() => setShowThumbnails(true)}
+            realisticFlipEnabled={realisticFlipEnabled}
+            canUseRealisticFlip={canUseRealisticFlip}
+            onToggleRealisticFlip={() => setRealisticFlipEnabled((v) => !v)}
       />
 
       {/* Page number indicator (页码指示器可见性控制) */}

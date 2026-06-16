@@ -345,6 +345,8 @@ const zhCN = {
     moreInfo: "详情",
     fullscreen: "全屏",
     exitFullscreen: "退出全屏",
+    realisticFlip: "真实翻页（实验）",
+    exitRealisticFlip: "关闭真实翻页",
     gestureHint: "双击放大，双指缩放，放大后可拖拽移动",
   },
 
@@ -1592,6 +1594,8 @@ export interface Translations {
     moreInfo: string;
     fullscreen: string;
     exitFullscreen: string;
+    realisticFlip: string;
+    exitRealisticFlip: string;
     gestureHint: string;
   };
   readerBookmarks: {

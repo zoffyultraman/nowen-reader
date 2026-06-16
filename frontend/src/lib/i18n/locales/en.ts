@@ -349,6 +349,8 @@ const en: Translations = {
     moreInfo: "Info",
     fullscreen: "Fullscreen",
     exitFullscreen: "Exit Fullscreen",
+    realisticFlip: "Realistic Flip (Experimental)",
+    exitRealisticFlip: "Disable Realistic Flip",
     gestureHint: "Double-tap to zoom, pinch to scale, drag to pan",
   },
 
