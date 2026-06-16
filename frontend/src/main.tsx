@@ -34,6 +34,7 @@ const Collections = React.lazy(() => import("@/app/collections/page"));
 const TagManager = React.lazy(() => import("@/app/tag-manager/page"));
 const DataAdmin = React.lazy(() => import("@/app/data-admin/page"));
 const DataQA = React.lazy(() => import("@/app/data-qa/page"));
+const History = React.lazy(() => import("@/app/history/page"));
 const BookFlipDevPage = React.lazy(() => import("@/app/dev/book-flip/page"));
 
 /** 动态设置浏览器标签页标题 */
@@ -68,6 +69,7 @@ function AnimatedRoutes() {
         <Route path="/stats" element={<AdminRoute><Stats /></AdminRoute>} />
         <Route path="/logs" element={<AdminRoute><Logs /></AdminRoute>} />
         <Route path="/settings" element={<Settings />} />
+        <Route path="/history" element={<History />} />
         <Route path="/scraper" element={<AdminRoute><Scraper /></AdminRoute>} />
         <Route path="/group/:id" element={<GroupDetail />} />
         <Route path="/collections" element={<AdminRoute><Collections /></AdminRoute>} />
