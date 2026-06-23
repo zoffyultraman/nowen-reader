@@ -76,6 +76,7 @@ export async function createLibrary(library: {
   enabled?: boolean;
   sortOrder?: number;
   defaultAccess?: "public" | "private";
+  scanEnabled?: boolean;
 }): Promise<Library> {
   const res = await fetch("/api/admin/libraries", {
     method: "POST",

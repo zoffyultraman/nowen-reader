@@ -246,17 +246,31 @@ export function LibraryManagementPanel() {
 
     setCreating(true);
     try {
-      await createLibrary({
+      const lib = await createLibrary({
         name: newName.trim(),
         type: newType,
         rootPaths: validPaths,
         defaultAccess: newDefaultAccess,
+        scanEnabled: newScanEnabled,
       });
       showMessage("书库创建成功");
       setShowCreateForm(false);
       setNewName("");
       setNewRootPaths([]);
       fetchLibraryList();
+      // 创建后自动扫描
+      if (newScanEnabled && lib?.id) {
+        setScanningId(lib.id);
+        try {
+          const result = await scanLibrary(lib.id);
+          showMessage(`扫描完成，新增 ${result.added} 个内容`);
+          fetchLibraryList();
+        } catch {
+          // 扫描失败不阻塞创建流程
+        } finally {
+          setScanningId(null);
+        }
+      }
     } catch (err) {
       showMessage(err instanceof Error ? err.message : "创建失败", true);
     } finally {
