@@ -116,6 +116,15 @@ export default function Home() {
     }
     return "grid";
   });
+  const [selectedLibraryIds, setSelectedLibraryIds] = useState<string[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = sessionStorage.getItem("homeFilter:libraryIds");
+        if (saved) return JSON.parse(saved);
+      } catch {}
+    }
+    return [];
+  });
   const [uploading, setUploading] = useState(false);
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [selectedLibraryId, setSelectedLibraryId] = useState("");
@@ -125,7 +134,16 @@ export default function Home() {
   useEffect(() => {
     if (!isAdmin) return;
     fetchLibraries()
-      .then(setLibraries)
+      .then((libs) => {
+        setLibraries(libs);
+        // 清理 sessionStorage 中已删除的书库 ID
+        setSelectedLibraryIds((prev) => {
+          if (prev.length === 0) return prev;
+          const validIds = new Set(libs.map((l) => l.id));
+          const cleaned = prev.filter((id) => validIds.has(id));
+          return cleaned.length === prev.length ? prev : cleaned;
+        });
+      })
       .catch(() => {});
   }, [isAdmin]);
 
@@ -323,6 +341,9 @@ export default function Home() {
   useEffect(() => {
     sessionStorage.setItem("homeFilter:untagged", String(untagged));
   }, [untagged]);
+  useEffect(() => {
+    sessionStorage.setItem("homeFilter:libraryIds", JSON.stringify(selectedLibraryIds));
+  }, [selectedLibraryIds]);
 
   // AI 语义搜索 handler
   const handleAiSearch = useCallback(async (query: string) => {
@@ -529,12 +550,12 @@ export default function Home() {
     JSON.stringify([debouncedSearch, selectedTags, favoritesOnly, selectedCategory, sortBy, sortOrder, contentType, readingStatusFilter])
   );
   useEffect(() => {
-    const newKey = JSON.stringify([debouncedSearch, selectedTags, favoritesOnly, selectedCategory, sortBy, sortOrder, contentType, readingStatusFilter]);
+    const newKey = JSON.stringify([debouncedSearch, selectedTags, favoritesOnly, selectedCategory, sortBy, sortOrder, contentType, readingStatusFilter, selectedLibraryIds]);
     if (filterKeyRef.current === newKey) return; // 值没变，不重置
     filterKeyRef.current = newKey;
     safeSetCurrentPage(1);
     safeSetGroupPage(1);
-  }, [debouncedSearch, selectedTags, favoritesOnly, selectedCategory, sortBy, sortOrder, contentType, readingStatusFilter, safeSetCurrentPage, safeSetGroupPage]);
+  }, [debouncedSearch, selectedTags, favoritesOnly, selectedCategory, sortBy, sortOrder, contentType, readingStatusFilter, selectedLibraryIds, safeSetCurrentPage, safeSetGroupPage]);
 
   // 视图模式切换时重置分页（使用受保护的 setter，挂载保护期内不会重置）
   useEffect(() => {
@@ -1081,7 +1102,7 @@ export default function Home() {
       <div className={`mx-auto w-full max-w-[1760px] px-6 sm:px-8 lg:px-10 2xl:px-14 pt-14 sm:pt-16 xl:grid xl:grid-cols-[minmax(0,1fr)_340px] 2xl:grid-cols-[minmax(0,1fr)_380px] xl:gap-6 ${batchMode ? "pb-32" : "pb-20 sm:pb-12"}`}>
       <main className="min-w-0 space-y-4 pt-6 sm:pt-8">
         {/* Data Source Indicator — 空库提示 */}
-        {!loading && displayComics.length === 0 && apiTotal === 0 && !debouncedSearch && selectedTags.length === 0 && !favoritesOnly && !selectedCategory && (
+        {!loading && displayComics.length === 0 && apiTotal === 0 && !debouncedSearch && selectedTags.length === 0 && !favoritesOnly && !selectedCategory && selectedLibraryIds.length === 0 && (
           <div className="mb-4 flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-4 py-3">
             <span className="text-sm text-amber-400">
               {t.home.mockDataNotice}{" "}
@@ -1181,6 +1202,44 @@ export default function Home() {
                     {tab.label}
                   </button>
                 ))}
+              </div>
+
+              {/* 书库 Tab 筛选 */}
+              <div className="flex items-center gap-1 sm:gap-1.5 overflow-x-auto scrollbar-hide">
+                <button
+                  onClick={() => setSelectedLibraryIds([])}
+                  className={`flex items-center gap-1 whitespace-nowrap rounded-lg px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium transition-all duration-200 ${
+                    selectedLibraryIds.length === 0
+                      ? "bg-accent text-white shadow-sm shadow-accent/25"
+                      : "bg-card text-muted hover:text-foreground hover:bg-card-hover"
+                  }`}
+                >
+                  {t.common?.all || "全部"}
+                  <span className="ml-1 opacity-70">{libraries.reduce((sum, lib) => sum + (lib.comicCount ?? 0), 0)}</span>
+                </button>
+                {libraries.filter((lib) => lib.enabled).map((lib) => {
+                  const active = selectedLibraryIds.includes(lib.id);
+                  return (
+                    <button
+                      key={lib.id}
+                      onClick={() => {
+                        setSelectedLibraryIds((prev) =>
+                          prev.includes(lib.id)
+                            ? prev.filter((id) => id !== lib.id)
+                            : [...prev, lib.id]
+                        );
+                      }}
+                      className={`flex items-center gap-1 whitespace-nowrap rounded-lg px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium transition-all duration-200 ${
+                        active
+                          ? "bg-accent text-white shadow-sm shadow-accent/25"
+                          : "bg-card text-muted hover:text-foreground hover:bg-card-hover"
+                      }`}
+                    >
+                      {lib.name}
+                      <span className="ml-1 opacity-70">{lib.comicCount ?? 0}</span>
+                    </button>
+                  );
+                })}
               </div>
 
               {/* View Toggle — 在此处始终可见 */}
@@ -1403,7 +1462,7 @@ export default function Home() {
             </div>
 
               {/* Clear filters — visible when any filter is active */}
-              {(favoritesOnly || readingStatusFilter || selectedCategory || selectedTags.length > 0) && (
+              {(favoritesOnly || readingStatusFilter || selectedCategory || selectedTags.length > 0 || selectedLibraryIds.length > 0) && (
                 <div className="flex items-center">
                   <button
                     onClick={() => {
@@ -1411,6 +1470,7 @@ export default function Home() {
                       setReadingStatusFilter("");
                       setSelectedCategory(null);
                       setSelectedTags([]);
+                      setSelectedLibraryIds([]);
                     }}
                     className="motion-button flex h-8 items-center gap-1.5 rounded-lg border border-border/40 px-3 text-xs font-medium text-muted transition-colors hover:text-foreground hover:border-border"
                   >
@@ -1592,7 +1652,9 @@ export default function Home() {
                 </h3>
                 <p className="max-w-sm text-sm text-muted mb-5">
                   {apiTotal === 0
-                    ? (contentType === "novel" ? t.home.emptyNovelLibraryHint : t.home.emptyLibraryHint)
+                    ? selectedLibraryIds.length > 0
+                      ? ("当前书库还没有内容，你可以切换到“全部”，或去书库管理中扫描 / 导入内容。")
+                      : (contentType === "novel" ? t.home.emptyNovelLibraryHint : t.home.emptyLibraryHint)
                     : t.home.noMatchingHint}
                 </p>
                 {/* 引导性操作按钮 */}
@@ -1629,6 +1691,7 @@ export default function Home() {
                         setSelectedTags([]);
                         setFavoritesOnly(false);
                         setSelectedCategory(null);
+                        setSelectedLibraryIds([]);
                         setContentType("comic");
                       }}
                       className="flex items-center gap-2 rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-accent-hover"

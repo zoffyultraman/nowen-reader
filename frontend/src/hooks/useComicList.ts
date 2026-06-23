@@ -52,8 +52,8 @@ export function useComics(options?: {
   readingStatus?: string; // 用户级阅读状态筛选
   uncategorized?: boolean;
   untagged?: boolean;
+  libraryIds?: string[]; // 书库筛选：只返回这些书库的内容（空=不过滤）
   fetchAll?: boolean; // 获取全部漫画（不分页，用于客户端合并分页）
-  libraryIds?: string[]; // 首页书库 Tab 多选筛选
 }) {
   const [comics, setComics] = useState<ApiComic[]>([]);
   const [loading, setLoading] = useState(true);
@@ -89,7 +89,7 @@ export function useComics(options?: {
     if (options?.readingStatus) params.set("readingStatus", options.readingStatus);
     if (options?.uncategorized) params.set("uncategorized", "true");
     if (options?.untagged) params.set("untagged", "true");
-    if (options?.libraryIds?.length) params.set("libraryIds", options.libraryIds.join(","));
+    if (options?.libraryIds && options.libraryIds.length > 0) params.set("libraryIds", options.libraryIds.join(","));
 
     const qs = params.toString();
     const cacheKey = qs || "__default__";
@@ -142,7 +142,7 @@ export function useComics(options?: {
         setFetching(false);
       }
     }
-  }, [options?.search, JSON.stringify(options?.tags), options?.favoritesOnly, options?.sortBy, options?.sortOrder, options?.page, options?.pageSize, options?.category, options?.contentType, options?.excludeGrouped, options?.fetchAll, options?.readingStatus]);
+  }, [options?.search, JSON.stringify(options?.tags), options?.favoritesOnly, options?.sortBy, options?.sortOrder, options?.page, options?.pageSize, options?.category, options?.contentType, options?.excludeGrouped, options?.fetchAll, options?.readingStatus, JSON.stringify(options?.libraryIds ?? [])]);
 
   useEffect(() => {
     fetchComics();
