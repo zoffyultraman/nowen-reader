@@ -1331,19 +1331,37 @@ func SyncLibraryByID(libraryID string) (int, error) {
 	}
 
 	useFolderComics := lib.Type != "novel"
-	files := walkDirRecursive(lib.RootPath, useFolderComics)
-	if len(files) == 0 {
+
+	// 收集所有根目录路径（主路径 + 额外路径）
+	rootPaths := []string{lib.RootPath}
+	if len(lib.RootPaths) > 0 {
+		// 使用 RootPaths 中除主路径外的额外路径
+		for _, p := range lib.RootPaths {
+			if p != lib.RootPath {
+				rootPaths = append(rootPaths, p)
+			}
+		}
+	}
+
+	// 遍历所有根目录收集文件
+	var allFiles []diskFile
+	for _, rootPath := range rootPaths {
+		files := walkDirRecursive(rootPath, useFolderComics)
+		allFiles = append(allFiles, files...)
+	}
+
+	if len(allFiles) == 0 {
 		_ = store.UpdateLibraryScanStatus(libraryID, 0, 0)
 		return 0, nil
 	}
 
-	for i := range files {
+	for i := range allFiles {
 		if lib.Type == "novel" {
-			files[i].Source = "novels"
+			allFiles[i].Source = "novels"
 		} else {
-			files[i].Source = "comics"
+			allFiles[i].Source = "comics"
 		}
-		files[i].LibraryID = libraryID
+		allFiles[i].LibraryID = libraryID
 	}
 
 	existing, err := store.GetComicIDsByLibraryID(libraryID)
@@ -1351,8 +1369,8 @@ func SyncLibraryByID(libraryID string) (int, error) {
 		return 0, fmt.Errorf("failed to query existing comics: %w", err)
 	}
 
-	fileMap := make(map[string]diskFile, len(files))
-	for _, f := range files {
+	fileMap := make(map[string]diskFile, len(allFiles))
+	for _, f := range allFiles {
 		fileMap[f.ID] = f
 	}
 
@@ -1392,7 +1410,7 @@ func SyncLibraryByID(libraryID string) (int, error) {
 		}
 	}
 
-	if err := store.UpdateLibraryScanStatus(libraryID, len(toAdd), len(files)); err != nil {
+	if err := store.UpdateLibraryScanStatus(libraryID, len(toAdd), len(allFiles)); err != nil {
 		return len(toAdd), fmt.Errorf("failed to update library scan status: %w", err)
 	}
 

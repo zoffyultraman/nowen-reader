@@ -57,13 +57,14 @@ func (h *LibraryHandler) ListLibraries(c *gin.Context) {
 
 func (h *LibraryHandler) CreateLibrary(c *gin.Context) {
 	var req struct {
-		Name          string  `json:"name" binding:"required"`
-		Type          string  `json:"type" binding:"required"`
-		RootPath      string  `json:"rootPath" binding:"required"`
-		Enabled       *bool   `json:"enabled"`
-		SortOrder     *int    `json:"sortOrder"`
-		DefaultAccess *string `json:"defaultAccess"`
-		ScanEnabled   *bool   `json:"scanEnabled"`
+		Name          string   `json:"name" binding:"required"`
+		Type          string   `json:"type" binding:"required"`
+		RootPath      string   `json:"rootPath"`
+		RootPaths     []string `json:"rootPaths"`
+		Enabled       *bool    `json:"enabled"`
+		SortOrder     *int     `json:"sortOrder"`
+		DefaultAccess *string  `json:"defaultAccess"`
+		ScanEnabled   *bool    `json:"scanEnabled"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -75,6 +76,32 @@ func (h *LibraryHandler) CreateLibrary(c *gin.Context) {
 	if req.Type != "comic" && req.Type != "novel" && req.Type != "mixed" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Type must be comic, novel, or mixed"})
 		return
+	}
+
+	// 处理 rootPaths：优先使用 rootPaths，如果都没有则报错
+	rootPath := req.RootPath
+	allPaths := req.RootPaths
+	if rootPath == "" && len(allPaths) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "rootPath or rootPaths is required"})
+		return
+	}
+	if rootPath == "" && len(allPaths) > 0 {
+		rootPath = allPaths[0]
+	}
+	// 确保主路径在 rootPaths 列表中
+	if len(allPaths) == 0 {
+		allPaths = []string{rootPath}
+	} else {
+		found := false
+		for _, p := range allPaths {
+			if p == rootPath {
+				found = true
+				break
+			}
+		}
+		if !found {
+			allPaths = append([]string{rootPath}, allPaths...)
+		}
 	}
 
 	enabled := true
@@ -100,7 +127,8 @@ func (h *LibraryHandler) CreateLibrary(c *gin.Context) {
 	lib := &model.Library{
 		Name:          req.Name,
 		Type:          req.Type,
-		RootPath:      req.RootPath,
+		RootPath:      rootPath,
+		RootPaths:     allPaths,
 		Enabled:       enabled,
 		SortOrder:     sortOrder,
 		DefaultAccess: defaultAccess,
@@ -133,13 +161,14 @@ func (h *LibraryHandler) UpdateLibrary(c *gin.Context) {
 	}
 
 	var req struct {
-		Name          *string `json:"name"`
-		Type          *string `json:"type"`
-		RootPath      *string `json:"rootPath"`
-		Enabled       *bool   `json:"enabled"`
-		SortOrder     *int    `json:"sortOrder"`
-		DefaultAccess *string `json:"defaultAccess"`
-		ScanEnabled   *bool   `json:"scanEnabled"`
+		Name          *string  `json:"name"`
+		Type          *string  `json:"type"`
+		RootPath      *string  `json:"rootPath"`
+		RootPaths     []string `json:"rootPaths"`
+		Enabled       *bool    `json:"enabled"`
+		SortOrder     *int     `json:"sortOrder"`
+		DefaultAccess *string  `json:"defaultAccess"`
+		ScanEnabled   *bool    `json:"scanEnabled"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -159,6 +188,13 @@ func (h *LibraryHandler) UpdateLibrary(c *gin.Context) {
 	}
 	if req.RootPath != nil {
 		existing.RootPath = *req.RootPath
+	}
+	if req.RootPaths != nil {
+		// 更新 rootPaths，同时更新主路径为第一个路径
+		existing.RootPaths = req.RootPaths
+		if len(req.RootPaths) > 0 {
+			existing.RootPath = req.RootPaths[0]
+		}
 	}
 	if req.Enabled != nil {
 		existing.Enabled = *req.Enabled
