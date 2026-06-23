@@ -26,6 +26,7 @@ import GroupCard from "@/components/GroupCard";
 import MergeGroupDialog from "@/components/MergeGroupDialog";
 import UploadDialog from "@/components/UploadDialog";
 import DiscoverySpotlight from "@/components/home/DiscoverySpotlight";
+import { LibraryTabsBar } from "@/components/home/LibraryTabsBar";
 import ExploreChannel from "@/components/home/ExploreChannel";
 import PersonalSidebar from "@/components/home/PersonalSidebar";
 
@@ -38,7 +39,7 @@ import { useAIStatus } from "@/hooks/useAIStatus";
 import type { ComicGroup } from "@/hooks/useComicTypes";
 import { fetchGroups, fetchGroupedComicMap, createGroup, updateGroup, deleteGroup } from "@/api/groups";
 import { toggleComicFavorite, deleteComicById } from "@/api/comics";
-import { fetchLibraries, type Library } from "@/api/libraries";
+import { fetchLibraries, fetchAccessibleLibraries, type Library } from "@/api/libraries";
 import { useAuth } from "@/lib/auth-context";
 import { calculateReadingProgress, isReadingFinished } from "@/lib/progress";
 
@@ -82,6 +83,19 @@ function apiToComic(api: ApiComic): Comic {
   };
 }
 
+
+/** 安全读取 localStorage 中的字符串数组，损坏时 fallback 到 [] */
+function readStringArrayFromLocalStorage(key: string): string[] {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
 export default function Home() {
   const t = useTranslation();
   const router = useRouter();
@@ -115,15 +129,9 @@ export default function Home() {
     }
     return "grid";
   });
-  const [selectedLibraryIds, setSelectedLibraryIds] = useState<string[]>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const saved = sessionStorage.getItem("homeFilter:libraryIds");
-        if (saved) return JSON.parse(saved);
-      } catch {}
-    }
-    return [];
-  });
+  const [selectedLibraryIds, setSelectedLibraryIds] = useState<string[]>(() =>
+    readStringArrayFromLocalStorage("home:selectedLibraryIds")
+  );
   const [uploading, setUploading] = useState(false);
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [selectedLibraryId, setSelectedLibraryId] = useState("");
@@ -133,18 +141,35 @@ export default function Home() {
   useEffect(() => {
     if (!isAdmin) return;
     fetchLibraries()
+      .then(setLibraries)
+      .catch(() => {});
+  }, [isAdmin]);
+  // Accessible libraries for homepage tabs (all logged-in users)
+  const [accessibleLibraries, setAccessibleLibraries] = useState<Library[]>([]);
+
+  useEffect(() => {
+    fetchAccessibleLibraries()
       .then((libs) => {
-        setLibraries(libs);
-        // 清理 sessionStorage 中已删除的书库 ID
+        setAccessibleLibraries(libs);
+        // 清理 localStorage 中已删除/无权限的书库 ID
         setSelectedLibraryIds((prev) => {
           if (prev.length === 0) return prev;
           const validIds = new Set(libs.map((l) => l.id));
           const cleaned = prev.filter((id) => validIds.has(id));
-          return cleaned.length === prev.length ? prev : cleaned;
+          if (cleaned.length !== prev.length) {
+            localStorage.setItem("home:selectedLibraryIds", JSON.stringify(cleaned));
+          }
+          return cleaned.length !== prev.length ? cleaned : prev;
         });
       })
       .catch(() => {});
-  }, [isAdmin]);
+  }, []);
+
+  const handleLibraryTabsChange = useCallback((ids: string[]) => {
+    setSelectedLibraryIds(ids);
+    localStorage.setItem("home:selectedLibraryIds", JSON.stringify(ids));
+    setCurrentPage(1);
+  }, []);
 
   const [scanningLibrary, setScanningLibrary] = useState(false);
   const [favoritesOnly, setFavoritesOnly] = useState(() => {
@@ -307,7 +332,7 @@ export default function Home() {
     sessionStorage.setItem("homeFilter:untagged", String(untagged));
   }, [untagged]);
   useEffect(() => {
-    sessionStorage.setItem("homeFilter:libraryIds", JSON.stringify(selectedLibraryIds));
+    localStorage.setItem("home:selectedLibraryIds", JSON.stringify(selectedLibraryIds));
   }, [selectedLibraryIds]);
 
   // AI 语义搜索 handler
@@ -1160,45 +1185,16 @@ export default function Home() {
                 ))}
               </div>
 
-              {/* 书库 Tab 筛选 */}
-              <div className="flex items-center gap-1 sm:gap-1.5 overflow-x-auto scrollbar-hide">
-                <button
-                  onClick={() => setSelectedLibraryIds([])}
-                  className={`flex items-center gap-1 whitespace-nowrap rounded-lg px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium transition-all duration-200 ${
-                    selectedLibraryIds.length === 0
-                      ? "bg-accent text-white shadow-sm shadow-accent/25"
-                      : "bg-card text-muted hover:text-foreground hover:bg-card-hover"
-                  }`}
-                >
-                  {t.common?.all || "全部"}
-                  <span className="ml-1 opacity-70">{libraries.reduce((sum, lib) => sum + (lib.comicCount ?? 0), 0)}</span>
-                </button>
-                {libraries.filter((lib) => lib.enabled).map((lib) => {
-                  const active = selectedLibraryIds.includes(lib.id);
-                  return (
-                    <button
-                      key={lib.id}
-                      onClick={() => {
-                        setSelectedLibraryIds((prev) =>
-                          prev.includes(lib.id)
-                            ? prev.filter((id) => id !== lib.id)
-                            : [...prev, lib.id]
-                        );
-                      }}
-                      className={`flex items-center gap-1 whitespace-nowrap rounded-lg px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium transition-all duration-200 ${
-                        active
-                          ? "bg-accent text-white shadow-sm shadow-accent/25"
-                          : "bg-card text-muted hover:text-foreground hover:bg-card-hover"
-                      }`}
-                    >
-                      {lib.name}
-                      <span className="ml-1 opacity-70">{lib.comicCount ?? 0}</span>
-                    </button>
-                  );
-                })}
-              </div>
+            {/* Library Tabs — accessible library filter */}
+            {accessibleLibraries.length > 1 && (
+              <LibraryTabsBar
+                libraries={accessibleLibraries}
+                selectedIds={selectedLibraryIds}
+                onChange={handleLibraryTabsChange}
+              />
+            )}
 
-              {/* View Toggle — 在此处始终可见 */}
+            {/* View Toggle — 在此处始终可见 */}
               <div className="flex items-center rounded-lg border border-border/60 bg-card/50 p-0.5">
                 <button
                   onClick={() => setViewMode("grid")}
