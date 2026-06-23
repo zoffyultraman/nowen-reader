@@ -801,22 +801,22 @@ export function LibraryManagementPanel() {
                       ))}
                     </div>
 
-                    <div className="mt-5 grid grid-cols-2 gap-x-6 gap-y-3 text-sm text-slate-600 sm:grid-cols-4">
+                    <div className="mt-5 grid grid-cols-2 gap-x-6 gap-y-3 text-sm text-muted sm:grid-cols-4">
                       <div className="space-y-0.5">
-                        <div className="text-[11px] uppercase tracking-wide text-slate-400">内容数</div>
-                        <div className="text-base font-semibold text-slate-900">{lib.comicCount ?? 0}</div>
+                        <div className="text-[11px] uppercase tracking-wide text-muted/70">内容数</div>
+                        <div className="text-base font-semibold text-foreground">{lib.comicCount ?? 0}</div>
                       </div>
                       <div className="space-y-0.5">
-                        <div className="text-[11px] uppercase tracking-wide text-slate-400">上次扫描</div>
-                        <div className="font-medium text-slate-800">{formatDate(lib.lastScanAt)}</div>
+                        <div className="text-[11px] uppercase tracking-wide text-muted/70">上次扫描</div>
+                        <div className="font-medium text-foreground">{formatDate(lib.lastScanAt)}</div>
                       </div>
                       <div className="space-y-0.5">
-                        <div className="text-[11px] uppercase tracking-wide text-slate-400">上次新增</div>
-                        <div className="text-base font-semibold text-slate-900">{lib.lastScanAdded ?? 0}</div>
+                        <div className="text-[11px] uppercase tracking-wide text-muted/70">上次新增</div>
+                        <div className="text-base font-semibold text-foreground">{lib.lastScanAdded ?? 0}</div>
                       </div>
                       <div className="space-y-0.5">
-                        <div className="text-[11px] uppercase tracking-wide text-slate-400">文件数</div>
-                        <div className="text-base font-semibold text-slate-900">{lib.lastScanTotal ?? 0}</div>
+                        <div className="text-[11px] uppercase tracking-wide text-muted/70">文件数</div>
+                        <div className="text-base font-semibold text-foreground">{lib.lastScanTotal ?? 0}</div>
                       </div>
                     </div>
 
