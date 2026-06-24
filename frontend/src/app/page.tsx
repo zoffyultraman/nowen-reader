@@ -442,7 +442,7 @@ export default function Home() {
   // 加载合集数据
   const loadGroups = useCallback(async () => {
     const [grps, gmap] = await Promise.all([
-      fetchGroups(undefined, selectedCategory || undefined, selectedTags.length > 0 ? selectedTags : undefined, favoritesOnly || undefined),
+      fetchGroups(undefined, selectedCategory || undefined, selectedTags.length > 0 ? selectedTags : undefined, favoritesOnly || undefined, selectedLibraryIds.length > 0 ? selectedLibraryIds : undefined),
       fetchGroupedComicMap(),
     ]);
     setGroups(grps);
@@ -451,7 +451,7 @@ export default function Home() {
     if (showGroupView) {
       refetchGroupCategories();
     }
-  }, [selectedCategory, selectedTags, favoritesOnly, showGroupView, refetchGroupCategories]);
+  }, [selectedCategory, selectedTags, favoritesOnly, selectedLibraryIds, showGroupView, refetchGroupCategories]);
 
   // 搜索过滤合集（前端过滤，匹配名称、作者、描述、标签；隐藏空合集）
   const filteredGroups = useMemo(() => {
