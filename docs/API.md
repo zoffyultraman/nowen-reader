@@ -94,7 +94,7 @@ GET /api/comics?readingStatus=finished
 
 | 方法 | 路径 | 说明 |
 |:---|:---|:---|
-| GET | `/api/groups` | 分组列表 |
+| GET | `/api/groups` | 分组列表（支持 contentType/category/tags/favoritesOnly/libraryIds 过滤）🔒 |
 | GET | `/api/groups/comic-map` | 漫画-分组映射关系 |
 | GET | `/api/groups/:id` | 分组详情 |
 | POST | `/api/groups` | 创建分组 🔒管理员 |
