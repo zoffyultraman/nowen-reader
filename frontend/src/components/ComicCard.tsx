@@ -243,7 +243,7 @@ const ComicCard = memo(function ComicCard({
             )}
             <Link
               href={getReaderUrl(comic)}
-              className="flex flex-1 min-w-0 items-center gap-3 sm:gap-4 rounded-xl bg-card p-2.5 sm:p-3 transition-all duration-200 group-hover:bg-card-hover group-hover:shadow-lg group-hover:shadow-accent/5"
+              className="flex flex-1 min-w-0 items-center gap-3 sm:gap-4 rounded-xl bg-card/70 backdrop-blur-sm border border-white/[0.04] p-2.5 sm:p-3 transition-all duration-200 group-hover:bg-card-hover group-hover:border-white/[0.08] group-hover:shadow-lg group-hover:shadow-accent/5"
             >
               {/* Thumbnail */}
               <div className="relative h-20 w-14 sm:h-16 sm:w-12 flex-shrink-0 overflow-hidden rounded-lg">
@@ -345,7 +345,7 @@ const ComicCard = memo(function ComicCard({
         <div onClick={handleClick} className="cursor-pointer">
           {/* Batch Selection Overlay */}
           <div
-            className={`relative overflow-hidden rounded-xl bg-card transition-all duration-300 ease-out ${
+            className={`relative overflow-hidden rounded-xl bg-card/70 backdrop-blur-sm border border-white/[0.04] transition-all duration-300 ease-out ${
               isSelected ? "ring-2 ring-accent scale-[0.96]" : "hover:scale-[1.03]"
             }`}
           >
@@ -393,7 +393,7 @@ const ComicCard = memo(function ComicCard({
             </div>
           )}
 
-          <div className={`motion-cover relative overflow-hidden rounded-xl bg-card group-hover:shadow-accent/10 ${compact ? "shadow-sm" : ""}`}>
+          <div className={`motion-cover relative overflow-hidden rounded-xl bg-card/70 backdrop-blur-sm border border-white/[0.04] group-hover:shadow-accent/10 group-hover:border-white/[0.08] ${compact ? "shadow-sm" : ""}`}>
             {/* Cover Image — 点击进入阅读 */}
             <Link
               href={getReaderUrl(comic)}
