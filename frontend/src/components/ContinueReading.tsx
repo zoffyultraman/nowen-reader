@@ -250,36 +250,34 @@ export function ContinueReading({ contentType, showTitle = true }: { contentType
                 background: "radial-gradient(ellipse 60% 50% at 50% 60%, rgba(59,130,246,0.08) 0%, transparent 70%)",
               }} />
 
-              {recentComics.map((comic, index) => {
+              {/* 循环渲染 5 张卡片：-2, -1, 0, +1, +2 */}
+              {[-2, -1, 0, 1, 2].map((offset) => {
+                const n = recentComics.length;
+                if (n === 0) return null;
+                const index = ((activeIndex + offset) % n + n) % n;
+                const comic = recentComics[index];
                 const progress = comic.pageCount > 0
                   ? calculateReadingProgress(comic.lastReadPage, comic.pageCount)
                   : 0;
                 const novel = isNovel(comic);
                 const href = novel ? `/novel/${comic.id}` : `/reader/${comic.id}`;
-                const isActive = index === activeIndex;
-                const distance = Math.abs(index - activeIndex);
+                const distance = Math.abs(offset);
 
-                // 3D 舞台参数
                 const isActiveCard = distance === 0;
                 const isNear = distance === 1;
                 const isFar = distance === 2;
-                const isHidden = distance > 2;
 
-                if (isHidden) return null;
-
-                const translateX = isActiveCard
-                  ? 0
-                  : (index < activeIndex ? -1 : 1) * (isNear ? 200 : 340);
+                const translateX = offset * (isNear ? 190 : 320);
                 const translateZ = isActiveCard ? 60 : isNear ? -40 : -100;
-                const rotateY = isActiveCard ? 0 : (index < activeIndex ? 1 : -1) * (isNear ? 18 : 32);
-                const scale = isActiveCard ? 1.12 : isNear ? 0.85 : 0.72;
-                const opacity = isActiveCard ? 1 : isNear ? 0.7 : 0.4;
+                const rotateY = isActiveCard ? 0 : -offset * (isNear ? 16 : 30);
+                const scale = isActiveCard ? 1.12 : isNear ? 0.86 : 0.72;
+                const opacity = isActiveCard ? 1 : isNear ? 0.75 : 0.42;
                 const zIndex = 10 - distance;
                 const cardWidth = isActiveCard ? 220 : isNear ? 170 : 140;
 
                 return (
                   <Link
-                    key={comic.id}
+                    key={`${offset}-${comic.id}`}
                     href={href}
                     onClick={() => setActiveIndex(index)}
                     className="coverflow-item absolute group"
