@@ -59,7 +59,7 @@ export default function Navbar({
   const { siteName, siteIcon, scraperEnabled } = useSiteSettings();
 
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 border-b border-white/[0.06] bg-[#070A0F]/80 backdrop-blur-2xl backdrop-saturate-200">
+    <nav className="fixed top-0 left-0 right-0 z-50 border-b border-border/50 bg-surface/80 backdrop-blur-2xl backdrop-saturate-200">
       <div className="mx-auto flex h-14 sm:h-16 max-w-[1760px] items-center justify-between px-6 sm:px-8 lg:px-12">
         {/* Logo */}
         <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
