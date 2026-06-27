@@ -262,7 +262,7 @@ export function ContinueReading({ contentType, showTitle = true }: { contentType
         <div ref={contentRef}>
           {/* 桌面端：3D Coverflow 舞台 */}
           <div className="hidden sm:block">
-            <div className="relative h-[340px] sm:h-[380px] flex items-center justify-center overflow-hidden" style={{ perspective: "1200px" }}>
+            <div className="relative h-[320px] sm:h-[350px] lg:h-[360px] flex items-center justify-center py-4" style={{ perspective: "1200px" }}>
               {/* 背景光晕 */}
               <div className="absolute inset-0 pointer-events-none" style={{
                 background: "radial-gradient(ellipse 60% 50% at 50% 60%, rgba(59,130,246,0.08) 0%, transparent 70%)",
@@ -285,10 +285,10 @@ export function ContinueReading({ contentType, showTitle = true }: { contentType
                 const params = distance === 0
                   ? { width: 230, scale: 1.12, translateX: 0, translateZ: 70, rotateY: 0, opacity: 1 }
                   : distance === 1
-                  ? { width: 180, scale: 0.88, translateX: offset * 175, translateZ: -30, rotateY: -offset * 14, opacity: 0.78 }
+                  ? { width: 185, scale: 0.90, translateX: offset * 155, translateZ: -25, rotateY: -offset * 12, opacity: 0.82 }
                   : distance === 2
-                  ? { width: 150, scale: 0.74, translateX: offset * 305, translateZ: -90, rotateY: -offset * 26, opacity: 0.52 }
-                  : { width: 125, scale: 0.62, translateX: offset * 410, translateZ: -150, rotateY: -offset * 36, opacity: 0.28 };
+                  ? { width: 155, scale: 0.78, translateX: offset * 260, translateZ: -80, rotateY: -offset * 22, opacity: 0.60 }
+                  : { width: 130, scale: 0.68, translateX: offset * 350, translateZ: -130, rotateY: -offset * 30, opacity: 0.42 };
 
                 const { width: cardWidth, scale, translateX, translateZ, rotateY, opacity } = params;
                 const isActiveCard = distance === 0;
@@ -308,11 +308,11 @@ export function ContinueReading({ contentType, showTitle = true }: { contentType
                       cursor: "pointer",
                     }}
                   >
-                    <div style={{ width: cardWidth }} className="space-y-2">
+                    <div style={{ width: cardWidth }} className="relative">
                       <div
                         className={`relative aspect-[5/7] w-full overflow-hidden rounded-2xl transition-all duration-500 ${
                           isActiveCard
-                            ? "border-2 border-accent/30 cover-active-glow"
+                            ? "cover-active-glow"
                             : "border border-border/30 bg-card/60 backdrop-blur-sm"
                         }`}
                       >
@@ -363,6 +363,11 @@ export function ContinueReading({ contentType, showTitle = true }: { contentType
                             </div>
                           </div>
                         )}
+
+                        {/* 活跃卡片高亮边框 overlay — 最顶层，不被裁切 */}
+                        {isActiveCard && (
+                          <div className="pointer-events-none absolute inset-0 z-30 rounded-2xl ring-2 ring-accent/60 shadow-[0_0_30px_rgba(59,130,246,0.4),0_0_60px_rgba(139,92,246,0.2)]" />
+                        )}
                       </div>
                     </div>
                   </Link>
@@ -372,7 +377,7 @@ export function ContinueReading({ contentType, showTitle = true }: { contentType
 
             {/* 页码指示器 */}
             {recentComics.length > 1 && (
-              <div className="mt-3 flex items-center justify-center gap-1.5">
+              <div className="mt-1 flex items-center justify-center gap-1.5">
                 {recentComics.map((_, i) => (
                   <button
                     key={i}
