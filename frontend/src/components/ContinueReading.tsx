@@ -118,7 +118,6 @@ export function ContinueReading({ contentType, showTitle = true }: { contentType
       const comics = all.filter(
         (c: ApiComic) =>
           !!c.lastReadAt &&
-          c.lastReadPage > 0 &&
           (c.pageCount === 0 || c.lastReadPage < c.pageCount)
       );
       setRecentComics(comics.slice(0, 8));
@@ -131,6 +130,21 @@ export function ContinueReading({ contentType, showTitle = true }: { contentType
 
   useEffect(() => {
     fetchRecent();
+  }, [fetchRecent]);
+
+  // 从阅读器返回时刷新
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        fetchRecent();
+      }
+    };
+    window.addEventListener("focus", fetchRecent);
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      window.removeEventListener("focus", fetchRecent);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
   }, [fetchRecent]);
 
   // 键盘导航（仅在 coverflow 可见时响应）
