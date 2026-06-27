@@ -262,7 +262,7 @@ export function ContinueReading({ contentType, showTitle = true }: { contentType
         <div ref={contentRef}>
           {/* 桌面端：3D Coverflow 舞台 */}
           <div className="hidden sm:block">
-            <div className="relative h-[320px] sm:h-[350px] lg:h-[360px] flex items-center justify-center py-4" style={{ perspective: "1200px" }}>
+            <div className="relative h-[310px] sm:h-[330px] lg:h-[350px] flex items-center justify-center" style={{ perspective: "1200px" }}>
               {/* 背景光晕 */}
               <div className="absolute inset-0 pointer-events-none" style={{
                 background: "radial-gradient(ellipse 60% 50% at 50% 60%, rgba(59,130,246,0.08) 0%, transparent 70%)",
@@ -283,12 +283,12 @@ export function ContinueReading({ contentType, showTitle = true }: { contentType
 
                 // 3D 舞台参数 — 紧凑排布
                 const params = distance === 0
-                  ? { width: 230, scale: 1.12, translateX: 0, translateZ: 70, rotateY: 0, opacity: 1 }
+                  ? { width: 230, scale: 1.10, translateX: 0, translateZ: 60, rotateY: 0, opacity: 1 }
                   : distance === 1
-                  ? { width: 185, scale: 0.90, translateX: offset * 155, translateZ: -25, rotateY: -offset * 12, opacity: 0.82 }
+                  ? { width: 180, scale: 0.88, translateX: offset * 145, translateZ: -25, rotateY: -offset * 10, opacity: 0.82 }
                   : distance === 2
-                  ? { width: 155, scale: 0.78, translateX: offset * 260, translateZ: -80, rotateY: -offset * 22, opacity: 0.60 }
-                  : { width: 130, scale: 0.68, translateX: offset * 350, translateZ: -130, rotateY: -offset * 30, opacity: 0.42 };
+                  ? { width: 150, scale: 0.76, translateX: offset * 245, translateZ: -70, rotateY: -offset * 20, opacity: 0.58 }
+                  : { width: 125, scale: 0.66, translateX: offset * 330, translateZ: -110, rotateY: -offset * 28, opacity: 0.40 };
 
                 const { width: cardWidth, scale, translateX, translateZ, rotateY, opacity } = params;
                 const isActiveCard = distance === 0;
@@ -308,14 +308,10 @@ export function ContinueReading({ contentType, showTitle = true }: { contentType
                       cursor: "pointer",
                     }}
                   >
+                    {/* 卡片外壳：负责宽度，relative 定位 */}
                     <div style={{ width: cardWidth }} className="relative">
-                      <div
-                        className={`relative aspect-[5/7] w-full overflow-hidden rounded-2xl transition-all duration-500 ${
-                          isActiveCard
-                            ? "cover-active-glow"
-                            : "border border-border/30 bg-card/60 backdrop-blur-sm"
-                        }`}
-                      >
+                      {/* 卡片主体：overflow-hidden，封面+信息层 */}
+                      <div className="relative aspect-[5/7] w-full overflow-hidden rounded-2xl bg-card shadow-lg">
                         <NSFWCoverGuard
                           src={comic.coverUrl}
                           alt={comic.title}
@@ -329,14 +325,14 @@ export function ContinueReading({ contentType, showTitle = true }: { contentType
 
                         {/* 进度环 — 仅活跃卡片 */}
                         {isActiveCard && (
-                          <div className="absolute top-3 right-3">
+                          <div className="absolute top-3 right-3 z-20">
                             <ReadingProgressRing progress={progress} size={36} strokeWidth={2.5} />
                           </div>
                         )}
 
                         {/* 底部信息 — 仅活跃卡片 */}
                         {isActiveCard && (
-                          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent p-4 pt-12">
+                          <div className="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/85 via-black/40 to-transparent p-4 pt-12">
                             <p className="text-sm font-semibold text-white line-clamp-1 drop-shadow-lg">
                               {comic.title}
                             </p>
@@ -363,12 +359,12 @@ export function ContinueReading({ contentType, showTitle = true }: { contentType
                             </div>
                           </div>
                         )}
-
-                        {/* 活跃卡片高亮边框 overlay — 最顶层，不被裁切 */}
-                        {isActiveCard && (
-                          <div className="pointer-events-none absolute inset-0 z-30 rounded-2xl ring-2 ring-accent/60 shadow-[0_0_30px_rgba(59,130,246,0.4),0_0_60px_rgba(139,92,246,0.2)]" />
-                        )}
                       </div>
+
+                      {/* Active 高亮边框 — 放在 overflow-hidden 外部，作为兄弟节点 */}
+                      {isActiveCard && (
+                        <div className="pointer-events-none absolute -inset-[2px] z-30 rounded-[18px] ring-2 ring-accent/70 shadow-[0_0_28px_rgba(59,130,246,0.5),0_0_60px_rgba(59,130,246,0.22)]" />
+                      )}
                     </div>
                   </Link>
                 );
