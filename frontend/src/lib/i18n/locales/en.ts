@@ -35,6 +35,7 @@ const en: Translations = {
     aiSearchTitle: "AI Semantic Search Results",
     aiSearchNoResults: "No matches found, try a different description",
     scanLibrary: "Scan Library",
+    backToDashboard: "Back to Dashboard",
   },
 
   // Home page

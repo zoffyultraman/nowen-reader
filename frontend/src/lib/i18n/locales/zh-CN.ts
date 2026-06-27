@@ -33,6 +33,7 @@ const zhCN = {
     aiSearchTitle: "AI 语义搜索结果",
     aiSearchNoResults: "未找到匹配结果，试试换个描述方式",
     scanLibrary: "扫描文库",
+    backToDashboard: "返回仪表盘",
   },
   home: {
     mockDataNotice: "当前显示 Mock 数据。将",
@@ -1340,6 +1341,7 @@ export interface Translations {
     aiSearchTitle: string;
     aiSearchNoResults: string;
     scanLibrary: string;
+    backToDashboard: string;
   };
   home: {
     mockDataNotice: string;
