@@ -931,7 +931,7 @@ export default function ReaderPage() {
           if (seriesGroupId) {
             router.replace(`/group/${seriesGroupId}`);
           } else {
-            router.back();
+            router.push('/');
           }
         }}
         onPageChange={handlePageChange}
