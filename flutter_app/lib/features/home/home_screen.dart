@@ -336,7 +336,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
-  /// 混合网格视图
+  /// 混合网格视图 — mini 紧凑风格
   Widget _buildUnifiedGrid(
     BuildContext context,
     List<_UnifiedItem> items,
@@ -344,22 +344,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   ) {
     final serverUrl = authState.serverUrl;
     final width = MediaQuery.of(context).size.width;
+    // 更多列数，更小卡片
     final crossAxisCount = width > 900
-        ? 6
+        ? 8
         : width > 600
-            ? 4
+            ? 5
             : width > 400
-                ? 3
-                : 2;
+                ? 4
+                : 3;
 
     return SliverPadding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
       sliver: SliverGrid(
         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: crossAxisCount,
-          childAspectRatio: 0.62,
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 14,
+          childAspectRatio: 0.75, // 更紧凑的宽高比
+          crossAxisSpacing: 8,
+          mainAxisSpacing: 10,
         ),
         delegate: SliverChildBuilderDelegate(
           (context, index) {
@@ -502,22 +503,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       BuildContext context, ComicListState state, AuthState authState) {
     final serverUrl = authState.serverUrl;
     final width = MediaQuery.of(context).size.width;
+    // 更多列数，更小卡片
     final crossAxisCount = width > 900
-        ? 6
+        ? 8
         : width > 600
-            ? 4
+            ? 5
             : width > 400
-                ? 3
-                : 2;
+                ? 4
+                : 3;
 
     return SliverPadding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
       sliver: SliverGrid(
         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: crossAxisCount,
-          childAspectRatio: 0.62,
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 14,
+          childAspectRatio: 0.75, // 更紧凑的宽高比
+          crossAxisSpacing: 8,
+          mainAxisSpacing: 10,
         ),
         delegate: SliverChildBuilderDelegate(
           (context, index) {
@@ -681,7 +683,7 @@ class _EmptyState extends StatelessWidget {
   }
 }
 
-/// 漫画卡片组件 — 精致的封面卡片
+/// 漫画卡片组件 — mini 紧凑风格
 class _ComicCard extends StatelessWidget {
   final Comic comic;
   final String serverUrl;
@@ -710,17 +712,17 @@ class _ComicCard extends StatelessWidget {
           Expanded(
             child: Container(
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(10),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.08),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
+                    color: Colors.black.withOpacity(0.06),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
                   ),
                 ],
               ),
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(10),
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
@@ -732,14 +734,14 @@ class _ComicCard extends StatelessWidget {
                         color: cs.surfaceContainerHighest,
                         child: Center(
                           child: Icon(Icons.image_outlined,
-                              size: 28, color: cs.onSurfaceVariant.withOpacity(0.3)),
+                              size: 24, color: cs.onSurfaceVariant.withOpacity(0.3)),
                         ),
                       ),
                       errorWidget: Container(
                         color: cs.surfaceContainerHighest,
                         child: Center(
                           child: Icon(Icons.broken_image_outlined,
-                              size: 28, color: cs.onSurfaceVariant.withOpacity(0.3)),
+                              size: 24, color: cs.onSurfaceVariant.withOpacity(0.3)),
                         ),
                       ),
                     ),
@@ -749,7 +751,7 @@ class _ComicCard extends StatelessWidget {
                       bottom: 0,
                       left: 0,
                       right: 0,
-                      height: 60,
+                      height: 40,
                       child: Container(
                         decoration: const BoxDecoration(
                           gradient: LinearGradient(
@@ -768,7 +770,7 @@ class _ComicCard extends StatelessWidget {
                         left: 0,
                         right: 0,
                         child: Container(
-                          height: 3,
+                          height: 2,
                           decoration: BoxDecoration(
                             color: Colors.black26,
                           ),
@@ -779,7 +781,7 @@ class _ComicCard extends StatelessWidget {
                               decoration: BoxDecoration(
                                 color: cs.primary,
                                 borderRadius: const BorderRadius.only(
-                                  bottomLeft: Radius.circular(12),
+                                  bottomLeft: Radius.circular(10),
                                 ),
                               ),
                             ),
@@ -789,8 +791,8 @@ class _ComicCard extends StatelessWidget {
 
                     // 收藏图标
                     Positioned(
-                      top: 6,
-                      right: 6,
+                      top: 4,
+                      right: 4,
                       child: GestureDetector(
                         onTap: () {
                           HapticFeedback.lightImpact();
@@ -799,11 +801,11 @@ class _ComicCard extends StatelessWidget {
                         child: HeartBounce(
                           trigger: comic.isFavorite,
                           child: Container(
-                            width: 28,
-                            height: 28,
+                            width: 22,
+                            height: 22,
                             decoration: BoxDecoration(
                               color: Colors.black.withOpacity(0.3),
-                              borderRadius: BorderRadius.circular(8),
+                              borderRadius: BorderRadius.circular(6),
                             ),
                             child: Icon(
                               comic.isFavorite
@@ -812,7 +814,7 @@ class _ComicCard extends StatelessWidget {
                               color: comic.isFavorite
                                   ? const Color(0xFFFF6B6B)
                                   : Colors.white70,
-                              size: 16,
+                              size: 12,
                             ),
                           ),
                         ),
@@ -822,22 +824,21 @@ class _ComicCard extends StatelessWidget {
                     // 类型标识
                     if (comic.isNovel)
                       Positioned(
-                        top: 6,
-                        left: 6,
+                        top: 4,
+                        left: 4,
                         child: Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 7, vertical: 3),
+                              horizontal: 5, vertical: 2),
                           decoration: BoxDecoration(
                             color: Colors.black.withOpacity(0.5),
-                            borderRadius: BorderRadius.circular(6),
+                            borderRadius: BorderRadius.circular(4),
                           ),
                           child: const Text(
                             '小说',
                             style: TextStyle(
                               color: Colors.white,
-                              fontSize: 10,
+                              fontSize: 9,
                               fontWeight: FontWeight.w600,
-                              letterSpacing: 0.5,
                             ),
                           ),
                         ),
@@ -850,17 +851,17 @@ class _ComicCard extends StatelessWidget {
 
           // 标题
           Padding(
-            padding: const EdgeInsets.fromLTRB(2, 8, 2, 0),
+            padding: const EdgeInsets.fromLTRB(2, 4, 2, 0),
             child: Text(
               comic.title,
-              maxLines: 2,
+              maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 12,
-                    height: 1.3,
-                    color: cs.onSurface,
-                  ),
+              style: TextStyle(
+                fontWeight: FontWeight.w500,
+                fontSize: 11,
+                height: 1.2,
+                color: cs.onSurface,
+              ),
             ),
           ),
         ],
