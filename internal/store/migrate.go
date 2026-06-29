@@ -401,6 +401,14 @@ var Migrations = []Migration{
 			`ALTER TABLE "ComicGroup" ADD COLUMN "externalRatingUpdatedAt" DATETIME;`,
 		}, "\n"),
 	},
+	{
+		Version:     28,
+		Description: "Add canDownload and canManage to GroupLibraryAccess",
+		SQL: strings.Join([]string{
+			`ALTER TABLE "GroupLibraryAccess" ADD COLUMN "canDownload" BOOLEAN NOT NULL DEFAULT 0;`,
+			`ALTER TABLE "GroupLibraryAccess" ADD COLUMN "canManage" BOOLEAN NOT NULL DEFAULT 0;`,
+		}, "\n"),
+	},
 }
 
 // ensureMigrationsTable creates the migrations tracking table.
