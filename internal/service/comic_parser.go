@@ -1,4 +1,4 @@
-﻿package service
+package service
 
 import (
 	"fmt"
@@ -576,7 +576,11 @@ func getArchivePageImage(comicID, fp string, pageIndex int) (*PageImage, error) 
 				return
 			}
 			cachePath := filepath.Join(cacheDir, fmt.Sprintf("%d%s", pageIndex, ext))
-			_ = os.WriteFile(cachePath, data, 0644)
+			tmpPath := cachePath + fmt.Sprintf(".%d.tmp", time.Now().UnixNano())
+			defer os.Remove(tmpPath) // Ensures cleanup regardless of panics or early exits
+			if err := os.WriteFile(tmpPath, data, 0644); err == nil {
+				_ = os.Rename(tmpPath, cachePath)
+			}
 		}()
 	}
 
@@ -593,8 +597,15 @@ func getPdfPageImage(comicID, fp string, pageIndex int) (*PageImage, error) {
 		return &PageImage{Data: data, MimeType: "image/png"}, nil
 	}
 
+	// 动态计算用于阅读的最佳 DPI
+	targetDPI := 200 // 默认值
+	if w, _, err := archive.GetPdfPageSize(fp, pageIndex); err == nil && w > 0 {
+		// 目标宽度定为 1920 像素，确保在现代高分屏上足够清晰
+		targetDPI = archive.CalcReadingDPI(w, 1920)
+	}
+
 	// Render from PDF
-	data, err := archive.RenderPdfPage(fp, pageIndex)
+	data, err := archive.RenderPdfPage(fp, pageIndex, targetDPI)
 	if err != nil {
 		return nil, fmt.Errorf("render PDF page %d: %w", pageIndex, err)
 	}
@@ -604,7 +615,11 @@ func getPdfPageImage(comicID, fp string, pageIndex int) (*PageImage, error) {
 		if err := os.MkdirAll(cacheDir, 0755); err != nil {
 			return
 		}
-		_ = os.WriteFile(cachePath, data, 0644)
+		tmpPath := cachePath + fmt.Sprintf(".%d.tmp", time.Now().UnixNano())
+		defer os.Remove(tmpPath) // Ensures cleanup regardless of panics or early exits
+		if err := os.WriteFile(tmpPath, data, 0644); err == nil {
+			_ = os.Rename(tmpPath, cachePath)
+		}
 	}()
 
 	return &PageImage{Data: data, MimeType: "image/png"}, nil

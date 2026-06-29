@@ -881,9 +881,26 @@ func pdfPageCountByMutool(fp string) (int, bool) {
 // GetPdfPageSize 返回 PDF 指定页面的物理宽高（单位：pt，1pt = 1/72 inch）。
 // 使用纯 Go 的 rsc.io/pdf 读取 MediaBox，无需外部工具。
 func GetPdfPageSize(fp string, pageIndex int) (widthPt, heightPt float64, err error) {
-	f, err := rscpdf.Open(fp)
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("rsc.io/pdf panicked in GetPdfPageSize: %v", r)
+		}
+	}()
+
+	file, err := os.Open(fp)
 	if err != nil {
-		return 0, 0, fmt.Errorf("open pdf: %w", err)
+		return 0, 0, fmt.Errorf("open pdf file: %w", err)
+	}
+	defer file.Close()
+
+	fi, err := file.Stat()
+	if err != nil {
+		return 0, 0, fmt.Errorf("stat pdf file: %w", err)
+	}
+
+	f, err := rscpdf.NewReader(file, fi.Size())
+	if err != nil {
+		return 0, 0, fmt.Errorf("parse pdf: %w", err)
 	}
 
 	pageNum := pageIndex + 1 // rsc.io/pdf 使用 1-based 页码
@@ -1149,6 +1166,22 @@ func countPdfPageObjects(content string) int {
 	return count
 }
 
+// CalcReadingDPI 根据 PDF 页面物理宽度（pt）和目标阅读宽度（px）计算最佳阅读 DPI。
+// 限制在 [72, 200] 范围内，大页面用低 DPI 防爆存，小页面用高 DPI 保清晰。
+func CalcReadingDPI(pageWidthPt float64, targetWidthPx int) int {
+	if pageWidthPt <= 0 || targetWidthPx <= 0 {
+		return 150
+	}
+	dpi := float64(targetWidthPx) * 72.0 / pageWidthPt
+	if dpi < 72 {
+		return 72
+	}
+	if dpi > 200 {
+		return 200
+	}
+	return int(dpi)
+}
+
 // RenderPdfPage renders a single PDF page to a PNG image.
 // Uses external tools (mutool, pdftoppm, or convert).
 // 渲染策略：每个工具按 dpiLadder 降级重试，遇到 OOM/signal killed 自动降级，
@@ -1167,10 +1200,17 @@ func RenderPdfPage(fp string, pageIndex int, targetDPI ...int) ([]byte, error) {
 	// dpi 降级序列：高质量优先，失败时降低分辨率以节省内存（适配 NAS/低内存环境）
 	var dpiLadder []int
 	if len(targetDPI) > 0 && targetDPI[0] > 0 {
-		// 缩略图场景：使用动态计算的 DPI，失败时降到 96 兜底
-		dpiLadder = []int{targetDPI[0], 96}
+		td := targetDPI[0]
+		// 根据动态目标 DPI 构建平滑降级阶梯，防止落差过大
+		if td >= 150 {
+			dpiLadder = []int{td, 120, 96}
+		} else if td > 96 {
+			dpiLadder = []int{td, 96}
+		} else {
+			dpiLadder = []int{td}
+		}
 	} else {
-		// 阅读场景：保持原始阶梯
+		// 默认原始阶梯
 		dpiLadder = []int{200, 120, 96}
 	}
 

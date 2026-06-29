@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import type { ReaderTheme } from "./ReaderToolbar";
@@ -251,12 +251,29 @@ export default function PdfView({
 
         // 高分辨率渲染（devicePixelRatio）
         const dpr = window.devicePixelRatio || 1;
-        const scaledViewport = page.getViewport({ scale: finalScale * dpr });
+
+        // 限制最大画布尺寸，防止在移动端或高分屏下因 canvas 过大导致浏览器崩溃
+        // iOS Safari 的 Canvas 限制大约是 4096x4096px 或 16.7MP
+        const maxCanvasDim = 4096;
+        let renderDpr = dpr;
+        
+        let expectedWidth = viewport.width * finalScale * renderDpr;
+        let expectedHeight = viewport.height * finalScale * renderDpr;
+        
+        // 如果超出最大限制，按比例降低渲染 DPR
+        if (expectedWidth > maxCanvasDim || expectedHeight > maxCanvasDim) {
+          const ratio = maxCanvasDim / Math.max(expectedWidth, expectedHeight);
+          renderDpr = Math.max(0.1, renderDpr * ratio);
+          console.warn(`[PdfView] Canvas exceeds limits, downgrading DPR to ${renderDpr.toFixed(2)}`);
+        }
+        
+        const scaledViewport = page.getViewport({ scale: finalScale * renderDpr });
 
         canvas.width = scaledViewport.width;
         canvas.height = scaledViewport.height;
-        canvas.style.width = `${scaledViewport.width / dpr}px`;
-        canvas.style.height = `${scaledViewport.height / dpr}px`;
+        // 显示尺寸保持不变，只降低内部渲染分辨率
+        canvas.style.width = `${viewport.width * finalScale}px`;
+        canvas.style.height = `${viewport.height * finalScale}px`;
 
         const renderContext = {
           canvasContext: ctx,
