@@ -182,6 +182,20 @@ func BatchSetReadingStatus(userID string, comicIDs []string, status string) erro
 	defer tx.Rollback()
 
 	for _, comicID := range comicIDs {
+		if status == "finished" {
+			var pageCount int
+			err := tx.QueryRow(`SELECT "pageCount" FROM "Comic" WHERE "id" = ?`, comicID).Scan(&pageCount)
+			if err == nil && pageCount > 0 {
+				now := time.Now().UTC()
+				_, _ = tx.Exec(`UPDATE "Comic" SET "lastReadPage" = ?, "lastReadAt" = ?, "updatedAt" = ? WHERE "id" = ?`, pageCount, now, now, comicID)
+				_, _ = tx.Exec(`
+					INSERT INTO "UserComicState" ("userId", "comicId", "lastReadPage", "lastReadAt")
+					VALUES (?, ?, ?, ?)
+					ON CONFLICT("userId", "comicId") DO UPDATE SET "lastReadPage" = ?, "lastReadAt" = ?
+				`, userID, comicID, pageCount, now, pageCount, now)
+			}
+		}
+
 		_, err := tx.Exec(`
 			INSERT INTO "UserComicState" ("userId", "comicId", "readingStatus")
 			VALUES (?, ?, ?)

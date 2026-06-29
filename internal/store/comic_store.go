@@ -266,6 +266,15 @@ func UpdateRating(comicID string, rating *int, userID ...string) error {
 // 不更新 Comic 表的全局 readingStatus 字段。
 // 当 status 为空字符串时，只清空 UserComicState.readingStatus，不删除整条记录（可能含其他字段）。
 func SetUserReadingStatus(userID, comicID, status string) error {
+	if status == "finished" {
+		var pageCount int
+		err := db.QueryRow(`SELECT "pageCount" FROM "Comic" WHERE "id" = ?`, comicID).Scan(&pageCount)
+		if err == nil && pageCount > 0 {
+			// Update global and user progress for backward compatibility
+			_ = UpdateReadingProgress(comicID, pageCount, userID)
+		}
+	}
+
 	_, err := db.Exec(`
 		INSERT INTO "UserComicState" ("userId", "comicId", "readingStatus")
 		VALUES (?, ?, ?)
