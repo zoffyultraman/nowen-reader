@@ -164,6 +164,24 @@ export default function TextReaderView({
   const [ttsSupported, setTtsSupported] = useState(false);
   const [showTtsPanel, setShowTtsPanel] = useState(false);
   const ttsUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+
+  // AI 优化朗读状态
+  const [aiTtsEnabled, setAiTtsEnabled] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("textReaderAiTts") === "true";
+    }
+    return false;
+  });
+  const [aiTtsRecap, setAiTtsRecap] = useState(true);
+  const [aiTtsSegments, setAiTtsSegments] = useState<Array<{
+    type: string;
+    speaker: string;
+    text: string;
+    pauseAfterMs: number;
+  }>>([]);
+  const [aiTtsCurrentIndex, setAiTtsCurrentIndex] = useState(0);
+  const [aiTtsPreparing, setAiTtsPreparing] = useState(false);
+  const [aiTtsError, setAiTtsError] = useState<string | null>(null);
   // 自动翻页状态
   const [autoScrollActive, setAutoScrollActive] = useState(false);
   const [autoScrollSpeed, setAutoScrollSpeed] = useState(() => {
@@ -519,14 +537,53 @@ export default function TextReaderView({
     return content;
   }, [content, isHTML]);
 
-  // 开始 TTS 朗读
-  const startTTS = useCallback(() => {
+  // 保存 AI 朗读设置
+  useEffect(() => {
+    localStorage.setItem("textReaderAiTts", String(aiTtsEnabled));
+  }, [aiTtsEnabled]);
+
+  // 准备 AI 朗读文本
+  const prepareAiTts = useCallback(async (forceRefresh = false) => {
+    if (!comicId || !chapters[currentPage]) return null;
+
+    setAiTtsPreparing(true);
+    setAiTtsError(null);
+
+    try {
+      const res = await fetch(`/api/comics/${comicId}/chapter/${currentPage}/audiobook/prepare`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          includeRecap: aiTtsRecap,
+          forceRefresh,
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error('AI 准备失败');
+      }
+
+      const data = await res.json();
+
+      if (data.error && data.source === 'fallback') {
+        setAiTtsError(data.error);
+        return null;
+      }
+
+      setAiTtsSegments(data.segments || []);
+      setAiTtsCurrentIndex(0);
+      return data;
+    } catch (err) {
+      setAiTtsError(err instanceof Error ? err.message : 'AI 准备失败');
+      return null;
+    } finally {
+      setAiTtsPreparing(false);
+    }
+  }, [comicId, currentPage, aiTtsRecap]);
+
+  // 播放单个 segment
+  const speakSegment = useCallback((text: string, onEnd: () => void) => {
     if (!ttsSupported) return;
-
-    window.speechSynthesis.cancel();
-
-    const text = getChapterText();
-    if (!text.trim()) return;
 
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = 'zh-CN';
@@ -538,19 +595,7 @@ export default function TextReaderView({
     const zhVoice = voices.find(v => v.lang.startsWith('zh')) || voices.find(v => v.lang.includes('CN'));
     if (zhVoice) utterance.voice = zhVoice;
 
-    utterance.onend = () => {
-      setTtsPlaying(false);
-      setTtsPaused(false);
-      // 自动播放下一章
-      if (currentPage < chapters.length - 1) {
-        onPageChange(currentPage + 1);
-        // 延迟后自动开始朗读下一章（等内容加载）
-        setTimeout(() => {
-          window.dispatchEvent(new CustomEvent('novel-tts-auto-next'));
-        }, 1500);
-      }
-    };
-
+    utterance.onend = onEnd;
     utterance.onerror = () => {
       setTtsPlaying(false);
       setTtsPaused(false);
@@ -558,9 +603,96 @@ export default function TextReaderView({
 
     ttsUtteranceRef.current = utterance;
     window.speechSynthesis.speak(utterance);
+  }, [ttsSupported, ttsRate]);
+
+  // 播放 AI segments 队列
+  const playSegmentsQueue = useCallback((startIndex: number) => {
+    if (startIndex >= aiTtsSegments.length) {
+      // 当前章节播放完毕，自动下一章
+      setTtsPlaying(false);
+      setTtsPaused(false);
+      if (currentPage < chapters.length - 1) {
+        onPageChange(currentPage + 1);
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('novel-tts-auto-next'));
+        }, 1500);
+      }
+      return;
+    }
+
+    const segment = aiTtsSegments[startIndex];
+    setAiTtsCurrentIndex(startIndex);
+
+    speakSegment(segment.text, () => {
+      // 暂停后继续播放下一个 segment
+      setTimeout(() => {
+        playSegmentsQueue(startIndex + 1);
+      }, segment.pauseAfterMs || 500);
+    });
+  }, [aiTtsSegments, currentPage, chapters.length, onPageChange, speakSegment]);
+
+  // 开始 TTS 朗读
+  const startTTS = useCallback(async () => {
+    if (!ttsSupported) return;
+
+    window.speechSynthesis.cancel();
+
+    // AI 优化朗读模式
+    if (aiTtsEnabled && aiConfigured) {
+      setTtsPlaying(true);
+      setTtsPaused(false);
+      setShowTtsPanel(true);
+
+      const result = await prepareAiTts();
+      if (result && result.segments.length > 0) {
+        // 先播放前情提要
+        if (result.recap && aiTtsRecap) {
+          speakSegment(result.recap, () => {
+            setTimeout(() => {
+              playSegmentsQueue(0);
+            }, 800);
+          });
+        } else {
+          playSegmentsQueue(0);
+        }
+      } else {
+        // AI 失败，回退到原始朗读
+        const text = getChapterText();
+        if (!text.trim()) {
+          setTtsPlaying(false);
+          return;
+        }
+        speakSegment(text, () => {
+          setTtsPlaying(false);
+          setTtsPaused(false);
+          if (currentPage < chapters.length - 1) {
+            onPageChange(currentPage + 1);
+            setTimeout(() => {
+              window.dispatchEvent(new CustomEvent('novel-tts-auto-next'));
+            }, 1500);
+          }
+        });
+      }
+      return;
+    }
+
+    // 原始朗读模式
+    const text = getChapterText();
+    if (!text.trim()) return;
+
+    speakSegment(text, () => {
+      setTtsPlaying(false);
+      setTtsPaused(false);
+      if (currentPage < chapters.length - 1) {
+        onPageChange(currentPage + 1);
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('novel-tts-auto-next'));
+        }, 1500);
+      }
+    });
     setTtsPlaying(true);
     setTtsPaused(false);
-  }, [ttsSupported, getChapterText, ttsRate, currentPage, chapters.length, onPageChange]);
+  }, [ttsSupported, aiTtsEnabled, aiConfigured, aiTtsRecap, getChapterText, speakSegment, prepareAiTts, playSegmentsQueue, currentPage, chapters.length, onPageChange]);
 
   // 暂停/继续 TTS
   const toggleTTSPause = useCallback(() => {
@@ -579,7 +711,34 @@ export default function TextReaderView({
     window.speechSynthesis?.cancel();
     setTtsPlaying(false);
     setTtsPaused(false);
+    setAiTtsCurrentIndex(0);
   }, []);
+
+  // 上一句（AI 模式）
+  const ttsPrevSegment = useCallback(() => {
+    if (!aiTtsEnabled || aiTtsSegments.length === 0) return;
+    window.speechSynthesis.cancel();
+    const prevIndex = Math.max(0, aiTtsCurrentIndex - 1);
+    setAiTtsCurrentIndex(prevIndex);
+    speakSegment(aiTtsSegments[prevIndex].text, () => {
+      setTimeout(() => {
+        playSegmentsQueue(prevIndex + 1);
+      }, aiTtsSegments[prevIndex].pauseAfterMs || 500);
+    });
+  }, [aiTtsEnabled, aiTtsSegments, aiTtsCurrentIndex, speakSegment, playSegmentsQueue]);
+
+  // 下一句（AI 模式）
+  const ttsNextSegment = useCallback(() => {
+    if (!aiTtsEnabled || aiTtsSegments.length === 0) return;
+    window.speechSynthesis.cancel();
+    const nextIndex = Math.min(aiTtsSegments.length - 1, aiTtsCurrentIndex + 1);
+    setAiTtsCurrentIndex(nextIndex);
+    speakSegment(aiTtsSegments[nextIndex].text, () => {
+      setTimeout(() => {
+        playSegmentsQueue(nextIndex + 1);
+      }, aiTtsSegments[nextIndex].pauseAfterMs || 500);
+    });
+  }, [aiTtsEnabled, aiTtsSegments, aiTtsCurrentIndex, speakSegment, playSegmentsQueue]);
 
   // 监听自动播放下一章事件
   useEffect(() => {
@@ -1765,72 +1924,158 @@ export default function TextReaderView({
         </>
       )}
 
-      {/* TTS 听书控制面板 */}
-      {showTtsPanel && ttsPlaying && (
+      {/* AI 优化朗读开关（TTS 面板旁边） */}
+      {showTtsPanel && !ttsPlaying && aiConfigured && (
         <div
-          className={`fixed bottom-16 left-1/2 z-[55] -translate-x-1/2 flex items-center gap-2 rounded-2xl px-4 py-2.5 shadow-2xl backdrop-blur-xl ${
+          className={`fixed bottom-16 left-1/2 z-[55] -translate-x-1/2 flex items-center gap-3 rounded-2xl px-4 py-2.5 shadow-2xl backdrop-blur-xl ${
             isDark ? "bg-zinc-800/95 border border-zinc-700" : "bg-white/95 border border-zinc-200"
           }`}
         >
-          {/* 播放/暂停 */}
+          <Brain className={`h-4 w-4 ${aiTtsEnabled ? "text-accent" : isDark ? "text-zinc-500" : "text-zinc-400"}`} />
+          <span className={`text-xs ${isDark ? "text-zinc-300" : "text-zinc-700"}`}>
+            AI 优化朗读
+          </span>
           <button
-            onClick={toggleTTSPause}
-            className={`rounded-full p-2 transition-colors ${
-              isDark ? "hover:bg-zinc-700 text-zinc-200" : "hover:bg-zinc-100 text-zinc-700"
+            onClick={() => setAiTtsEnabled(!aiTtsEnabled)}
+            className={`relative h-5 w-9 rounded-full transition-colors ${
+              aiTtsEnabled ? "bg-accent" : isDark ? "bg-zinc-600" : "bg-zinc-300"
             }`}
-            title={ttsPaused ? t.reader.ttsPause : t.reader.ttsResume}
           >
-            {ttsPaused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
+            <div
+              className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${
+                aiTtsEnabled ? "translate-x-4" : "translate-x-0.5"
+              }`}
+            />
           </button>
+          {aiTtsEnabled && (
+            <label className="flex items-center gap-1.5">
+              <input
+                type="checkbox"
+                checked={aiTtsRecap}
+                onChange={(e) => setAiTtsRecap(e.target.checked)}
+                className="h-3 w-3 rounded accent-accent"
+              />
+              <span className={`text-[10px] ${isDark ? "text-zinc-400" : "text-zinc-500"}`}>
+                前情提要
+              </span>
+            </label>
+          )}
+        </div>
+      )}
 
-          {/* 停止 */}
-          <button
-            onClick={() => { stopTTS(); setShowTtsPanel(false); }}
-            className={`rounded-full p-2 transition-colors ${
-              isDark ? "hover:bg-zinc-700 text-red-400" : "hover:bg-zinc-100 text-red-500"
-            }`}
-            title={t.reader.ttsStop}
-          >
-            <Square className="h-3.5 w-3.5" />
-          </button>
+      {/* TTS 听书控制面板 */}
+      {showTtsPanel && ttsPlaying && (
+        <div
+          className={`fixed bottom-16 left-1/2 z-[55] -translate-x-1/2 flex flex-col items-center gap-2 rounded-2xl px-4 py-2.5 shadow-2xl backdrop-blur-xl ${
+            isDark ? "bg-zinc-800/95 border border-zinc-700" : "bg-white/95 border border-zinc-200"
+          }`}
+        >
+          {/* AI 朗读进度 */}
+          {aiTtsEnabled && aiTtsSegments.length > 0 && (
+            <div className={`text-[10px] ${isDark ? "text-zinc-400" : "text-zinc-500"}`}>
+              {aiTtsPreparing ? (
+                <span className="flex items-center gap-1">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  AI 处理中...
+                </span>
+              ) : (
+                <span>
+                  {aiTtsCurrentIndex + 1} / {aiTtsSegments.length}
+                  {aiTtsError && <span className="text-red-400 ml-2">({aiTtsError})</span>}
+                </span>
+              )}
+            </div>
+          )}
 
-          {/* 分隔线 */}
-          <div className={`h-6 w-px mx-0.5 shrink-0 ${isDark ? "bg-zinc-700" : "bg-zinc-200"}`} />
-
-          {/* 语速调节 - 移动端自适应 */}
-          <div className="flex items-center gap-1 overflow-x-auto">
-            <span className={`text-[10px] shrink-0 ${isDark ? "text-zinc-500" : "text-zinc-400"}`}>{t.reader.ttsSpeed}</span>
-            {[0.5, 0.8, 1.0, 1.5, 2.0].map((rate) => (
+          <div className="flex items-center gap-2">
+            {/* 上一句（AI 模式） */}
+            {aiTtsEnabled && aiTtsSegments.length > 0 && (
               <button
-                key={rate}
-                onClick={() => {
-                  setTtsRate(rate);
-                  // 如果正在播放，需要重新开始以应用新语速
-                  if (ttsPlaying && !ttsPaused) {
-                    window.speechSynthesis.cancel();
-                    setTimeout(() => startTTS(), 100);
-                  }
-                }}
-                className={`shrink-0 rounded-lg px-1.5 py-0.5 text-[10px] transition-colors ${
-                  ttsRate === rate
-                    ? "bg-accent/20 text-accent font-bold"
-                    : isDark ? "text-zinc-400 hover:bg-zinc-700" : "text-zinc-500 hover:bg-zinc-100"
+                onClick={ttsPrevSegment}
+                disabled={aiTtsCurrentIndex <= 0}
+                className={`rounded-full p-2 transition-colors disabled:opacity-30 ${
+                  isDark ? "hover:bg-zinc-700 text-zinc-200" : "hover:bg-zinc-100 text-zinc-700"
                 }`}
+                title="上一句"
               >
-                {rate}x
+                <ChevronLeft className="h-4 w-4" />
               </button>
-            ))}
-          </div>
+            )}
 
-          {/* 关闭面板按钮 */}
-          <button
-            onClick={() => setShowTtsPanel(false)}
-            className={`ml-1 shrink-0 rounded-full p-1 transition-colors ${
-              isDark ? "text-zinc-500 hover:text-zinc-300" : "text-zinc-400 hover:text-zinc-600"
-            }`}
-          >
-            <X className="h-3 w-3" />
-          </button>
+            {/* 播放/暂停 */}
+            <button
+              onClick={toggleTTSPause}
+              className={`rounded-full p-2 transition-colors ${
+                isDark ? "hover:bg-zinc-700 text-zinc-200" : "hover:bg-zinc-100 text-zinc-700"
+              }`}
+              title={ttsPaused ? t.reader.ttsPause : t.reader.ttsResume}
+            >
+              {ttsPaused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
+            </button>
+
+            {/* 停止 */}
+            <button
+              onClick={() => { stopTTS(); setShowTtsPanel(false); }}
+              className={`rounded-full p-2 transition-colors ${
+                isDark ? "hover:bg-zinc-700 text-red-400" : "hover:bg-zinc-100 text-red-500"
+              }`}
+              title={t.reader.ttsStop}
+            >
+              <Square className="h-3.5 w-3.5" />
+            </button>
+
+            {/* 下一句（AI 模式） */}
+            {aiTtsEnabled && aiTtsSegments.length > 0 && (
+              <button
+                onClick={ttsNextSegment}
+                disabled={aiTtsCurrentIndex >= aiTtsSegments.length - 1}
+                className={`rounded-full p-2 transition-colors disabled:opacity-30 ${
+                  isDark ? "hover:bg-zinc-700 text-zinc-200" : "hover:bg-zinc-100 text-zinc-700"
+                }`}
+                title="下一句"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            )}
+
+            {/* 分隔线 */}
+            <div className={`h-6 w-px mx-0.5 shrink-0 ${isDark ? "bg-zinc-700" : "bg-zinc-200"}`} />
+
+            {/* 语速调节 - 移动端自适应 */}
+            <div className="flex items-center gap-1 overflow-x-auto">
+              <span className={`text-[10px] shrink-0 ${isDark ? "text-zinc-500" : "text-zinc-400"}`}>{t.reader.ttsSpeed}</span>
+              {[0.5, 0.8, 1.0, 1.5, 2.0].map((rate) => (
+                <button
+                  key={rate}
+                  onClick={() => {
+                    setTtsRate(rate);
+                    // 如果正在播放，需要重新开始以应用新语速
+                    if (ttsPlaying && !ttsPaused) {
+                      window.speechSynthesis.cancel();
+                      setTimeout(() => startTTS(), 100);
+                    }
+                  }}
+                  className={`shrink-0 rounded-lg px-1.5 py-0.5 text-[10px] transition-colors ${
+                    ttsRate === rate
+                      ? "bg-accent/20 text-accent font-bold"
+                      : isDark ? "text-zinc-400 hover:bg-zinc-700" : "text-zinc-500 hover:bg-zinc-100"
+                  }`}
+                >
+                  {rate}x
+                </button>
+              ))}
+            </div>
+
+            {/* 关闭面板按钮 */}
+            <button
+              onClick={() => setShowTtsPanel(false)}
+              className={`ml-1 shrink-0 rounded-full p-1 transition-colors ${
+                isDark ? "text-zinc-500 hover:text-zinc-300" : "text-zinc-400 hover:text-zinc-600"
+              }`}
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </div>
         </div>
       )}
 

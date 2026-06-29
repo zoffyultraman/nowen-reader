@@ -107,6 +107,14 @@ func registerComicRoutes(api *gin.RouterGroup) {
 		imgRead.POST("/warmup-done", img.WarmupDone)
 	}
 
+	// 听书 AI 增强（需要 AI 权限）
+	audiobook := &AudiobookHandler{}
+	audiobookGroup := api.Group("/comics/:id")
+	audiobookGroup.Use(middleware.AIRequired())
+	{
+		audiobookGroup.POST("/chapter/:index/audiobook/prepare", audiobook.Prepare)
+	}
+
 	// Per-comic metadata translation (requires admin)
 	tagTranslate := NewTagTranslateHandler()
 	comicByIDWrite.POST("/translate-metadata", tagTranslate.TranslateMetadata)

@@ -315,6 +315,11 @@ const zhCN = {
     ttsSpeed: "语速",
     ttsPaused: "已暂停",
     ttsReading: "朗读中...",
+    aiTts: "AI 优化朗读",
+    aiTtsPreparing: "AI 处理中...",
+    aiTtsRecap: "前情提要",
+    aiTtsPrev: "上一句",
+    aiTtsNext: "下一句",
     autoScrolling: "自动翻页中",
     searchPlaceholder: "搜索全书内容...",
     search: "搜索",
@@ -1619,6 +1624,11 @@ export interface Translations {
     ttsSpeed: string;
     ttsPaused: string;
     ttsReading: string;
+    aiTts: string;
+    aiTtsPreparing: string;
+    aiTtsRecap: string;
+    aiTtsPrev: string;
+    aiTtsNext: string;
     autoScrolling: string;
     searchPlaceholder: string;
     search: string;
