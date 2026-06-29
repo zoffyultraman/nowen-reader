@@ -191,6 +191,16 @@ class ComicApi {
     });
   }
 
+  /// 获取已分组漫画的 ID 映射（漫画ID -> 所属分组ID列表）
+  Future<Map<String, List<int>>> getGroupedComicMap() async {
+    final res = await _dio.get('/groups/comic-map');
+    final map = res.data['map'] as Map<String, dynamic>? ?? {};
+    return map.map((key, value) => MapEntry(
+      key,
+      (value as List<dynamic>).map((e) => e as int).toList(),
+    ));
+  }
+
   /// 自动检测可合并的系列
   Future<List<dynamic>> autoDetectGroups({String? contentType}) async {
     final res = await _dio.post('/groups/auto-detect', data: {

@@ -6,12 +6,13 @@ import '../../data/api/api_client.dart';
 import '../../widgets/authenticated_image.dart';
 import '../../widgets/continue_reading.dart';
 import '../../widgets/comic_list_tile.dart';
+import '../../widgets/group_card.dart';
 import '../../data/models/comic.dart';
 import '../../data/providers/auth_provider.dart';
 import '../../data/providers/comic_provider.dart';
 import '../../widgets/animations.dart';
 
-/// 首页 — 极简优雅的书库浏览
+/// 首页 — 极简优雅的书库浏览，支持合集优先展示
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
@@ -21,6 +22,7 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   final _scrollController = ScrollController();
+  bool _groupByFolder = true; // 默认按文件夹收起
 
   @override
   void initState() {
@@ -65,10 +67,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final viewMode = ref.watch(viewModeProvider);
     final cs = Theme.of(context).colorScheme;
 
+    // 合集数据
+    final groupsAsync = ref.watch(groupsProvider);
+    // 已分组漫画 ID 映射
+    final groupedMapAsync = ref.watch(groupedComicMapProvider);
+
     return Scaffold(
       body: RefreshIndicator(
         onRefresh: () async {
           await ref.read(comicListProvider.notifier).loadComics();
+          ref.invalidate(groupsProvider);
+          ref.invalidate(groupedComicMapProvider);
         },
         color: cs.primary,
         child: CustomScrollView(
@@ -165,6 +174,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               child: ContinueReading(),
             ),
 
+            // ─── 合集收起开关 ───
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                child: _buildGroupToggle(cs, groupsAsync, groupedMapAsync),
+              ),
+            ),
+
             // ─── 内容区域 ───
             if (state.comics.isEmpty && state.isLoading)
               const SliverFillRemaining(
@@ -178,11 +195,244 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 hasScrollBody: false,
                 child: _EmptyState(),
               )
-            else if (viewMode == ViewMode.grid)
-              _buildGrid(context, state, authState)
             else
-              _buildList(context, state, authState),
+              _buildContent(context, state, authState, viewMode, groupsAsync, groupedMapAsync),
           ],
+        ),
+      ),
+    );
+  }
+
+  /// 合集收起开关
+  Widget _buildGroupToggle(
+    ColorScheme cs,
+    AsyncValue<List<ComicGroup>> groupsAsync,
+    AsyncValue<Map<String, List<int>>> groupedMapAsync,
+  ) {
+    final groupCount = groupsAsync.whenOrNull(data: (groups) => groups.length) ?? 0;
+
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.lightImpact();
+        setState(() => _groupByFolder = !_groupByFolder);
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: _groupByFolder
+              ? cs.primaryContainer.withOpacity(0.3)
+              : cs.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: _groupByFolder
+                ? cs.primary.withOpacity(0.3)
+                : cs.outlineVariant.withOpacity(0.3),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              _groupByFolder
+                  ? Icons.folder_outlined
+                  : Icons.folder_open_outlined,
+              size: 18,
+              color: _groupByFolder ? cs.primary : cs.onSurfaceVariant,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              _groupByFolder ? '按文件夹收起' : '全部展开',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: _groupByFolder ? cs.primary : cs.onSurfaceVariant,
+              ),
+            ),
+            if (groupCount > 0) ...[
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: _groupByFolder
+                      ? cs.primary.withOpacity(0.15)
+                      : cs.onSurfaceVariant.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  '$groupCount',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: _groupByFolder ? cs.primary : cs.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 构建内容区域（支持合集优先或全部展开）
+  Widget _buildContent(
+    BuildContext context,
+    ComicListState state,
+    AuthState authState,
+    ViewMode viewMode,
+    AsyncValue<List<ComicGroup>> groupsAsync,
+    AsyncValue<Map<String, List<int>>> groupedMapAsync,
+  ) {
+    // 如果不按文件夹收起，直接显示原始漫画列表
+    if (!_groupByFolder) {
+      return viewMode == ViewMode.grid
+          ? _buildGrid(context, state, authState)
+          : _buildList(context, state, authState);
+    }
+
+    // 合集优先模式：混合展示合集卡片和未分组的漫画
+    return groupsAsync.when(
+      loading: () => viewMode == ViewMode.grid
+          ? _buildGrid(context, state, authState)
+          : _buildList(context, state, authState),
+      error: (_, __) => viewMode == ViewMode.grid
+          ? _buildGrid(context, state, authState)
+          : _buildList(context, state, authState),
+      data: (groups) {
+        return groupedMapAsync.when(
+          loading: () => viewMode == ViewMode.grid
+              ? _buildGrid(context, state, authState)
+              : _buildList(context, state, authState),
+          error: (_, __) => viewMode == ViewMode.grid
+              ? _buildGrid(context, state, authState)
+              : _buildList(context, state, authState),
+          data: (groupedMap) {
+            // 过滤掉已分组的漫画
+            final looseComics = state.comics
+                .where((c) => !groupedMap.containsKey(c.id))
+                .toList();
+
+            // 构建混合列表：合集 + 散本
+            final items = <_UnifiedItem>[
+              ...groups
+                  .where((g) => g.comicCount > 0)
+                  .map((g) => _UnifiedItem.group(g)),
+              ...looseComics.map((c) => _UnifiedItem.comic(c)),
+            ];
+
+            if (items.isEmpty) {
+              return SliverFillRemaining(
+                hasScrollBody: false,
+                child: _EmptyState(),
+              );
+            }
+
+            return viewMode == ViewMode.grid
+                ? _buildUnifiedGrid(context, items, authState)
+                : _buildUnifiedList(context, items, authState);
+          },
+        );
+      },
+    );
+  }
+
+  /// 混合网格视图
+  Widget _buildUnifiedGrid(
+    BuildContext context,
+    List<_UnifiedItem> items,
+    AuthState authState,
+  ) {
+    final serverUrl = authState.serverUrl;
+    final width = MediaQuery.of(context).size.width;
+    final crossAxisCount = width > 900
+        ? 6
+        : width > 600
+            ? 4
+            : width > 400
+                ? 3
+                : 2;
+
+    return SliverPadding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+      sliver: SliverGrid(
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: crossAxisCount,
+          childAspectRatio: 0.62,
+          crossAxisSpacing: 12,
+          mainAxisSpacing: 14,
+        ),
+        delegate: SliverChildBuilderDelegate(
+          (context, index) {
+            if (index >= items.length) {
+              return const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(16),
+                  child: _LoadingIndicator(),
+                ),
+              );
+            }
+
+            final item = items[index];
+            return StaggeredFadeSlide(
+              index: index,
+              child: item.when(
+                group: (group) => GroupCard(group: group, isGrid: true),
+                comic: (comic) => _ComicCard(
+                  comic: comic,
+                  serverUrl: serverUrl,
+                  onTap: () => context.push('/comic/${comic.id}'),
+                  onFavoriteToggle: () => ref
+                      .read(comicListProvider.notifier)
+                      .toggleFavorite(comic.id),
+                ),
+              ),
+            );
+          },
+          childCount: items.length,
+        ),
+      ),
+    );
+  }
+
+  /// 混合列表视图
+  Widget _buildUnifiedList(
+    BuildContext context,
+    List<_UnifiedItem> items,
+    AuthState authState,
+  ) {
+    final serverUrl = authState.serverUrl;
+
+    return SliverPadding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      sliver: SliverList(
+        delegate: SliverChildBuilderDelegate(
+          (context, index) {
+            if (index >= items.length) {
+              return const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(16),
+                  child: _LoadingIndicator(),
+                ),
+              );
+            }
+
+            final item = items[index];
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              child: item.when(
+                group: (group) => GroupCard(group: group, isGrid: false),
+                comic: (comic) => ComicListTile(
+                  comic: comic,
+                  serverUrl: serverUrl,
+                  onTap: () => context.push('/comic/${comic.id}'),
+                  onFavoriteToggle: () => ref
+                      .read(comicListProvider.notifier)
+                      .toggleFavorite(comic.id),
+                ),
+              ),
+            );
+          },
+          childCount: items.length,
         ),
       ),
     );
@@ -327,6 +577,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         ),
       ),
     );
+  }
+}
+
+/// 统一项类型：合集或漫画
+class _UnifiedItem {
+  final ComicGroup? _group;
+  final Comic? _comic;
+
+  _UnifiedItem.group(ComicGroup group) : _group = group, _comic = null;
+  _UnifiedItem.comic(Comic comic) : _group = null, _comic = comic;
+
+  T when<T>({
+    required T Function(ComicGroup group) group,
+    required T Function(Comic comic) comic,
+  }) {
+    if (_group != null) return group(_group!);
+    return comic(_comic!);
   }
 }
 

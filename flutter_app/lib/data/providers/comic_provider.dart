@@ -238,6 +238,12 @@ final groupsProvider = FutureProvider<List<ComicGroup>>((ref) async {
   return data.map((e) => ComicGroup.fromJson(e)).toList();
 });
 
+/// 已分组漫画 ID 映射 Provider（漫画ID -> 所属分组ID列表）
+final groupedComicMapProvider = FutureProvider<Map<String, List<int>>>((ref) async {
+  final api = ref.read(comicApiProvider);
+  return await api.getGroupedComicMap();
+});
+
 /// 按内容类型过滤的分组列表 Provider
 final groupsByTypeProvider = FutureProvider.family<List<ComicGroup>, String?>((ref, contentType) async {
   final api = ref.read(comicApiProvider);
