@@ -725,8 +725,14 @@ func WarmupPages(comicID string, startPage, count int) {
 		}
 
 		archiveType := archive.DetectType(fp)
-		// 仅对漫画格式预热（小说、PDF和图片文件夹不需要）
-		if archive.IsNovelType(archiveType) || archiveType == archive.TypePdf || archiveType == archive.TypeImageFolder {
+		// 仅对漫画格式预热（小说和图片文件夹不需要）
+		if archive.IsNovelType(archiveType) || archiveType == archive.TypeImageFolder {
+			return
+		}
+
+		// PDF 使用专用预热逻辑
+		if archiveType == archive.TypePdf {
+			warmupPdf(comicID, fp, startPage, count)
 			return
 		}
 
@@ -774,6 +780,77 @@ func WarmupPages(comicID string, startPage, count int) {
 			warmupNormal(reader, comicID, images, startPage, end, cacheDir)
 		}
 	}()
+}
+
+// warmupPdf 对 PDF 文件进行预渲染缓存。
+// 使用并行渲染，最多 2 个并发（PDF 渲染较重，避免 OOM）。
+func warmupPdf(comicID, fp string, startPage, count int) {
+	pageCount, err := archive.GetPdfPageCount(fp)
+	if err != nil {
+		return
+	}
+
+	cacheDir := filepath.Join(config.GetPagesCacheDir(), comicID)
+
+	// 计算需要预热的页面范围
+	end := startPage + count
+	if end > pageCount {
+		end = pageCount
+	}
+	if startPage < 0 {
+		startPage = 0
+	}
+
+	// 收集需要预热的页面
+	cacheSet := buildCacheSet(cacheDir)
+	var pagesToWarm []int
+	for i := startPage; i < end; i++ {
+		if !cacheSetHas(cacheSet, i) {
+			pagesToWarm = append(pagesToWarm, i)
+		}
+	}
+
+	if len(pagesToWarm) == 0 {
+		return
+	}
+
+	// 确保缓存目录存在
+	if err := os.MkdirAll(cacheDir, 0755); err != nil {
+		return
+	}
+
+	// 并行预热，最多 2 个并发（PDF 渲染较重）
+	warmed := 0
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, 2)
+
+	for _, i := range pagesToWarm {
+		wg.Add(1)
+		go func(pageIdx int) {
+			defer wg.Done()
+			sem <- struct{}{} // 获取信号量
+			defer func() { <-sem }() // 释放信号量
+
+			data, ext, err := archive.RenderPdfPage(fp, pageIdx)
+			if err != nil {
+				return
+			}
+
+			cachePath := filepath.Join(cacheDir, fmt.Sprintf("%d%s", pageIdx, ext))
+			if err := os.WriteFile(cachePath, data, 0644); err == nil {
+				mu.Lock()
+				warmed++
+				mu.Unlock()
+			}
+		}(i)
+	}
+
+	wg.Wait()
+
+	if warmed > 0 {
+		log.Printf("[warmup] PDF pre-cached %d pages for %s (pages %d-%d)", warmed, comicID, startPage, end-1)
+	}
 }
 
 // warmupEbookComic 对电子书漫画格式（EPUB/MOBI/AZW3）逐页预热缓存。
