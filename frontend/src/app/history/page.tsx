@@ -290,11 +290,29 @@ export default function HistoryPage() {
 function HistoryCard({ comic }: { comic: ApiComic }) {
   const progress = calculateReadingProgress(comic.lastReadPage, comic.pageCount);
   const finished = isReadingFinished(comic.lastReadPage, comic.pageCount);
-  const statusColor = finished
-    ? "text-amber-400 bg-amber-500/10"
-    : progress > 0
-      ? "text-blue-400 bg-blue-500/10"
-      : "text-muted bg-muted/10";
+  // 判断是否已开始阅读（不依赖 progress > 0，避免小数进度被四舍五入为 0）
+  const hasStarted = !!comic.lastReadAt || comic.lastReadPage > 0;
+
+  // 状态标签逻辑
+  let statusText: string;
+  let statusColor: string;
+  if (finished) {
+    statusText = "已完成";
+    statusColor = "text-amber-400 bg-amber-500/10";
+  } else if (hasStarted && progress > 0) {
+    statusText = `${progress}%`;
+    statusColor = "text-blue-400 bg-blue-500/10";
+  } else if (hasStarted) {
+    // 已开始但进度 < 1%（四舍五入后为 0）
+    statusText = "<1%";
+    statusColor = "text-blue-400 bg-blue-500/10";
+  } else {
+    statusText = "未读";
+    statusColor = "text-muted bg-muted/10";
+  }
+
+  // 进度条最小宽度（已开始阅读时至少显示 2%，避免完全看不见）
+  const progressBarWidth = hasStarted && progress === 0 ? 2 : progress;
 
   return (
     <div className="group flex gap-3 sm:gap-4 rounded-2xl border border-border/30 bg-card/60 backdrop-blur-sm p-3 sm:p-4 transition-all hover:border-border/60 hover:bg-card/80">
@@ -326,7 +344,7 @@ function HistoryCard({ comic }: { comic: ApiComic }) {
               {comic.title || comic.filename}
             </Link>
             <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${statusColor}`}>
-              {finished ? "已完成" : progress > 0 ? `${progress}%` : "未读"}
+              {statusText}
             </span>
           </div>
 
@@ -348,7 +366,7 @@ function HistoryCard({ comic }: { comic: ApiComic }) {
               <div className="h-1.5 flex-1 rounded-full bg-muted/20 overflow-hidden">
                 <div
                   className={`h-full rounded-full transition-all ${finished ? "bg-amber-400" : "bg-accent"}`}
-                  style={{ width: `${progress}%` }}
+                  style={{ width: `${progressBarWidth}%` }}
                 />
               </div>
               <span className="text-[10px] text-muted shrink-0">
