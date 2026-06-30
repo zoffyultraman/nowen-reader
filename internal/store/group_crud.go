@@ -70,12 +70,13 @@ type GroupComicItem struct {
 
 // GroupListOptions 分组列表查询选项。
 type GroupListOptions struct {
-	UserID       string   // 用户ID过滤
-	ContentType  string   // 内容类型过滤: "comic" | "novel" | "" (全部)
-	Category     string   // 分类过滤（slug）
-	Tags         []string // 标签过滤（标签名列表，AND 逻辑）
-	FavoritesOnly bool   // 仅返回包含收藏漫画的分组
-	LibraryIDs   []string // 书库ID过滤：只返回包含这些书库中漫画的分组
+	UserID        string   // 用户ID过滤
+	ContentType   string   // 内容类型过滤: "comic" | "novel" | "" (全部)
+	Category      string   // 分类过滤（slug）
+	Tags          []string // 标签过滤（标签名列表，AND 逻辑）
+	FavoritesOnly bool     // 仅返回包含收藏漫画的分组
+	LibraryIDs    []string // 书库ID过滤：只返回包含这些书库中漫画的分组
+	IncludeEmpty  bool     // 是否包含空合集（默认 false）
 }
 
 // GetAllGroups 获取所有分组（带漫画数量）。
@@ -177,6 +178,12 @@ func GetAllGroupsWithOptions(opts GroupListOptions) ([]ComicGroupWithCount, erro
 		args = append([]interface{}{opts.ContentType}, args...)
 	}
 
+	// 默认过滤空合集
+	havingClause := ""
+	if !opts.IncludeEmpty {
+		havingClause = ` HAVING COUNT(gi."comicId") > 0`
+	}
+
 	rows, err := db.Query(`
 		SELECT g."id", g."name", g."coverUrl", g."sortOrder",
 		       g."author", g."description", g."tags", g."year",
@@ -194,6 +201,7 @@ func GetAllGroupsWithOptions(opts GroupListOptions) ([]ComicGroupWithCount, erro
 		`+joinClause+`
 	`+whereClause+`
 		GROUP BY g."id"
+		`+havingClause+`
 		ORDER BY g."sortOrder" ASC, g."name" ASC
 	`, args...)
 	if err != nil {

@@ -49,11 +49,16 @@ func BatchDeleteComicsWithFiles(comicIDs []string, comicsDirs []string, deleteFi
 	db.Exec(fmt.Sprintf(`DELETE FROM "ComicTag" WHERE "comicId" IN (%s)`, in), args...)
 	db.Exec(fmt.Sprintf(`DELETE FROM "ComicCategory" WHERE "comicId" IN (%s)`, in), args...)
 	db.Exec(fmt.Sprintf(`DELETE FROM "ReadingSession" WHERE "comicId" IN (%s)`, in), args...)
+	db.Exec(fmt.Sprintf(`DELETE FROM "ComicGroupItem" WHERE "comicId" IN (%s)`, in), args...)
+	db.Exec(fmt.Sprintf(`DELETE FROM "UserComicState" WHERE "comicId" IN (%s)`, in), args...)
 
 	res, err := db.Exec(fmt.Sprintf(`DELETE FROM "Comic" WHERE "id" IN (%s)`, in), args...)
 	if err != nil {
 		return 0, err
 	}
+
+	// 清理空合集
+	_, _ = CleanupEmptyGroups()
 
 	// Delete files from disk
 	if deleteFiles && len(filenames) > 0 {
@@ -362,7 +367,7 @@ func BulkCreateComicsWithSource(comics []struct {
 	return tx.Commit()
 }
 
-// BulkDeleteComicsByIDs 批量删除指定ID的漫画。
+// BulkDeleteComicsByIDs 批量删除指定ID的漫画及其关联数据。
 func BulkDeleteComicsByIDs(ids []string) error {
 	if len(ids) == 0 {
 		return nil
@@ -373,11 +378,27 @@ func BulkDeleteComicsByIDs(ids []string) error {
 		placeholders[i] = "?"
 		args[i] = id
 	}
+	in := strings.Join(placeholders, ",")
+
+	// 删除关联数据
+	db.Exec(fmt.Sprintf(`DELETE FROM "ComicTag" WHERE "comicId" IN (%s)`, in), args...)
+	db.Exec(fmt.Sprintf(`DELETE FROM "ComicCategory" WHERE "comicId" IN (%s)`, in), args...)
+	db.Exec(fmt.Sprintf(`DELETE FROM "ReadingSession" WHERE "comicId" IN (%s)`, in), args...)
+	db.Exec(fmt.Sprintf(`DELETE FROM "ComicGroupItem" WHERE "comicId" IN (%s)`, in), args...)
+	db.Exec(fmt.Sprintf(`DELETE FROM "UserComicState" WHERE "comicId" IN (%s)`, in), args...)
+
 	_, err := db.Exec(
-		fmt.Sprintf(`DELETE FROM "Comic" WHERE "id" IN (%s)`, strings.Join(placeholders, ",")),
+		fmt.Sprintf(`DELETE FROM "Comic" WHERE "id" IN (%s)`, in),
 		args...,
 	)
-	return err
+	if err != nil {
+		return err
+	}
+
+	// 清理空合集
+	_, _ = CleanupEmptyGroups()
+
+	return nil
 }
 
 // BulkUpdateComicLibraryID 批量更新漫画的书库ID和类型（用于将已有漫画移动到新书库）。
