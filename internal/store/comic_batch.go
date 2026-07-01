@@ -217,6 +217,19 @@ func UpdateSortOrders(orders []struct {
 	return tx.Commit()
 }
 
+// UpdateLibraryComicsType 强制修正某个书库下所有文件的类型（用于书库类型更改后的单库扫描同步）。
+func UpdateLibraryComicsType(libraryID, libType string) error {
+	if libType == "mixed" {
+		return nil
+	}
+	targetType := "comic"
+	if libType == "novel" {
+		targetType = "novel"
+	}
+	_, err := db.Exec(`UPDATE "Comic" SET "type" = ? WHERE "libraryId" = ? AND "type" != ?`, targetType, libraryID, targetType)
+	return err
+}
+
 // ============================================================
 // 快速同步辅助函数 (scanner 使用)
 // ============================================================

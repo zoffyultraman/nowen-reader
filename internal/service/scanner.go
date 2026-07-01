@@ -1358,6 +1358,11 @@ func SyncLibraryByID(libraryID string) (int, error) {
 
 	useFolderComics := lib.Type != "novel"
 
+	// 在单书库扫描开始时，如果书库类型非 mixed，则强制同步当前书库下所有历史文件的 type
+	if err := store.UpdateLibraryComicsType(libraryID, lib.Type); err != nil {
+		log.Printf("[WARN] Failed to sync comic types for library %s: %v", libraryID, err)
+	}
+
 	// 收集所有根目录路径（RootPaths 已包含主路径和额外路径）
 	rootPaths := lib.RootPaths
 	if len(rootPaths) == 0 {
