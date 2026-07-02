@@ -63,7 +63,7 @@ docker compose -f docker-compose.nas.yml up -d
 
 > 💡 **多目录挂载**：如果漫画/小说分散在多个文件夹，将它们全部挂载进容器（如 `/mnt/manga`、`/mnt/novels2`），然后在 Web 界面 **设置 → 额外漫画目录 / 额外电子书目录** 中添加对应路径即可。
 >
-> 🔑 **权限问题**：NAS 上如遇到 `permission denied`，可在 compose 的 `environment` 中取消注释并设置 `PUID` / `PGID` 为宿主机文件的实际 UID/GID（通过 `ls -ln` 查看）。
+> 🔑 **权限问题**：NAS 上如遇到 `permission denied`，优先在 compose 的 `environment` 中设置 `PUID` / `PGID` 为宿主机文件的实际 UID/GID（通过 `ls -ln` 查看）。如果是 SMB/NFS 等无法 `chown` 的挂载，且 UID/GID 正确后仍无法写入，可再设置 `PERMISSION_FIX_MODE=relaxed`。
 
 ---
 

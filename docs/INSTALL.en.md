@@ -63,7 +63,7 @@ docker compose -f docker-compose.nas.yml up -d
 
 > 💡 **Multiple directories**: If your manga/novels are scattered across folders, mount them all into the container (e.g. `/mnt/manga`, `/mnt/novels2`), then add the corresponding paths under **Settings → Extra Manga Directories / Extra Novel Directories** in the web UI.
 >
-> 🔑 **Permission issues**: If you encounter `permission denied` on NAS, uncomment and set `PUID` / `PGID` in the compose `environment` section to match the actual UID/GID of your host files (check via `ls -ln`).
+> 🔑 **Permission issues**: If you encounter `permission denied` on NAS, first set `PUID` / `PGID` in the compose `environment` section to match the actual UID/GID of your host files (check via `ls -ln`). If an SMB/NFS mount still cannot be written because `chown` is not supported, set `PERMISSION_FIX_MODE=relaxed`.
 
 ---
 
