@@ -102,15 +102,32 @@ docker compose up -d
 
 ## NAS 上遇到 permission denied 怎么办？
 
-NAS 上挂载主机目录时常因 UID 不匹配导致权限问题。在 Compose 文件的 `environment` 中取消注释并配置：
+NAS 上挂载主机目录时常因 UID/GID 不匹配导致权限问题。优先在 Compose 文件的 `environment` 中配置为宿主机文件的实际 UID/GID：
 
 ```yaml
 environment:
   - PUID=1001  # 替换为你 NAS 上的 UID
   - PGID=1001  # 替换为你 NAS 上的 GID
+  - UMASK=0002
 ```
 
-可通过 `ls -ln` 查看实际 UID/GID。
+可通过 `ls -ln` 查看实际 UID/GID。启动日志会检查 `appuser` 是否真的能写入 `/data`、缓存目录和书库目录；如果显示仍不可写，说明 Docker 容器内用户和 NAS 挂载权限仍未对齐。
+
+如果是 SMB/NFS/部分 NAS 共享目录，文件系统可能禁止容器内 `chown`。在确认目录确实要允许容器写入后，可以开启宽松回退：
+
+```yaml
+environment:
+  - PERMISSION_FIX_MODE=relaxed
+```
+
+另外，书库管理里要填写**容器内路径**，不是宿主机路径。例如 compose 中写的是：
+
+```yaml
+volumes:
+  - /volume1/comics:/app/comics
+```
+
+那么 Web UI 里的书库根目录应填写 `/app/comics`，不要填写 `/volume1/comics`。
 
 ## 数据库存在哪？是否需要备份？
 

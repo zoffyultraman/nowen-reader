@@ -260,7 +260,7 @@ func TestComicCRUD(t *testing.T) {
 	}
 
 	// Update reading progress
-	if err := UpdateReadingProgress(comics[0].ID, 10); err != nil {
+	if err := UpdateReadingProgress(comics[0].ID, 10, 50); err != nil {
 		t.Fatalf("UpdateReadingProgress failed: %v", err)
 	}
 

@@ -225,7 +225,7 @@ func (h *ComicHandler) UpdateProgress(c *gin.Context) {
 		return
 	}
 
-	if err := store.UpdateReadingProgress(id, body.Page, getUserID(c)); err != nil {
+	if err := store.UpdateReadingProgress(id, body.Page, body.TotalPages, getUserID(c)); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update progress"})
 		return
 	}

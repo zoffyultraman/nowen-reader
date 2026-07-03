@@ -15,6 +15,8 @@
 | `GIN_MODE` | `debug` | Gin 运行模式（`debug` 详细日志 / `release` 静默） |
 | `TZ` | `Asia/Shanghai` | 时区 |
 | `PUID` / `PGID` | `1001` / `1001` | Docker 内进程的 UID / GID（用于解决 bind-mount 权限问题） |
+| `UMASK` | `0002` | Docker 内新建文件/目录的权限掩码；`0002` 适合 NAS/共享目录的同组写入 |
+| `PERMISSION_FIX_MODE` | `auto` | Docker 启动时的权限修复模式：`auto` 自动修复，`relaxed` 在 NAS/SMB/NFS 无法 `chown` 时回退到更宽松权限，`off` 只检测不修复 |
 
 ## 站点设置
 
@@ -115,7 +117,7 @@
      - /your/manga/path2:/mnt/comics2
    ```
 
-2. 在**管理后台 → 书库管理**中创建书库，选择对应目录
+2. 在**管理后台 → 书库管理**中创建书库，选择对应的**容器内路径**，例如 `/mnt/manga`，不要填写宿主机路径 `/your/manga/path1`
 3. 系统会自动扫描所有已启用且 scanEnabled=true 的书库
 
 ### 上传目标书库
