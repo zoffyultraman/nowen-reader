@@ -36,7 +36,7 @@ func AutoGroupByDirectory() (int, error) {
 	}
 
 	// 查询所有未分组的书籍（包括漫画和小说）
-	rows, err := db.Query(`SELECT "id", "title", "filename" FROM "Comic" ORDER BY "title" ASC`)
+	rows, err := db.Query(`SELECT "id", "title", "filename" FROM "Comic" ` + TitleSortOrderSQL("", "ASC"))
 	if err != nil {
 		return 0, err
 	}

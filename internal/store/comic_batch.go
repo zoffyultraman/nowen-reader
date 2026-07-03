@@ -270,8 +270,8 @@ func BulkCreateComics(comics []struct {
 
 	now := time.Now().UTC()
 	stmt, err := tx.Prepare(`
-		INSERT INTO "Comic" ("id", "filename", "title", "pageCount", "fileSize", "type", "addedAt", "updatedAt")
-		VALUES (?, ?, ?, 0, ?, ?, ?, ?)
+		INSERT INTO "Comic" ("id", "filename", "title", "titleSortKey", "pageCount", "fileSize", "type", "addedAt", "updatedAt")
+		VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?)
 		ON CONFLICT("id") DO NOTHING
 	`)
 	if err != nil {
@@ -281,7 +281,7 @@ func BulkCreateComics(comics []struct {
 
 	for _, c := range comics {
 		comicType := detectComicType(c.Filename)
-		if _, err := stmt.Exec(c.ID, c.Filename, c.Title, c.FileSize, comicType, now, now); err != nil {
+		if _, err := stmt.Exec(c.ID, c.Filename, c.Title, BuildTitleSortKey(c.Title), c.FileSize, comicType, now, now); err != nil {
 			return err
 		}
 	}
@@ -323,8 +323,8 @@ func BulkCreateComicsWithSource(comics []struct {
 
 	now := time.Now().UTC()
 	stmt, err := tx.Prepare(`
-		INSERT INTO "Comic" ("id", "filename", "title", "pageCount", "fileSize", "type", "libraryId", "relativePath", "addedAt", "updatedAt")
-		VALUES (?, ?, ?, 0, ?, ?, ?, ?, ?, ?)
+		INSERT INTO "Comic" ("id", "filename", "title", "titleSortKey", "pageCount", "fileSize", "type", "libraryId", "relativePath", "addedAt", "updatedAt")
+		VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT("id") DO NOTHING
 	`)
 	if err != nil {
@@ -350,7 +350,7 @@ func BulkCreateComicsWithSource(comics []struct {
 		if libID == "" {
 			libID = "default"
 		}
-		if _, err := stmt.Exec(c.ID, c.Filename, c.Title, c.FileSize, comicType, libID, relPath, now, now); err != nil {
+		if _, err := stmt.Exec(c.ID, c.Filename, c.Title, BuildTitleSortKey(c.Title), c.FileSize, comicType, libID, relPath, now, now); err != nil {
 		}
 	}
 	return tx.Commit()
@@ -593,6 +593,8 @@ func UpdateComicIdentityAfterMove(oldID, newID, newFilename, newTitle string) er
 	if strings.TrimSpace(newTitle) != "" {
 		fields = append(fields, `"title" = ?`)
 		args = append(args, newTitle)
+		fields = append(fields, `"titleSortKey" = ?`)
+		args = append(args, BuildTitleSortKey(newTitle))
 	}
 	args = append(args, oldID)
 	_, err := db.Exec(fmt.Sprintf(`UPDATE "Comic" SET %s WHERE "id" = ?`, strings.Join(fields, ", ")), args...)

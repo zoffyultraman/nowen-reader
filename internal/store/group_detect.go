@@ -37,7 +37,7 @@ func AutoDetectGroups(contentType ...string) ([]AutoDetectGroup, error) {
 		querySQL += ` WHERE "type" = ?`
 		queryArgs = append(queryArgs, contentType[0])
 	}
-	querySQL += ` ORDER BY "title" ASC`
+	querySQL += ` ` + TitleSortOrderSQL("", "ASC")
 
 	rows, err := db.Query(querySQL, queryArgs...)
 	if err != nil {

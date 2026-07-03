@@ -68,6 +68,7 @@ type ComicListItem struct {
 	ID                      string              `json:"id"`
 	Filename                string              `json:"filename"`
 	Title                   string              `json:"title"`
+	TitleSortKey            string              `json:"titleSortKey,omitempty"`
 	PageCount               int                 `json:"pageCount"`
 	FileSize                int64               `json:"fileSize"`
 	AddedAt                 string              `json:"addedAt"`
@@ -247,8 +248,10 @@ func GetAllComics(opts ComicListOptions) (*ComicListResult, error) {
 	}
 
 	// Sort
-	sortField := "c.\"title\""
+	sortField := `c."titleSortKey"`
 	switch opts.SortBy {
+	case "", "title":
+		sortField = `c."titleSortKey"`
 	case "addedAt":
 		sortField = "c.\"addedAt\""
 	case "updatedAt":
@@ -276,7 +279,10 @@ func GetAllComics(opts ComicListOptions) (*ComicListResult, error) {
 	if strings.ToLower(opts.SortOrder) == "desc" {
 		sortDir = "DESC"
 	}
-	orderClause := fmt.Sprintf("ORDER BY %s %s", sortField, sortDir)
+	orderClause := fmt.Sprintf(`ORDER BY %s %s, c."title" %s, c."id" ASC`, sortField, sortDir, sortDir)
+	if opts.SortBy == "" || opts.SortBy == "title" {
+		orderClause = TitleSortOrderSQL("c", sortDir)
+	}
 
 	// Count total
 	countQuery := fmt.Sprintf(`SELECT COUNT(*) FROM "Comic" c %s %s`, joinClause, whereClause)
@@ -314,7 +320,7 @@ func GetAllComics(opts ComicListOptions) (*ComicListResult, error) {
 	var query string
 	if opts.UserID != "" {
 		query = fmt.Sprintf(`
-		SELECT c."id", c."filename", c."title", c."pageCount", c."fileSize",
+		SELECT c."id", c."filename", c."title", c."titleSortKey", c."pageCount", c."fileSize",
 		       c."addedAt", c."updatedAt",
 		       COALESCE(ucs."lastReadPage", c."lastReadPage") AS lrp,
 		       COALESCE(ucs."lastReadAt",   c."lastReadAt")   AS lra,
@@ -331,7 +337,7 @@ func GetAllComics(opts ComicListOptions) (*ComicListResult, error) {
 	`, joinClause, whereClause, orderClause, limitClause)
 	} else {
 		query = fmt.Sprintf(`
-		SELECT c."id", c."filename", c."title", c."pageCount", c."fileSize",
+		SELECT c."id", c."filename", c."title", c."titleSortKey", c."pageCount", c."fileSize",
 		       c."addedAt", c."updatedAt", c."lastReadPage", c."lastReadAt",
 		       c."isFavorite", c."rating", c."sortOrder", c."totalReadTime",
 		       c."author", c."publisher", c."year", c."description",
@@ -368,7 +374,7 @@ func GetAllComics(opts ComicListOptions) (*ComicListResult, error) {
 		var extRatingUpdatedAtStr sql.NullString
 
 		if err := rows.Scan(
-			&c.ID, &c.Filename, &c.Title, &c.PageCount, &c.FileSize,
+			&c.ID, &c.Filename, &c.Title, &c.TitleSortKey, &c.PageCount, &c.FileSize,
 			&addedAt, &updatedAt, &lastReadPage, &lastReadAtStr,
 			&isFavRaw, &rating, &c.SortOrder, &totalReadTime,
 			&c.Author, &c.Publisher, &year, &c.Description,
@@ -1218,6 +1224,9 @@ func UpdateComicFields(comicID string, fields map[string]interface{}) error {
 
 	var setClauses []string
 	var args []interface{}
+	if title, ok := fields["title"]; ok {
+		fields["titleSortKey"] = BuildTitleSortKey(fmt.Sprint(title))
+	}
 	for k, v := range fields {
 		setClauses = append(setClauses, fmt.Sprintf(`"%s" = ?`, k))
 		args = append(args, v)

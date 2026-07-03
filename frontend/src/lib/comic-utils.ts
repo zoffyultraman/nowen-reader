@@ -59,3 +59,24 @@ export function isNovelComic(comic: { filename?: string; type?: string }): boole
 export function naturalSortKey(s: string): string {
   return s.replace(/\d+/g, (match) => match.padStart(20, "0")).toLowerCase();
 }
+
+const zhNaturalCollator =
+  typeof Intl !== "undefined"
+    ? new Intl.Collator("zh-Hans-CN-u-co-pinyin", {
+        numeric: true,
+        sensitivity: "base",
+        ignorePunctuation: true,
+      })
+    : null;
+
+/** 中文拼音 + 数字自然排序比较。 */
+export function compareNaturalTitle(a?: string | null, b?: string | null): number {
+  const left = (a || "").trim();
+  const right = (b || "").trim();
+  if (zhNaturalCollator) {
+    return zhNaturalCollator.compare(left, right);
+  }
+  const keyA = naturalSortKey(left);
+  const keyB = naturalSortKey(right);
+  return keyA < keyB ? -1 : keyA > keyB ? 1 : 0;
+}

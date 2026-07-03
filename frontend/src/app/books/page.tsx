@@ -38,6 +38,7 @@ import { toggleComicFavorite, deleteComicById } from "@/api/comics";
 import { fetchLibraries, fetchAccessibleLibraries, type Library } from "@/api/libraries";
 import { useAuth } from "@/lib/auth-context";
 import { calculateReadingProgress, isReadingFinished } from "@/lib/progress";
+import { compareNaturalTitle } from "@/lib/comic-utils";
 
 const DEFAULT_PAGE_SIZE = 24;
 
@@ -56,6 +57,7 @@ function apiToComic(api: ApiComic): Comic {
   return {
     id: api.id,
     title: api.title,
+    titleSortKey: api.titleSortKey,
     coverUrl: api.coverUrl,
     coverAspectRatio: api.coverAspectRatio || 0,
     tags: (api.tags || []).map((t) => t.name),
@@ -686,7 +688,7 @@ export default function BooksPage() {
     if (item.type === 'group') {
       const g = item.data;
       switch (sortBy) {
-        case 'title': return g.name?.toLowerCase() || '';
+        case 'title': return g.name || '';
         case 'addedAt': return g.createdAt || '';
         case 'custom': return g.sortOrder ?? 0;
         // lastReadAt / rating / fileSize：合集无此字段 → null
@@ -695,7 +697,7 @@ export default function BooksPage() {
     } else {
       const c = item.data;
       switch (sortBy) {
-        case 'title': return c.title?.toLowerCase() || '';
+        case 'title': return c.title || '';
         case 'addedAt': return c.addedAt || '';
         case 'lastReadAt': return c.lastRead || null;
         case 'rating': return c.rating ?? null;
@@ -722,6 +724,10 @@ export default function BooksPage() {
       if (keyA === null && keyB === null) return 0;
       if (keyA === null) return sortOrder === 'desc' ? 1 : -1;
       if (keyB === null) return sortOrder === 'desc' ? -1 : 1;
+      if (sortBy === 'title') {
+        const cmp = compareNaturalTitle(String(keyA), String(keyB));
+        return cmp === 0 ? 0 : cmp * dir;
+      }
       if (keyA < keyB) return -1 * dir;
       if (keyA > keyB) return 1 * dir;
       return 0;
@@ -2047,7 +2053,6 @@ export default function BooksPage() {
     </div>
   );
 }
-
 
 
 

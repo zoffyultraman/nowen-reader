@@ -466,8 +466,8 @@
       <h1>Nowen Reader API</h1>
       <p data-en="REST API Documentation" data-zh="REST API 文档">REST API Documentation</p>
       <div class="lang-switch">
-        <button class="active" onclick="setLang('en')">EN</button>
-        <button onclick="setLang('zh')">中文</button>
+        <button class="active" type="button" data-lang="en">EN</button>
+        <button type="button" data-lang="zh">中文</button>
       </div>
     </div>
         <a href="#endpoints-health" class="nav-group" data-group="health" data-en="Health &amp; System" data-zh="健康与系统">Health & System</a>
@@ -814,14 +814,14 @@
 
     <div id="endpoints-comics-crud" class="endpoint-group">
     <h2 class="group-title"><span data-en="3. Comics CRUD" data-zh="3. 漫画增删改查">3. Comics CRUD</span> <span class="group-badge"><span data-en="20 endpoints" data-zh="20 个接口">20 endpoints</span></span></h2>
-<div class="endpoint public-endpoint" data-search="GET /api/comics List comics with filtering and pagination" id="get-api-comics">
+<div class="endpoint auth-required" data-search="GET /api/comics List comics with filtering pagination libraryIds" id="get-api-comics">
   <div class="endpoint-header">
     <span class="method method-GET">GET</span>
     <span class="path">/api/comics</span>
     <span class="summary"><span data-en="List comics with filtering and pagination" data-zh="列出漫画（支持筛选和分页）">List comics with filtering and pagination</span></span>
   </div>
   <div class="endpoint-body">
-    <p class="description"><span data-en="Returns a paginated list of comics with support for search, tag filtering, favorites filtering, sorting, category filtering, content type filtering, reading status filtering, and pagination." data-zh="返回分页漫画列表，支持搜索、标签筛选、收藏筛选、排序、分类筛选、内容类型筛选、阅读状态筛选和分页。">Returns a paginated list of comics with support for search, tag filtering, favorites filtering, sorting, category filtering, content type filtering, reading status filtering, and pagination.</span></p>
+    <p class="description"><span data-en="Returns a paginated list of comics with support for search, tag filtering, favorites filtering, sorting, category filtering, content type filtering, reading status filtering, library filtering, and pagination. Results are always limited to libraries the current user can access." data-zh="返回分页漫画列表，支持搜索、标签筛选、收藏筛选、排序、分类筛选、内容类型筛选、阅读状态筛选、书库筛选和分页。结果始终限制在当前用户可访问的书库内。">Returns a paginated list of comics with support for search, tag filtering, favorites filtering, sorting, category filtering, content type filtering, reading status filtering, library filtering, and pagination. Results are always limited to libraries the current user can access.</span></p>
 
     <h4><span data-en="Query Parameters" data-zh="查询参数">Query Parameters</span></h4>
     <table class="params-table">
@@ -830,12 +830,15 @@
         <tr><td>search</td><td>string</td><td>No</td><td>Search by title/filename</td></tr>
         <tr><td>tags</td><td>string</td><td>No</td><td>Comma-separated tag names</td></tr>
         <tr><td>favorites</td><td>string</td><td>No</td><td>Filter favorites only (&quot;true&quot;)</td></tr>
-        <tr><td>sortBy</td><td>string</td><td>No</td><td>Sort field (default: &quot;title&quot;)</td></tr>
+        <tr><td>sortBy</td><td>string</td><td>No</td><td>Sort field (default: &quot;title&quot;). Title sorting uses a server-side natural Chinese/pinyin sort key.</td></tr>
         <tr><td>sortOrder</td><td>string</td><td>No</td><td>&quot;asc&quot; or &quot;desc&quot; (default: &quot;asc&quot;)</td></tr>
         <tr><td>category</td><td>string</td><td>No</td><td>Category slug filter</td></tr>
         <tr><td>contentType</td><td>string</td><td>No</td><td>&quot;comic&quot; or &quot;novel&quot;</td></tr>
         <tr><td>readingStatus</td><td>string</td><td>No</td><td>&quot;want&quot;, &quot;reading&quot;, &quot;finished&quot;, &quot;shelved&quot;</td></tr>
+        <tr><td>libraryIds</td><td>string</td><td>No</td><td>Comma-separated library IDs. Admin users filter by the requested IDs; non-admin users are limited to the intersection with their accessible libraries. Empty access/intersection returns an empty list.</td></tr>
         <tr><td>excludeGrouped</td><td>string</td><td>No</td><td>Exclude grouped comics (&quot;true&quot;) (default: &quot;false&quot;)</td></tr>
+        <tr><td>uncategorized</td><td>string</td><td>No</td><td>Only return comics without categories (&quot;true&quot;)</td></tr>
+        <tr><td>untagged</td><td>string</td><td>No</td><td>Only return comics without tags (&quot;true&quot;)</td></tr>
         <tr><td>page</td><td>int</td><td>No</td><td>Page number (default: 0)</td></tr>
         <tr><td>pageSize</td><td>int</td><td>No</td><td>Items per page (default: 0)</td></tr>
       </tbody>
@@ -844,7 +847,7 @@
     <h4><span data-en="Response" data-zh="响应">Response</span> <span class="status-code">200</span></h4>
     <pre class="code-block"><code>comics list with pagination info (store.GetAllComics result)</code></pre>
     <div class="badges">
-      <span class="badge badge-public"><span data-en="Public" data-zh="公开">Public</span></span>
+      <span class="badge badge-auth"><span data-en="Auth Required" data-zh="需要认证">Auth Required</span></span>
     </div>
   </div>
 </div>
@@ -6189,6 +6192,6 @@ Content-Type: varies by file type (e.g. application/zip, application/pdf, applic
     </div>
   </div>
 
-  <script src="/api-doc.js"></script>
+  <script src="./api-doc.js"></script>
 </body>
 </html>

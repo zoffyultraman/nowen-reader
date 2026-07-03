@@ -8,6 +8,7 @@ export interface ComicCategory {
 export interface Comic {
   id: string;
   title: string;
+  titleSortKey?: string;
   coverUrl: string;
   coverAspectRatio?: number;
   tags: string[];

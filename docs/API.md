@@ -36,6 +36,36 @@ NowenReader 提供完整的 RESTful API，所有功能均可通过 API 调用。
 | GET | `/api/comics/duplicates` | 重复检测 |
 
 
+### 漫画列表查询
+
+```
+GET /api/comics?libraryIds=lib-a,lib-b&contentType=comic&page=1&pageSize=24
+Authorization: Bearer <token>
+```
+
+| 查询参数 | 类型 | 必填 | 说明 |
+|:---|:---|:---:|:---|
+| `search` | string | 否 | 按标题/文件名全文搜索 |
+| `tags` | string | 否 | 逗号分隔的标签名，匹配任意标签 |
+| `favorites` | string | 否 | `true` 时仅返回当前用户收藏 |
+| `sortBy` | string | 否 | 排序字段，默认 `title`；标题排序使用中文拼音 + 数字自然排序键 |
+| `sortOrder` | string | 否 | `asc` / `desc`，默认 `asc` |
+| `category` | string | 否 | 分类 slug；`uncategorized` 表示无分类 |
+| `contentType` | string | 否 | `comic` / `novel` |
+| `readingStatus` | string | 否 | `want` / `reading` / `finished` / `shelved` |
+| `libraryIds` | string | 否 | 逗号分隔的书库 ID。管理员按传入书库过滤；普通用户会与自身可访问书库取交集，不会越权 |
+| `excludeGrouped` | string | 否 | `true` 时排除已加入分组的作品 |
+| `uncategorized` | string | 否 | `true` 时仅返回无分类作品 |
+| `untagged` | string | 否 | `true` 时仅返回无标签作品 |
+| `page` | int | 否 | 页码，默认 `0` |
+| `pageSize` | int | 否 | 每页数量，默认 `0`（不分页） |
+
+- 需要登录。
+- 普通用户即使不传 `libraryIds`，也只返回自己可访问书库中的作品。
+- 普通用户传入无权限书库 ID 时会被过滤掉；交集为空时返回空列表。
+- 没有任何书库访问权限的普通用户返回空列表，不会退化成全库查询。
+- `sortBy=title` 时会按服务端维护的 `titleSortKey` 排序，效果上 `第2卷` 在 `第10卷` 前，常见中文标题按拼音顺序排列。
+
 ### 设置阅读状态
 
 ```

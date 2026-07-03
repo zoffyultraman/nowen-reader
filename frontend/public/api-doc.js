@@ -1,12 +1,33 @@
-// ── i18n Language Switch ──
-let currentLang = localStorage.getItem('api-doc-lang') || 'en';
+// -- i18n Language Switch --
+const langStorageKey = 'api-doc-lang';
+
+function readStoredLang() {
+  try {
+    return localStorage.getItem(langStorageKey) || 'en';
+  } catch {
+    return 'en';
+  }
+}
+
+function storeLang(lang) {
+  try {
+    localStorage.setItem(langStorageKey, lang);
+  } catch {
+    // Ignore storage errors in private/sandboxed/file contexts.
+  }
+}
+
+let currentLang = readStoredLang();
 
 function setLang(lang) {
+  if (lang !== 'en' && lang !== 'zh') {
+    return;
+  }
   currentLang = lang;
-  localStorage.setItem('api-doc-lang', lang);
+  storeLang(lang);
   // Update toggle buttons
   document.querySelectorAll('.lang-switch button').forEach(btn => {
-    btn.classList.toggle('active', btn.textContent.trim() === (lang === 'zh' ? '中文' : 'EN'));
+    btn.classList.toggle('active', btn.dataset.lang === lang);
   });
   // Update all elements with data-en/data-zh
   document.querySelectorAll('[data-' + lang + ']').forEach(el => {
@@ -24,8 +45,22 @@ function setLang(lang) {
   document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en';
 }
 
+window.setLang = setLang;
+
+function initApiDoc() {
+  document.querySelectorAll('.lang-switch button[data-lang]').forEach(btn => {
+    btn.addEventListener('click', () => setLang(btn.dataset.lang));
+  });
+
+  setLang(currentLang);
+}
+
 // Initialize language on load
-document.addEventListener('DOMContentLoaded', () => setLang(currentLang));
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initApiDoc);
+} else {
+  initApiDoc();
+}
 
 // Toggle endpoint body
 document.querySelectorAll('.endpoint-header').forEach(header => {

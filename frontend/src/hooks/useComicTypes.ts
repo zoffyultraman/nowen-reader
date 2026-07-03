@@ -11,6 +11,7 @@ export interface ApiComicTag {
 export interface ApiComic {
   id: string;
   title: string;
+  titleSortKey?: string;
   filename: string;
   pageCount: number;
   fileSize: number;

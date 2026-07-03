@@ -274,7 +274,7 @@ func DetectDuplicates(comicsDir string, libraryIDs []string, filterLibraryIDs bo
 		// 按书库过滤
 		query := `SELECT "id", "filename", "title", "fileSize", "pageCount", "addedAt",
 		        COALESCE("author", ''), COALESCE("genre", ''), COALESCE("md5Hash", '')
-			FROM "Comic" WHERE "libraryId" IN (` + placeholders(len(libraryIDs)) + `) ORDER BY "title" ASC`
+			FROM "Comic" WHERE "libraryId" IN (` + placeholders(len(libraryIDs)) + `) ` + TitleSortOrderSQL("", "ASC")
 		args := make([]interface{}, len(libraryIDs))
 		for i, id := range libraryIDs {
 			args[i] = id
@@ -284,7 +284,7 @@ func DetectDuplicates(comicsDir string, libraryIDs []string, filterLibraryIDs bo
 		rows, err = db.Query(`
 			SELECT "id", "filename", "title", "fileSize", "pageCount", "addedAt",
 			       COALESCE("author", ''), COALESCE("genre", ''), COALESCE("md5Hash", '')
-			FROM "Comic" ORDER BY "title" ASC
+			FROM "Comic" ` + TitleSortOrderSQL("", "ASC") + `
 		`)
 	}
 	if err != nil {

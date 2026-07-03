@@ -24,6 +24,9 @@ func InitDB(dbPath string) error {
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return fmt.Errorf("failed to create db directory %s: %w", dir, err)
 	}
+	if err := registerTitleSortKeySQLFunction(); err != nil {
+		return fmt.Errorf("failed to register title sort SQL function: %w", err)
+	}
 
 	var err error
 	// modernc.org/sqlite uses "sqlite" as driver name
@@ -177,6 +180,7 @@ func createTables() error {
 			"id"             TEXT NOT NULL PRIMARY KEY,
 			"filename"       TEXT NOT NULL,
 			"title"          TEXT NOT NULL,
+			"titleSortKey"   TEXT NOT NULL DEFAULT '',
 			"pageCount"      INTEGER NOT NULL DEFAULT 0,
 			"fileSize"       INTEGER NOT NULL DEFAULT 0,
 			"addedAt"        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -214,6 +218,16 @@ func createTables() error {
 		`CREATE UNIQUE INDEX IF NOT EXISTS "Comic_library_path_key" ON "Comic"("libraryId", "relativePath") WHERE "libraryId" != '' AND "relativePath" != ''`,
 		`DROP INDEX IF EXISTS "Comic_filename_key"`,
 		`CREATE INDEX IF NOT EXISTS "Comic_title_idx" ON "Comic"("title")`,
+		`CREATE INDEX IF NOT EXISTS "Comic_titleSortKey_idx" ON "Comic"("titleSortKey", "title", "id")`,
+		`CREATE TRIGGER IF NOT EXISTS "Comic_titleSortKey_ai" AFTER INSERT ON "Comic"
+		 WHEN new."titleSortKey" = ''
+		 BEGIN
+		   UPDATE "Comic" SET "titleSortKey" = title_sort_key(new."title") WHERE "id" = new."id";
+		 END`,
+		`CREATE TRIGGER IF NOT EXISTS "Comic_titleSortKey_au" AFTER UPDATE OF "title" ON "Comic"
+		 BEGIN
+		   UPDATE "Comic" SET "titleSortKey" = title_sort_key(new."title") WHERE "id" = new."id";
+		 END`,
 		`CREATE INDEX IF NOT EXISTS "Comic_isFavorite_idx" ON "Comic"("isFavorite")`,
 		`CREATE INDEX IF NOT EXISTS "Comic_lastReadAt_idx" ON "Comic"("lastReadAt")`,
 		`CREATE INDEX IF NOT EXISTS "Comic_sortOrder_idx" ON "Comic"("sortOrder")`,

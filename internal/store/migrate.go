@@ -419,6 +419,17 @@ var Migrations = []Migration{
 			`DROP INDEX IF EXISTS "Comic_filename_key";`,
 		}, "\n"),
 	},
+	{
+		Version:     30,
+		Description: "Add titleSortKey for natural Chinese title ordering",
+		SQL: strings.Join([]string{
+			`ALTER TABLE "Comic" ADD COLUMN "titleSortKey" TEXT NOT NULL DEFAULT '';`,
+			`UPDATE "Comic" SET "titleSortKey" = title_sort_key("title") WHERE "titleSortKey" = '';`,
+			`CREATE INDEX IF NOT EXISTS "Comic_titleSortKey_idx" ON "Comic"("titleSortKey", "title", "id");`,
+			`CREATE TRIGGER IF NOT EXISTS "Comic_titleSortKey_ai" AFTER INSERT ON "Comic" WHEN new."titleSortKey" = '' BEGIN UPDATE "Comic" SET "titleSortKey" = title_sort_key(new."title") WHERE "id" = new."id"; END;`,
+			`CREATE TRIGGER IF NOT EXISTS "Comic_titleSortKey_au" AFTER UPDATE OF "title" ON "Comic" BEGIN UPDATE "Comic" SET "titleSortKey" = title_sort_key(new."title") WHERE "id" = new."id"; END;`,
+		}, "\n"),
+	},
 }
 
 // ensureMigrationsTable creates the migrations tracking table.
