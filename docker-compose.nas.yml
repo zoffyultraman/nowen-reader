@@ -51,6 +51,10 @@ services:
       # 可通过 SSH 执行 ls -ln 查看文件的 UID/GID
       # - PUID=1000
       # - PGID=1000
+      # 新建文件权限掩码。0002 表示同组用户也可写，适合 NAS/共享目录
+      # - UMASK=0002
+      # 如果 NAS/SMB/NFS 无法 chown，且 PUID/PGID 仍无法写入，可开启宽松回退
+      # - PERMISSION_FIX_MODE=relaxed
     # 内存限制（NAS 通常内存有限）
     deploy:
       resources:

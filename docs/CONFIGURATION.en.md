@@ -15,6 +15,8 @@ English · [简体中文](./CONFIGURATION.md)
 | `GIN_MODE` | `debug` | Gin mode (`debug` for verbose logs / `release` for silent) |
 | `TZ` | `Asia/Shanghai` | Timezone |
 | `PUID` / `PGID` | `1001` / `1001` | UID / GID of the in-container process (for bind-mount permission) |
+| `UMASK` | `0002` | Permission mask for files/directories created in Docker; `0002` is suitable for group-writable NAS/shared folders |
+| `PERMISSION_FIX_MODE` | `auto` | Docker startup permission repair mode: `auto` repairs automatically, `relaxed` falls back to broader permissions when NAS/SMB/NFS cannot `chown`, `off` only checks writability |
 
 ## Site Settings
 
@@ -115,7 +117,7 @@ The legacy `ComicsDir`, `ExtraComicsDirs`, `NovelsDir`, `ExtraNovelsDirs` enviro
      - /your/manga/path2:/mnt/comics2
    ```
 
-2. Create a library in **Admin Panel → Library Management** and select the directory
+2. Create a library in **Admin Panel → Library Management** and select the matching **container path**, such as `/mnt/manga`; do not enter the host path `/your/manga/path1`
 3. The system will scan all enabled libraries with scanEnabled=true
 
 ## Related Documents

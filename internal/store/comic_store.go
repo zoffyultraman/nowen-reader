@@ -194,25 +194,45 @@ func normalizeWhitespace(s string) string {
 // Comic 变更操作
 // ============================================================
 
-// UpdateReadingProgress 更新最后阅读页码和时间戳。
+// UpdateReadingProgress 更新最后阅读页码和时间戳，并联动更新阅读状态。
 // 如果 userID 不为空，同时更新 UserComicState。
-func UpdateReadingProgress(comicID string, page int, userID ...string) error {
+func UpdateReadingProgress(comicID string, page int, totalPages int, userID ...string) error {
 	now := time.Now().UTC()
+	uid := ""
+	if len(userID) > 0 {
+		uid = userID[0]
+	}
+
+	actualTotalPages := totalPages
+	if actualTotalPages <= 0 {
+		_ = db.QueryRow(`SELECT "pageCount" FROM "Comic" WHERE "id" = ?`, comicID).Scan(&actualTotalPages)
+	}
+
+	status := ""
+	if page > 0 {
+		if actualTotalPages > 0 && page >= actualTotalPages {
+			status = "finished"
+		} else {
+			status = "reading"
+		}
+	}
+
 	// 始终更新 Comic 表（全局默认值 / 向后兼容）
 	_, err := db.Exec(`
-		UPDATE "Comic" SET "lastReadPage" = ?, "lastReadAt" = ?, "updatedAt" = ?
+		UPDATE "Comic" SET "lastReadPage" = ?, "lastReadAt" = ?, "readingStatus" = ?, "updatedAt" = ?
 		WHERE "id" = ?
-	`, page, now, now, comicID)
+	`, page, now, status, now, comicID)
 	if err != nil {
 		return err
 	}
+
 	// 更新 UserComicState
-	if len(userID) > 0 && userID[0] != "" {
+	if uid != "" {
 		_, err = db.Exec(`
-			INSERT INTO "UserComicState" ("userId", "comicId", "lastReadPage", "lastReadAt")
-			VALUES (?, ?, ?, ?)
-			ON CONFLICT("userId", "comicId") DO UPDATE SET "lastReadPage" = ?, "lastReadAt" = ?
-		`, userID[0], comicID, page, now, page, now)
+			INSERT INTO "UserComicState" ("userId", "comicId", "lastReadPage", "lastReadAt", "readingStatus")
+			VALUES (?, ?, ?, ?, ?)
+			ON CONFLICT("userId", "comicId") DO UPDATE SET "lastReadPage" = ?, "lastReadAt" = ?, "readingStatus" = ?
+		`, uid, comicID, page, now, status, page, now, status)
 	}
 	return err
 }
@@ -300,7 +320,7 @@ func SetUserReadingStatus(userID, comicID, status string) error {
 		err := db.QueryRow(`SELECT "pageCount" FROM "Comic" WHERE "id" = ?`, comicID).Scan(&pageCount)
 		if err == nil && pageCount > 0 {
 			// Update global and user progress for backward compatibility
-			_ = UpdateReadingProgress(comicID, pageCount, userID)
+			_ = UpdateReadingProgress(comicID, pageCount, pageCount, userID)
 		}
 	}
 
