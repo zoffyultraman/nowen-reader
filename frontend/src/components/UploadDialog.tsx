@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   Upload,
   X,
@@ -13,7 +13,7 @@ import {
   CloudUpload,
   Trash2,
 } from "lucide-react";
-import { uploadComics } from "@/api/comics";
+import { uploadComics, type UploadFileResult } from "@/api/comics";
 import { fetchAccessibleLibraries, type Library } from "@/api/libraries";
 
 // ============================================================
@@ -25,6 +25,7 @@ interface QueueItem {
   file: File;
   status: "waiting" | "uploading" | "success" | "failed";
   error?: string;
+  errorType?: "validation" | "upload";
 }
 
 interface UploadDialogProps {
@@ -46,10 +47,52 @@ function formatFileSize(bytes: number): string {
   return bytes + " B";
 }
 
+type LibraryType = Library["type"];
+
+const EXTENSIONS_BY_LIBRARY_TYPE: Record<LibraryType, string[]> = {
+  comic: [".zip", ".cbz", ".cbr", ".rar", ".7z", ".cb7", ".pdf", ".azw3"],
+  novel: [".txt", ".epub", ".mobi", ".azw3", ".html", ".htm", ".pdf"],
+  mixed: [".zip", ".cbz", ".cbr", ".rar", ".7z", ".cb7", ".pdf", ".azw3", ".txt", ".epub", ".mobi", ".html", ".htm"],
+};
+
+const UPLOAD_COPY: Record<LibraryType, { title: string; hint: string; label: string; switchHint: string }> = {
+  comic: {
+    title: "上传漫画",
+    hint: "支持 zip、cbz、cbr、rar、7z、pdf 等格式",
+    label: "漫画书库",
+    switchHint: "请切换到小说书库或混合书库。",
+  },
+  novel: {
+    title: "上传小说",
+    hint: "支持 txt、epub、mobi、html、pdf 等格式",
+    label: "小说书库",
+    switchHint: "请切换到漫画书库或混合书库。",
+  },
+  mixed: {
+    title: "上传文件",
+    hint: "支持漫画和小说格式",
+    label: "混合书库",
+    switchHint: "请选择受支持的漫画或小说格式。",
+  },
+};
+
+function fileExtension(name: string): string {
+  const ext = name.includes(".") ? name.slice(name.lastIndexOf(".")).toLowerCase() : "";
+  return ext;
+}
+
+function getInvalidFileMessage(file: File, libraryType: LibraryType): string | undefined {
+  const ext = fileExtension(file.name);
+  if (EXTENSIONS_BY_LIBRARY_TYPE[libraryType].includes(ext)) return undefined;
+  const shownExt = ext || "无扩展名文件";
+  const copy = UPLOAD_COPY[libraryType];
+  return `当前选择的是${copy.label}，不支持 ${shownExt}，${copy.switchHint}`;
+}
+
 function fileIcon(name: string) {
   const ext = name.split(".").pop()?.toLowerCase() ?? "";
-  if (["zip", "cbz", "cbr", "rar", "7z"].includes(ext)) return <FileArchive className="h-4 w-4 text-amber-500" />;
-  if (["pdf", "epub", "mobi"].includes(ext)) return <FileText className="h-4 w-4 text-blue-500" />;
+  if (["zip", "cbz", "cbr", "rar", "7z", "cb7"].includes(ext)) return <FileArchive className="h-4 w-4 text-amber-500" />;
+  if (["pdf", "epub", "mobi", "azw3", "txt", "html", "htm"].includes(ext)) return <FileText className="h-4 w-4 text-blue-500" />;
   return <File className="h-4 w-4 text-muted" />;
 }
 
@@ -93,27 +136,56 @@ export default function UploadDialog({
     }
   }, [open]);
 
-  // Filtered libraries (must have canManage)
-  const filteredLibs = libraries.filter(
-    (lib) => lib.enabled && lib.canManage && (lib.type === "mixed" || lib.type === contentType)
+  // Upload can target any manageable library; the selected library type controls file validation.
+  const uploadableLibs = useMemo(
+    () => libraries.filter((lib) => lib.enabled && lib.canManage),
+    [libraries]
   );
+
+  const selectedLibrary = useMemo(
+    () => libraries.find((lib) => lib.id === selectedLibraryId),
+    [libraries, selectedLibraryId]
+  );
+  const effectiveLibraryType: LibraryType = selectedLibrary?.type ?? contentType;
+  const uploadCategory: "comic" | "novel" =
+    effectiveLibraryType === "novel" ? "novel" : contentType;
+  const uploadCopy = UPLOAD_COPY[effectiveLibraryType];
+  const acceptValue = EXTENSIONS_BY_LIBRARY_TYPE[effectiveLibraryType].join(",");
 
   // Auto-select first library if none is selected
   useEffect(() => {
-    if (open && !selectedLibraryId && filteredLibs.length > 0) {
-      setSelectedLibraryId(filteredLibs[0].id);
+    if (open && uploadableLibs.length > 0 && (!selectedLibraryId || !uploadableLibs.some((lib) => lib.id === selectedLibraryId))) {
+      setSelectedLibraryId(uploadableLibs[0].id);
     }
-  }, [open, filteredLibs, selectedLibraryId]);
+  }, [open, uploadableLibs, selectedLibraryId]);
+
+  // Re-check locally blocked files when the selected library type changes.
+  useEffect(() => {
+    setQueue((prev) =>
+      prev.map((item) => {
+        if (item.status !== "failed" || item.errorType !== "validation") return item;
+        const error = getInvalidFileMessage(item.file, effectiveLibraryType);
+        return error
+          ? { ...item, error }
+          : { ...item, status: "waiting" as const, error: undefined, errorType: undefined };
+      })
+    );
+  }, [effectiveLibraryType]);
 
   // Add files to queue
   const addFiles = useCallback((files: FileList | File[]) => {
-    const items: QueueItem[] = Array.from(files).map((file) => ({
-      id: makeId(),
-      file,
-      status: "waiting" as const,
-    }));
+    const items: QueueItem[] = Array.from(files).map((file) => {
+      const error = getInvalidFileMessage(file, effectiveLibraryType);
+      return {
+        id: makeId(),
+        file,
+        status: error ? "failed" as const : "waiting" as const,
+        error,
+        errorType: error ? "validation" as const : undefined,
+      };
+    });
     setQueue((prev) => [...prev, ...items]);
-  }, []);
+  }, [effectiveLibraryType]);
 
   // Drag handlers
   const handleDragEnter = useCallback((e: React.DragEvent) => {
@@ -158,26 +230,54 @@ export default function UploadDialog({
     const pending = queue.filter((item) => item.status === "waiting");
     if (pending.length === 0) return;
 
+    const uploadable = pending.filter((item) => !getInvalidFileMessage(item.file, effectiveLibraryType));
+    const blocked = pending.filter((item) => getInvalidFileMessage(item.file, effectiveLibraryType));
+
+    if (blocked.length > 0) {
+      const blockedIds = new Set(blocked.map((item) => item.id));
+      setQueue((prev) =>
+        prev.map((item) =>
+          blockedIds.has(item.id)
+            ? { ...item, status: "failed" as const, error: getInvalidFileMessage(item.file, effectiveLibraryType), errorType: "validation" as const }
+            : item
+        )
+      );
+    }
+
+    if (uploadable.length === 0) return;
+
     setUploading(true);
 
     // Upload all pending files as a single batch
-    const files = pending.map((item) => item.file);
+    const files = uploadable.map((item) => item.file);
+    const uploadableIds = new Set(uploadable.map((item) => item.id));
     setQueue((prev) =>
-      prev.map((item) => (item.status === "waiting" ? { ...item, status: "uploading" as const } : item))
+      prev.map((item) => (uploadableIds.has(item.id) ? { ...item, status: "uploading" as const, error: undefined, errorType: undefined } : item))
     );
 
     try {
       const libId = selectedLibraryId || undefined;
-      const result = await uploadComics(files, contentType, libId);
+      const result = await uploadComics(files, uploadCategory, libId);
+      const resultsById = new Map<string, UploadFileResult>();
+      uploadable.forEach((item, index) => {
+        resultsById.set(item.id, result.results[index] ?? {
+          filename: item.file.name,
+          success: false,
+          error: result.message,
+        });
+      });
 
-      if (result.success) {
-        setQueue((prev) =>
-          prev.map((item) =>
-            item.status === "uploading"
-              ? { ...item, status: "success" as const }
-              : item
-          )
-        );
+      setQueue((prev) =>
+        prev.map((item) => {
+          const fileResult = resultsById.get(item.id);
+          if (!fileResult) return item;
+          return fileResult.success
+            ? { ...item, status: "success" as const, error: undefined, errorType: undefined }
+            : { ...item, status: "failed" as const, error: fileResult.error || result.message, errorType: "upload" as const };
+        })
+      );
+
+      if (result.results.some((item) => item.success) || result.successCount > 0) {
         // Trigger backend scan + refresh
         try {
           await fetch("/api/sync", { method: "POST" });
@@ -185,27 +285,19 @@ export default function UploadDialog({
           // scan failure shouldn't block
         }
         onUploaded?.();
-      } else {
-        setQueue((prev) =>
-          prev.map((item) =>
-            item.status === "uploading"
-              ? { ...item, status: "failed" as const, error: result.message }
-              : item
-          )
-        );
       }
     } catch (err) {
       setQueue((prev) =>
         prev.map((item) =>
           item.status === "uploading"
-            ? { ...item, status: "failed" as const, error: err instanceof Error ? err.message : "上传失败" }
+            ? { ...item, status: "failed" as const, error: err instanceof Error ? err.message : "上传失败", errorType: "upload" as const }
             : item
         )
       );
     } finally {
       setUploading(false);
     }
-  }, [queue, selectedLibraryId, contentType, onUploaded]);
+  }, [queue, selectedLibraryId, uploadCategory, effectiveLibraryType, onUploaded]);
 
   // Clear completed
   const clearCompleted = useCallback(() => {
@@ -235,9 +327,9 @@ export default function UploadDialog({
         <div className="flex items-center justify-between border-b border-border/30 px-5 py-4">
           <div>
             <h2 className="text-base font-semibold text-foreground text-balance">
-              上传{contentType === "novel" ? "小说" : "漫画"}
+              {uploadCopy.title}
             </h2>
-            <p className="text-xs text-muted text-pretty">支持 zip、cbz、pdf、epub 等格式</p>
+            <p className="text-xs text-muted text-pretty">{uploadCopy.hint}</p>
           </div>
           <button
             onClick={onClose}
@@ -250,7 +342,7 @@ export default function UploadDialog({
 
         <div className="space-y-4 p-5">
           {/* Target selector */}
-          {filteredLibs.length > 0 && (
+          {uploadableLibs.length > 0 && (
             <div>
               <label className="text-xs font-medium text-muted">上传到</label>
               <select
@@ -259,7 +351,7 @@ export default function UploadDialog({
                 disabled={uploading}
                 className="mt-1 w-full rounded-xl border border-border/40 bg-background px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none disabled:opacity-50"
               >
-                {filteredLibs.map((lib) => (
+                {uploadableLibs.map((lib) => (
                   <option key={lib.id} value={lib.id}>
                     {lib.name} ({lib.type})
                   </option>
@@ -295,7 +387,7 @@ export default function UploadDialog({
               ref={fileInputRef}
               type="file"
               multiple
-              accept=".zip,.cbz,.cbr,.rar,.pdf,.epub,.mobi,.txt,.md"
+              accept={acceptValue}
               onChange={(e) => {
                 if (e.target.files) addFiles(e.target.files);
                 e.target.value = "";
@@ -338,7 +430,12 @@ export default function UploadDialog({
                     {fileIcon(item.file.name)}
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-sm text-foreground">{item.file.name}</div>
-                      <div className="text-[10px] text-muted">{formatFileSize(item.file.size)}</div>
+                      <div
+                        className={`truncate text-[10px] ${item.status === "failed" && item.error ? "text-red-500" : "text-muted"}`}
+                        title={item.status === "failed" ? item.error : undefined}
+                      >
+                        {item.status === "failed" && item.error ? item.error : formatFileSize(item.file.size)}
+                      </div>
                     </div>
                     <div className="flex items-center gap-1.5">
                       {item.status === "waiting" && (

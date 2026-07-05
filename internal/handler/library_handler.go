@@ -2,6 +2,7 @@ package handler
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -265,12 +266,14 @@ func (h *LibraryHandler) DeleteLibrary(c *gin.Context) {
 	if len(ids) > 0 {
 		deletedContents, err = store.BatchDeleteComics(ids)
 		if err != nil {
+			log.Printf("[library] Failed to delete contents for library %s: %v", id, err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete library contents"})
 			return
 		}
 	}
 
 	if err := store.DeleteLibrary(id); err != nil {
+		log.Printf("[library] Failed to delete library %s: %v", id, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete library"})
 		return
 	}

@@ -1,6 +1,7 @@
 package store
 
 import (
+	"database/sql"
 	"fmt"
 
 	"strings"
@@ -16,30 +17,24 @@ func BatchDeleteComics(comicIDs []string) (int64, error) {
 	if len(comicIDs) == 0 {
 		return 0, nil
 	}
-	placeholders := make([]string, len(comicIDs))
-	args := make([]interface{}, len(comicIDs))
-	for i, id := range comicIDs {
-		placeholders[i] = "?"
-		args[i] = id
-	}
-	in := strings.Join(placeholders, ",")
 
-	// Delete related data first (explicit, even though CASCADE should handle it)
-	db.Exec(fmt.Sprintf(`DELETE FROM "ComicTag" WHERE "comicId" IN (%s)`, in), args...)
-	db.Exec(fmt.Sprintf(`DELETE FROM "ComicCategory" WHERE "comicId" IN (%s)`, in), args...)
-	db.Exec(fmt.Sprintf(`DELETE FROM "ReadingSession" WHERE "comicId" IN (%s)`, in), args...)
-	db.Exec(fmt.Sprintf(`DELETE FROM "ComicGroupItem" WHERE "comicId" IN (%s)`, in), args...)
-	db.Exec(fmt.Sprintf(`DELETE FROM "UserComicState" WHERE "comicId" IN (%s)`, in), args...)
-
-	res, err := db.Exec(fmt.Sprintf(`DELETE FROM "Comic" WHERE "id" IN (%s)`, in), args...)
+	tx, err := db.Begin()
 	if err != nil {
 		return 0, err
 	}
+	defer tx.Rollback()
 
-	// 清理空合集
+	rowsAffected, err := deleteComicsByIDBatches(tx, comicIDs)
+	if err != nil {
+		return 0, err
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+
 	_, _ = CleanupEmptyGroups()
 
-	return res.RowsAffected()
+	return rowsAffected, nil
 }
 
 // BatchSetFavorite 批量设置用户个人的收藏状态。
@@ -361,33 +356,86 @@ func BulkDeleteComicsByIDs(ids []string) error {
 	if len(ids) == 0 {
 		return nil
 	}
-	placeholders := make([]string, len(ids))
-	args := make([]interface{}, len(ids))
-	for i, id := range ids {
-		placeholders[i] = "?"
-		args[i] = id
-	}
-	in := strings.Join(placeholders, ",")
 
-	// 删除关联数据
-	db.Exec(fmt.Sprintf(`DELETE FROM "ComicTag" WHERE "comicId" IN (%s)`, in), args...)
-	db.Exec(fmt.Sprintf(`DELETE FROM "ComicCategory" WHERE "comicId" IN (%s)`, in), args...)
-	db.Exec(fmt.Sprintf(`DELETE FROM "ReadingSession" WHERE "comicId" IN (%s)`, in), args...)
-	db.Exec(fmt.Sprintf(`DELETE FROM "ComicGroupItem" WHERE "comicId" IN (%s)`, in), args...)
-	db.Exec(fmt.Sprintf(`DELETE FROM "UserComicState" WHERE "comicId" IN (%s)`, in), args...)
-
-	_, err := db.Exec(
-		fmt.Sprintf(`DELETE FROM "Comic" WHERE "id" IN (%s)`, in),
-		args...,
-	)
+	tx, err := db.Begin()
 	if err != nil {
 		return err
 	}
+	defer tx.Rollback()
 
-	// 清理空合集
+	if _, err := deleteComicsByIDBatches(tx, ids); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+
 	_, _ = CleanupEmptyGroups()
 
 	return nil
+}
+
+func deleteComicsByIDBatches(tx *sql.Tx, ids []string) (int64, error) {
+	relatedTables, err := existingTables(tx, []string{
+		"ComicTag",
+		"ComicCategory",
+		"ReadingSession",
+		"ComicGroupItem",
+		"UserComicState",
+		"MetadataSyncLog",
+	})
+	if err != nil {
+		return 0, err
+	}
+
+	var rowsAffected int64
+	for i := 0; i < len(ids); i += batchSize {
+		end := i + batchSize
+		if end > len(ids) {
+			end = len(ids)
+		}
+		batch := ids[i:end]
+		placeholders := make([]string, len(batch))
+		args := make([]interface{}, len(batch))
+		for j, id := range batch {
+			placeholders[j] = "?"
+			args[j] = id
+		}
+		in := strings.Join(placeholders, ",")
+
+		for _, table := range relatedTables {
+			if _, err := tx.Exec(fmt.Sprintf(`DELETE FROM "%s" WHERE "comicId" IN (%s)`, table, in), args...); err != nil {
+				return rowsAffected, fmt.Errorf("delete %s records: %w", table, err)
+			}
+		}
+
+		res, err := tx.Exec(fmt.Sprintf(`DELETE FROM "Comic" WHERE "id" IN (%s)`, in), args...)
+		if err != nil {
+			return rowsAffected, fmt.Errorf("delete Comic records: %w", err)
+		}
+		n, err := res.RowsAffected()
+		if err != nil {
+			return rowsAffected, err
+		}
+		rowsAffected += n
+	}
+	return rowsAffected, nil
+}
+
+func existingTables(tx *sql.Tx, names []string) ([]string, error) {
+	existing := make([]string, 0, len(names))
+	for _, name := range names {
+		var found string
+		err := tx.QueryRow(`SELECT "name" FROM "sqlite_master" WHERE "type" = 'table' AND "name" = ?`, name).Scan(&found)
+		if err == sql.ErrNoRows {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		existing = append(existing, name)
+	}
+	return existing, nil
 }
 
 // BulkUpdateComicLibraryID 批量更新漫画的书库ID和类型（用于将已有漫画移动到新书库）。

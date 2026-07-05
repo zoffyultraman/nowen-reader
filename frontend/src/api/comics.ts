@@ -14,13 +14,28 @@ import { useToast } from "@/components/Toast";
  *                 后端会按文件扩展名自动分流到漫画/电子书目录；
  *                 此参数仅用于消除歧义扩展名（如.azw3）。
  */
+export interface UploadFileResult {
+  filename: string;
+  success: boolean;
+  error?: string;
+}
+
+export interface UploadComicsResult {
+  success: boolean;
+  message: string;
+  successCount: number;
+  totalCount: number;
+  results: UploadFileResult[];
+}
+
 export async function uploadComics(
   files: FileList | File[],
   category?: "comic" | "novel",
   libraryId?: string
-): Promise<{ success: boolean; message: string; successCount: number; totalCount: number }> {
+): Promise<UploadComicsResult> {
+  const fileList = Array.from(files);
   const formData = new FormData();
-  Array.from(files).forEach((file) => formData.append("files", file));
+  fileList.forEach((file) => formData.append("files", file));
   if (category) {
     formData.append("category", category);
   }
@@ -35,13 +50,15 @@ export async function uploadComics(
       error?: string;
       successCount?: number;
       totalCount?: number;
+      results?: UploadFileResult[];
     }>("/api/upload", formData);
 
     return {
       success: (data.successCount ?? 0) > 0,
       message: data.message || data.error || "Unknown error",
       successCount: data.successCount ?? 0,
-      totalCount: data.totalCount ?? Array.from(files).length,
+      totalCount: data.totalCount ?? fileList.length,
+      results: data.results ?? [],
     };
   } catch (e: unknown) {
     const err = e as { message?: string };
@@ -49,7 +66,12 @@ export async function uploadComics(
       success: false,
       message: err?.message || "Upload failed",
       successCount: 0,
-      totalCount: Array.from(files).length,
+      totalCount: fileList.length,
+      results: fileList.map((file) => ({
+        filename: file.name,
+        success: false,
+        error: err?.message || "Upload failed",
+      })),
     };
   }
 }

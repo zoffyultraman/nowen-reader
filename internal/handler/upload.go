@@ -109,7 +109,12 @@ func (h *UploadHandler) Upload(c *gin.Context) {
 			if !isFileAllowedForLibraryType(fh.Filename, targetLibrary.Type) {
 				results = append(results, uploadResult{
 					Filename: fh.Filename,
-					Error:    fmt.Sprintf("File type not allowed for %s library", targetLibrary.Type),
+					Error: fmt.Sprintf(
+						"File type %s is not allowed for %s library. Allowed extensions: %s",
+						ext,
+						targetLibrary.Type,
+						strings.Join(allowedExtensionsForLibraryType(targetLibrary.Type), ", "),
+					),
 				})
 				continue
 			}
@@ -184,6 +189,35 @@ func (h *UploadHandler) Upload(c *gin.Context) {
 		resp["libraryId"] = targetLibrary.ID
 	}
 	c.JSON(http.StatusOK, resp)
+}
+
+// allowedExtensionsForLibraryType 返回某类书库允许上传的扩展名，用于错误提示。
+func allowedExtensionsForLibraryType(libraryType string) []string {
+	switch libraryType {
+	case "comic":
+		return config.SupportedExtensions
+	case "novel":
+		return config.NovelExtensions
+	case "mixed":
+		return uniqueExtensions(config.SupportedExtensions, config.NovelExtensions)
+	default:
+		return uniqueExtensions(config.SupportedExtensions, config.NovelExtensions)
+	}
+}
+
+func uniqueExtensions(groups ...[]string) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, group := range groups {
+		for _, ext := range group {
+			if seen[ext] {
+				continue
+			}
+			seen[ext] = true
+			out = append(out, ext)
+		}
+	}
+	return out
 }
 
 // isFileAllowedForLibraryType 根据书库类型判断文件是否允许上传。
