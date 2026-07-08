@@ -6,11 +6,14 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net/url"
 	"path"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/nowen-reader/nowen-reader/internal/config"
+	"golang.org/x/net/html"
 )
 
 // ============================================================
@@ -20,25 +23,41 @@ import (
 type epubChapter struct {
 	title       string
 	href        string // path inside the EPUB zip
+	fragment    string
+	level       int
+	playOrder   int
+	spineIndex  int
+	source      string
 	content     string // extracted text content (plain text fallback)
 	htmlContent string // sanitized HTML content for rich rendering
 }
 
+type epubChapterRef struct {
+	title      string
+	href       string
+	fragment   string
+	level      int
+	playOrder  int
+	spineIndex int
+	source     string
+}
+
 type epubReader struct {
-	filepath        string
-	comicID         string // populated later for image URL rewriting
-	rc              *zip.ReadCloser
-	chapters        []epubChapter
-	entries         []Entry
-	coverPath       string // path to cover image inside the EPUB
-	resources       map[string]bool
-	spineImages     []string // image paths extracted from XHTML pages in spine order (for comic mode)
-	spineImageSet   map[string]bool
+	filepath      string
+	comicID       string // populated later for image URL rewriting
+	rc            *zip.ReadCloser
+	chapters      []epubChapter
+	entries       []Entry
+	coverPath     string // path to cover image inside the EPUB
+	resources     map[string]bool
+	spineImages   []string // image paths extracted from XHTML pages in spine order (for comic mode)
+	spineImageSet map[string]bool
 }
 
 // OPF package document structures
 type opfPackage struct {
 	XMLName  xml.Name    `xml:"package"`
+	Version  string      `xml:"version,attr"`
 	Metadata opfMetadata `xml:"metadata"`
 	Manifest opfManifest `xml:"manifest"`
 	Spine    opfSpine    `xml:"spine"`
@@ -70,11 +89,37 @@ type opfItem struct {
 }
 
 type opfSpine struct {
+	Toc      string       `xml:"toc,attr"`
 	ItemRefs []opfItemRef `xml:"itemref"`
 }
 
 type opfItemRef struct {
-	IDRef string `xml:"idref,attr"`
+	IDRef  string `xml:"idref,attr"`
+	Linear string `xml:"linear,attr"`
+}
+
+type ncxDocument struct {
+	NavMap ncxNavMap `xml:"navMap"`
+}
+
+type ncxNavMap struct {
+	NavPoints []ncxNavPoint `xml:"navPoint"`
+}
+
+type ncxNavPoint struct {
+	ID       string        `xml:"id,attr"`
+	Play     int           `xml:"playOrder,attr"`
+	NavLabel ncxNavLabel   `xml:"navLabel"`
+	Content  ncxContent    `xml:"content"`
+	Children []ncxNavPoint `xml:"navPoint"`
+}
+
+type ncxNavLabel struct {
+	Text string `xml:"text"`
+}
+
+type ncxContent struct {
+	Src string `xml:"src,attr"`
 }
 
 // container.xml structure
@@ -131,15 +176,12 @@ func (r *epubReader) parseEpub() error {
 		return fmt.Errorf("parse OPF: %w", err)
 	}
 
-	// Build manifest ID → item map
+	// Build manifest ID -> item map
 	manifestMap := make(map[string]opfItem, len(pkg.Manifest.Items))
 	for _, item := range pkg.Manifest.Items {
 		manifestMap[item.ID] = item
 		// Track all resources
-		href := item.Href
-		if opfDir != "" {
-			href = opfDir + "/" + href
-		}
+		href, _ := resolveEpubHref(opfDir, item.Href)
 		r.resources[href] = true
 
 		// Find cover image
@@ -152,38 +194,60 @@ func (r *epubReader) parseEpub() error {
 		}
 	}
 
-	// Step 3: Get reading order from spine
-	var chapterHrefs []string
-	for _, ref := range pkg.Spine.ItemRefs {
+	// Step 3: Build spine order. It remains the content index and fallback order,
+	// but EPUB nav/NCX is preferred for the visible chapter list.
+	spineRefs := make([]epubChapterRef, 0, len(pkg.Spine.ItemRefs))
+	spineIndexByHref := make(map[string]int, len(pkg.Spine.ItemRefs))
+	for i, ref := range pkg.Spine.ItemRefs {
 		if item, ok := manifestMap[ref.IDRef]; ok {
 			if strings.HasPrefix(item.MediaType, "application/xhtml") ||
 				strings.HasPrefix(item.MediaType, "text/html") {
-				href := item.Href
-				if opfDir != "" {
-					href = opfDir + "/" + href
+				href, fragment := resolveEpubHref(opfDir, item.Href)
+				if _, exists := spineIndexByHref[href]; !exists {
+					spineIndexByHref[href] = i
 				}
-				chapterHrefs = append(chapterHrefs, href)
+				if strings.EqualFold(ref.Linear, "no") {
+					continue
+				}
+				spineRefs = append(spineRefs, epubChapterRef{
+					href:       href,
+					fragment:   fragment,
+					spineIndex: i,
+					source:     "spine",
+				})
 			}
 		}
 	}
 
-	if len(chapterHrefs) == 0 {
+	if len(spineRefs) == 0 {
 		return fmt.Errorf("no chapters found in EPUB spine")
 	}
 
-	// Step 4: Extract each chapter's text content
-	r.chapters = make([]epubChapter, 0, len(chapterHrefs))
-	r.entries = make([]Entry, 0, len(chapterHrefs))
+	// Step 4: Prefer standard table-of-contents sources.
+	chapterRefs := r.validChapterRefs(r.parseNavChapters(pkg, opfDir, spineIndexByHref))
+	if len(chapterRefs) == 0 {
+		chapterRefs = r.validChapterRefs(r.parseNCXChapters(pkg, opfDir, manifestMap, spineIndexByHref))
+	}
+	if len(chapterRefs) == 0 {
+		chapterRefs = spineRefs
+	}
 
-	for i, href := range chapterHrefs {
-		data, err := r.readZipFile(href)
+	// Step 5: Extract each chapter's text content
+	r.chapters = make([]epubChapter, 0, len(chapterRefs))
+	r.entries = make([]Entry, 0, len(chapterRefs))
+
+	for i, ref := range chapterRefs {
+		data, err := r.readZipFile(ref.href)
 		if err != nil {
 			continue
 		}
 
 		rawHTML := string(data)
 
-		title := extractXHTMLTitle(rawHTML)
+		title := strings.TrimSpace(ref.title)
+		if title == "" {
+			title = extractXHTMLTitle(rawHTML)
+		}
 		if title == "" {
 			title = fmt.Sprintf("第 %d 章", i+1)
 		}
@@ -197,12 +261,17 @@ func (r *epubReader) parseEpub() error {
 		textContent := extractTextFromXHTML(rawHTML)
 
 		// Sanitize HTML: keep formatting tags, rewrite image src to API URLs
-		chapterDir := path.Dir(href)
+		chapterDir := path.Dir(ref.href)
 		htmlContent := sanitizeEpubHTML(rawHTML, chapterDir)
 
 		r.chapters = append(r.chapters, epubChapter{
 			title:       title,
-			href:        href,
+			href:        ref.href,
+			fragment:    ref.fragment,
+			level:       ref.level,
+			playOrder:   ref.playOrder,
+			spineIndex:  ref.spineIndex,
+			source:      ref.source,
 			content:     strings.TrimSpace(textContent),
 			htmlContent: htmlContent,
 		})
@@ -226,14 +295,14 @@ func (r *epubReader) parseEpub() error {
 	r.spineImageSet = make(map[string]bool)
 	imgSrcRegex := regexp.MustCompile(`(?i)<img[^>]+src\s*=\s*"([^"]+)"`)
 	svgImgRegex := regexp.MustCompile(`(?i)<image[^>]+href\s*=\s*"([^"]+)"`)
-	for _, href := range chapterHrefs {
-		data, err := r.readZipFile(href)
+	for _, ref := range spineRefs {
+		data, err := r.readZipFile(ref.href)
 		if err != nil {
-			log.Printf("[epub] Step5: failed to read %s: %v", href, err)
+			log.Printf("[epub] Step5: failed to read %s: %v", ref.href, err)
 			continue
 		}
 		html := string(data)
-		chapterDir := path.Dir(href)
+		chapterDir := path.Dir(ref.href)
 
 		// Extract <img src="...">
 		for _, m := range imgSrcRegex.FindAllStringSubmatch(html, -1) {
@@ -273,6 +342,306 @@ func (r *epubReader) parseEpub() error {
 	}
 
 	return nil
+}
+
+func resolveEpubHref(baseDir, href string) (string, string) {
+	href = strings.TrimSpace(href)
+	if href == "" {
+		return "", ""
+	}
+
+	filePart, fragment, _ := strings.Cut(href, "#")
+	filePart, _, _ = strings.Cut(filePart, "?")
+	if decoded, err := url.PathUnescape(filePart); err == nil {
+		filePart = decoded
+	}
+	filePart = strings.TrimPrefix(filePart, "/")
+	if filePart == "" {
+		return "", fragment
+	}
+	if baseDir != "" && baseDir != "." {
+		filePart = path.Join(baseDir, filePart)
+	}
+	filePart = path.Clean(filePart)
+	if filePart == "." {
+		filePart = ""
+	}
+	return filePart, fragment
+}
+
+func (r *epubReader) validChapterRefs(refs []epubChapterRef) []epubChapterRef {
+	if len(refs) == 0 {
+		return nil
+	}
+
+	valid := make([]epubChapterRef, 0, len(refs))
+	seen := make(map[string]bool, len(refs))
+	for _, ref := range refs {
+		if ref.href == "" || !r.epubFileExists(ref.href) {
+			continue
+		}
+		key := ref.href + "#" + ref.fragment
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		valid = append(valid, ref)
+	}
+	if len(valid) == 0 {
+		return nil
+	}
+
+	// If most TOC links are broken, treat that TOC as unusable and let spine
+	// fallback take over. Converted EPUBs often have messy structure, but a
+	// usable NCX/nav should still resolve most entries.
+	if len(valid)*100/len(refs) < 60 {
+		return nil
+	}
+	return valid
+}
+
+func (r *epubReader) epubFileExists(name string) bool {
+	if name == "" {
+		return false
+	}
+	if _, err := r.readZipFile(name); err == nil {
+		return true
+	}
+	return false
+}
+
+func (r *epubReader) parseNCXChapters(pkg opfPackage, opfDir string, manifestMap map[string]opfItem, spineIndexByHref map[string]int) []epubChapterRef {
+	var ncxItem opfItem
+	found := false
+	if pkg.Spine.Toc != "" {
+		if item, ok := manifestMap[pkg.Spine.Toc]; ok {
+			ncxItem = item
+			found = true
+		}
+	}
+	if !found {
+		for _, item := range pkg.Manifest.Items {
+			if item.MediaType == "application/x-dtbncx+xml" || strings.EqualFold(item.ID, "ncx") {
+				ncxItem = item
+				found = true
+				break
+			}
+		}
+	}
+	if !found {
+		return nil
+	}
+
+	ncxPath, _ := resolveEpubHref(opfDir, ncxItem.Href)
+	data, err := r.readZipFile(ncxPath)
+	if err != nil {
+		return nil
+	}
+
+	var doc ncxDocument
+	if err := xml.Unmarshal(data, &doc); err != nil {
+		log.Printf("[epub] failed to parse NCX %s: %v", ncxPath, err)
+		return nil
+	}
+
+	baseDir := path.Dir(ncxPath)
+	if baseDir == "." {
+		baseDir = ""
+	}
+	var refs []epubChapterRef
+	var walk func(points []ncxNavPoint, level int)
+	walk = func(points []ncxNavPoint, level int) {
+		for _, point := range points {
+			if point.Content.Src != "" {
+				href, fragment := resolveEpubHref(baseDir, point.Content.Src)
+				ref := epubChapterRef{
+					title:     strings.TrimSpace(point.NavLabel.Text),
+					href:      href,
+					fragment:  fragment,
+					level:     level,
+					playOrder: point.Play,
+					source:    "epub2-ncx",
+				}
+				if idx, ok := spineIndexByHref[href]; ok {
+					ref.spineIndex = idx
+				} else {
+					ref.spineIndex = -1
+				}
+				refs = append(refs, ref)
+			}
+			walk(point.Children, level+1)
+		}
+	}
+	walk(doc.NavMap.NavPoints, 0)
+
+	if hasUsablePlayOrder(refs) {
+		sort.SliceStable(refs, func(i, j int) bool {
+			return refs[i].playOrder < refs[j].playOrder
+		})
+	}
+	return refs
+}
+
+func hasUsablePlayOrder(refs []epubChapterRef) bool {
+	if len(refs) == 0 {
+		return false
+	}
+	seen := make(map[int]bool, len(refs))
+	for _, ref := range refs {
+		if ref.playOrder <= 0 || seen[ref.playOrder] {
+			return false
+		}
+		seen[ref.playOrder] = true
+	}
+	return true
+}
+
+func (r *epubReader) parseNavChapters(pkg opfPackage, opfDir string, spineIndexByHref map[string]int) []epubChapterRef {
+	var navItem opfItem
+	found := false
+	for _, item := range pkg.Manifest.Items {
+		if hasSpaceSeparatedToken(item.Props, "nav") &&
+			(strings.HasPrefix(item.MediaType, "application/xhtml") || strings.HasPrefix(item.MediaType, "text/html")) {
+			navItem = item
+			found = true
+			break
+		}
+	}
+	if !found {
+		return nil
+	}
+
+	navPath, _ := resolveEpubHref(opfDir, navItem.Href)
+	data, err := r.readZipFile(navPath)
+	if err != nil {
+		return nil
+	}
+	doc, err := html.Parse(strings.NewReader(string(data)))
+	if err != nil {
+		log.Printf("[epub] failed to parse nav %s: %v", navPath, err)
+		return nil
+	}
+
+	baseDir := path.Dir(navPath)
+	if baseDir == "." {
+		baseDir = ""
+	}
+	tocNav := findTOCNav(doc)
+	if tocNav == nil {
+		tocNav = findFirstElement(doc, "nav")
+	}
+	if tocNav == nil {
+		return nil
+	}
+
+	var refs []epubChapterRef
+	collectNavAnchors(tocNav, baseDir, spineIndexByHref, 0, &refs)
+	return refs
+}
+
+func hasSpaceSeparatedToken(s, token string) bool {
+	for _, part := range strings.Fields(s) {
+		if part == token {
+			return true
+		}
+	}
+	return false
+}
+
+func findTOCNav(n *html.Node) *html.Node {
+	if n == nil {
+		return nil
+	}
+	if n.Type == html.ElementNode && n.Data == "nav" {
+		for _, attr := range n.Attr {
+			if strings.EqualFold(attr.Key, "epub:type") || strings.EqualFold(attr.Key, "type") {
+				for _, part := range strings.Fields(attr.Val) {
+					if part == "toc" {
+						return n
+					}
+				}
+			}
+		}
+	}
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		if found := findTOCNav(c); found != nil {
+			return found
+		}
+	}
+	return nil
+}
+
+func findFirstElement(n *html.Node, name string) *html.Node {
+	if n == nil {
+		return nil
+	}
+	if n.Type == html.ElementNode && n.Data == name {
+		return n
+	}
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		if found := findFirstElement(c, name); found != nil {
+			return found
+		}
+	}
+	return nil
+}
+
+func collectNavAnchors(n *html.Node, baseDir string, spineIndexByHref map[string]int, level int, refs *[]epubChapterRef) {
+	if n == nil {
+		return
+	}
+	if n.Type == html.ElementNode && n.Data == "a" {
+		hrefAttr := ""
+		for _, attr := range n.Attr {
+			if strings.EqualFold(attr.Key, "href") {
+				hrefAttr = attr.Val
+				break
+			}
+		}
+		if hrefAttr != "" {
+			href, fragment := resolveEpubHref(baseDir, hrefAttr)
+			ref := epubChapterRef{
+				title:     strings.TrimSpace(nodeText(n)),
+				href:      href,
+				fragment:  fragment,
+				level:     level,
+				playOrder: len(*refs) + 1,
+				source:    "epub3-nav",
+			}
+			if idx, ok := spineIndexByHref[href]; ok {
+				ref.spineIndex = idx
+			} else {
+				ref.spineIndex = -1
+			}
+			*refs = append(*refs, ref)
+		}
+	}
+
+	nextLevel := level
+	if n.Type == html.ElementNode && n.Data == "ol" {
+		nextLevel++
+	}
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		collectNavAnchors(c, baseDir, spineIndexByHref, nextLevel, refs)
+	}
+}
+
+func nodeText(n *html.Node) string {
+	if n == nil {
+		return ""
+	}
+	var b strings.Builder
+	var walk func(*html.Node)
+	walk = func(cur *html.Node) {
+		if cur.Type == html.TextNode {
+			b.WriteString(cur.Data)
+		}
+		for c := cur.FirstChild; c != nil; c = c.NextSibling {
+			walk(c)
+		}
+	}
+	walk(n)
+	return b.String()
 }
 
 func (r *epubReader) findOPFPath() (string, error) {

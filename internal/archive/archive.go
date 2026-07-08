@@ -135,6 +135,9 @@ func DetectType(fp string) ArchiveType {
 	ext := strings.ToLower(path.Ext(fp))
 	switch ext {
 	case ".zip", ".cbz":
+		if isEpubZip(fp) {
+			return TypeEpub
+		}
 		return TypeZip
 	case ".rar", ".cbr":
 		return TypeRar
@@ -161,6 +164,35 @@ func DetectType(fp string) ArchiveType {
 		}
 		return ""
 	}
+}
+
+func isEpubZip(fp string) bool {
+	rc, err := zip.OpenReader(fp)
+	if err != nil {
+		return false
+	}
+	defer rc.Close()
+
+	hasContainer := false
+	for _, f := range rc.File {
+		name := strings.TrimPrefix(f.Name, "/")
+		if name == "mimetype" {
+			r, err := f.Open()
+			if err != nil {
+				continue
+			}
+			data, err := io.ReadAll(io.LimitReader(r, 128))
+			r.Close()
+			if err == nil && strings.TrimSpace(string(data)) == "application/epub+zip" {
+				return true
+			}
+			continue
+		}
+		if strings.EqualFold(name, "META-INF/container.xml") {
+			hasContainer = true
+		}
+	}
+	return hasContainer
 }
 
 // IsNovelType returns true if the archive type is a novel/text format.
