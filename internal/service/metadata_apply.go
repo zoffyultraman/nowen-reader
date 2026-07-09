@@ -1,4 +1,4 @@
-﻿package service
+package service
 
 import (
 	"encoding/base64"
@@ -103,7 +103,7 @@ func ApplyMetadata(comicID string, meta ComicMetadata, lang string, overwrite bo
 
 	if len(updates) > 0 {
 		if err := store.UpdateComicFields(comicID, updates); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("update comic fields: %w", err)
 		}
 	}
 

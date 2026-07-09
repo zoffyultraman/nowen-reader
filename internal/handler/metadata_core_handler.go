@@ -2,6 +2,7 @@ package handler
 
 import (
 	"fmt"
+	"log"
 	"path/filepath"
 	"strings"
 
@@ -97,7 +98,8 @@ func (h *MetadataHandler) Apply(c *gin.Context) {
 
 	comic, err := service.ApplyMetadata(body.ComicID, body.Metadata, body.Lang, body.Overwrite, service.ApplyOption{SkipCover: body.SkipCover})
 	if err != nil {
-		c.JSON(500, gin.H{"error": "Failed to apply metadata"})
+		log.Printf("[metadata] apply failed for comic %s: %v", body.ComicID, err)
+		c.JSON(500, gin.H{"error": "Failed to apply metadata: " + err.Error()})
 		return
 	}
 
