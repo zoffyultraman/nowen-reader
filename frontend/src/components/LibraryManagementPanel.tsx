@@ -30,8 +30,11 @@ import {
   createLibrary,
   updateLibrary,
   deleteLibrary,
+  previewLibraryOwnership,
+  reconcileLibraryOwnership,
   scanLibrary,
   type Library as LibraryType,
+  type LibraryOwnershipPreview,
 } from "@/api/libraries";
 import { FolderBrowser } from "@/components/FolderBrowser";
 
@@ -170,6 +173,9 @@ export function LibraryManagementPanel() {
   const [deletingTarget, setDeletingTarget] = useState<LibraryType | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [ownershipPreview, setOwnershipPreview] = useState<LibraryOwnershipPreview | null>(null);
+  const [reconcilingOwnership, setReconcilingOwnership] = useState(false);
+  const [rootOwnerSelections, setRootOwnerSelections] = useState<Record<string, string>>({});
 
   const [browseOpen, setBrowseOpen] = useState(false);
   const [browseTarget, setBrowseTarget] = useState<"create" | "edit">("create");
@@ -205,9 +211,18 @@ export function LibraryManagementPanel() {
     }
   }, [showMessage]);
 
+  const fetchOwnershipPreview = useCallback(async () => {
+    try {
+      setOwnershipPreview(await previewLibraryOwnership());
+    } catch {
+      setOwnershipPreview(null);
+    }
+  }, []);
+
   useEffect(() => {
     fetchLibraryList();
-  }, [fetchLibraryList]);
+    fetchOwnershipPreview();
+  }, [fetchLibraryList, fetchOwnershipPreview]);
 
   useEffect(() => {
     if (!openMenuId) return;
@@ -237,6 +252,20 @@ export function LibraryManagementPanel() {
     };
   }, [libraries]);
 
+  const rootConflictGroups = useMemo(() => {
+    const grouped = new Map<string, Map<string, string>>();
+    for (const conflict of ownershipPreview?.rootConflicts || []) {
+      const options = grouped.get(conflict.path) || new Map<string, string>();
+      options.set(conflict.libraryId, conflict.libraryName);
+      options.set(conflict.otherLibraryId, conflict.otherLibraryName);
+      grouped.set(conflict.path, options);
+    }
+    return Array.from(grouped, ([path, options]) => ({
+      path,
+      options: Array.from(options, ([id, name]) => ({ id, name })),
+    }));
+  }, [ownershipPreview]);
+
   const handleCreate = async () => {
     const validPaths = newRootPaths.filter(p => p.trim());
     if (!newName.trim() || validPaths.length === 0) {
@@ -258,6 +287,7 @@ export function LibraryManagementPanel() {
       setNewName("");
       setNewRootPaths([]);
       fetchLibraryList();
+      fetchOwnershipPreview();
       // 创建后自动扫描
       if (newScanEnabled && lib?.id) {
         setScanningId(lib.id);
@@ -265,6 +295,7 @@ export function LibraryManagementPanel() {
           const result = await scanLibrary(lib.id);
           showMessage(`扫描完成，新增 ${result.added} 个内容`);
           fetchLibraryList();
+          fetchOwnershipPreview();
         } catch (scanErr) {
           showMessage(scanErr instanceof Error ? `扫描失败: ${scanErr.message}` : "自动扫描失败，请手动重试", true);
         } finally {
@@ -313,6 +344,7 @@ export function LibraryManagementPanel() {
       showMessage("书库更新成功");
       setEditingId(null);
       fetchLibraryList();
+      fetchOwnershipPreview();
     } catch (err) {
       showMessage(err instanceof Error ? err.message : "更新失败", true);
     } finally {
@@ -325,6 +357,7 @@ export function LibraryManagementPanel() {
       await updateLibrary(id, { enabled: !enabled });
       showMessage(enabled ? "书库已禁用" : "书库已启用");
       fetchLibraryList();
+      fetchOwnershipPreview();
     } catch (err) {
       showMessage(err instanceof Error ? err.message : "更新失败", true);
     }
@@ -336,6 +369,7 @@ export function LibraryManagementPanel() {
       const result = await scanLibrary(id);
       showMessage(`扫描完成，新增 ${result.added} 个内容`);
       fetchLibraryList();
+      fetchOwnershipPreview();
     } catch (err) {
       showMessage(err instanceof Error ? err.message : "扫描失败", true);
     } finally {
@@ -351,10 +385,42 @@ export function LibraryManagementPanel() {
       showMessage("书库已从管理中心移除");
       setDeletingTarget(null);
       fetchLibraryList();
+      fetchOwnershipPreview();
     } catch (err) {
       showMessage(err instanceof Error ? err.message : "删除失败", true);
     } finally {
       setDeleting(false);
+    }
+  };
+
+  const handleReconcileOwnership = async () => {
+    if (!ownershipPreview) return;
+    const conflictPaths = rootConflictGroups.map((conflict) => conflict.path);
+    const unresolvedPath = conflictPaths.find((path) => !rootOwnerSelections[path]);
+    if (unresolvedPath) {
+      showMessage("请先为每个重复根目录选择保留的书库", true);
+      return;
+    }
+    if (!ownershipPreview.canReconcile && conflictPaths.length === 0) return;
+    const confirmed = window.confirm(
+      conflictPaths.length > 0
+        ? `将按所选书库归属合并重复目录中的记录。完成后仍需修改其他书库的重复路径，原始文件不会被删除。是否继续？`
+        : `将修复 ${ownershipPreview.issueCount} 个归属问题，并合并 ${ownershipPreview.duplicateRows} 条重复记录。原始文件不会被删除，是否继续？`
+    );
+    if (!confirmed) return;
+    try {
+      setReconcilingOwnership(true);
+      const result = await reconcileLibraryOwnership(rootOwnerSelections);
+      showMessage(
+        conflictPaths.length > 0
+          ? `记录合并完成，请继续修改重复书库路径；本次处理 ${result.reconciled} 项`
+          : `归属修复完成：处理 ${result.reconciled} 项，合并 ${result.mergedRows} 条重复记录`
+      );
+      await Promise.all([fetchLibraryList(), fetchOwnershipPreview()]);
+    } catch (err) {
+      showMessage(err instanceof Error ? err.message : "归属修复失败", true);
+    } finally {
+      setReconcilingOwnership(false);
     }
   };
 
@@ -431,7 +497,7 @@ export function LibraryManagementPanel() {
                   className="w-56 rounded-xl border border-border bg-card/80 py-2 pl-9 pr-3 text-sm text-foreground shadow-sm placeholder:text-muted focus:border-accent/50 focus:outline-none focus:ring-2 focus:ring-accent/20"
                 />
               </div>
-              <InlineButton variant="ghost" onClick={fetchLibraryList}>
+              <InlineButton variant="ghost" onClick={() => { fetchLibraryList(); fetchOwnershipPreview(); }}>
                 <RefreshCw className="h-4 w-4" /> 刷新
               </InlineButton>
               <InlineButton variant="soft" onClick={() => setShowCreateForm(true)}>
@@ -459,6 +525,59 @@ export function LibraryManagementPanel() {
         <div className="flex items-center gap-2 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4 text-emerald-600 dark:text-emerald-400">
           <Check className="h-4 w-4" />
           {success}
+        </div>
+      )}
+
+      {ownershipPreview && ownershipPreview.rootConflicts.length > 0 && (
+        <div className="flex items-start gap-3 rounded-2xl border border-rose-500/20 bg-rose-500/10 p-4 text-rose-700 dark:text-rose-300">
+          <ShieldAlert className="mt-0.5 h-4 w-4 flex-shrink-0" />
+          <div className="min-w-0 flex-1 text-sm">
+            <div className="font-medium">检测到重复书库根目录，相关目录已暂停扫描</div>
+            {rootConflictGroups.map((conflict) => (
+              <div key={conflict.path} className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
+                <span className="min-w-0 flex-1 truncate text-xs opacity-80">{conflict.path}</span>
+                <select
+                  value={rootOwnerSelections[conflict.path] || ""}
+                  onChange={(event) => setRootOwnerSelections((current) => ({
+                    ...current,
+                    [conflict.path]: event.target.value,
+                  }))}
+                  className="rounded-lg border border-rose-500/20 bg-card px-2 py-1.5 text-xs text-foreground"
+                >
+                  <option value="">选择保留书库</option>
+                  {conflict.options.map((option) => (
+                    <option key={option.id} value={option.id}>{option.name}</option>
+                  ))}
+                </select>
+              </div>
+            ))}
+            <div className="mt-3">
+              <InlineButton variant="danger" onClick={handleReconcileOwnership} disabled={reconcilingOwnership}>
+                {reconcilingOwnership ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                {reconcilingOwnership ? "合并中..." : "按所选书库合并记录"}
+              </InlineButton>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {ownershipPreview && ownershipPreview.issueCount > 0 && (
+        <div className="flex flex-col gap-3 rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4 text-amber-800 dark:text-amber-300 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-start gap-3">
+            <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+            <div className="text-sm">
+              <div className="font-medium">发现 {ownershipPreview.issueCount} 个文件归属问题</div>
+              <div className="mt-0.5 text-xs opacity-80">其中 {ownershipPreview.duplicateRows} 条为同一物理文件的重复记录。</div>
+            </div>
+          </div>
+          <InlineButton
+            variant="soft"
+            onClick={handleReconcileOwnership}
+            disabled={!ownershipPreview.canReconcile || reconcilingOwnership || ownershipPreview.rootConflicts.length > 0}
+          >
+            {reconcilingOwnership ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+            {reconcilingOwnership ? "修复中..." : "修复归属"}
+          </InlineButton>
         </div>
       )}
 

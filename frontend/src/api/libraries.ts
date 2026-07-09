@@ -43,6 +43,47 @@ export interface UserLibraryAccess {
   canManage: boolean;
 }
 
+export interface LibraryRootConflict {
+  path: string;
+  libraryId: string;
+  libraryName: string;
+  otherLibraryId: string;
+  otherLibraryName: string;
+}
+
+export interface OwnershipIssue {
+  physicalPath: string;
+  targetLibraryId: string;
+  targetLibraryName: string;
+  targetRelativePath: string;
+  targetId: string;
+  action: "move" | "merge";
+  resolvable: boolean;
+  records: Array<{
+    id: string;
+    title: string;
+    libraryId: string;
+    libraryName: string;
+    relativePath: string;
+  }>;
+}
+
+export interface LibraryOwnershipPreview {
+  issues: OwnershipIssue[];
+  rootConflicts: LibraryRootConflict[];
+  issueCount: number;
+  duplicateRows: number;
+  canReconcile: boolean;
+}
+
+export interface LibraryOwnershipReconcileResult {
+  issueCount: number;
+  reconciled: number;
+  mergedRows: number;
+  movedRows: number;
+  blocked: number;
+}
+
 // ============================================================
 // API 函数
 // ============================================================
@@ -147,6 +188,31 @@ export async function scanLibrary(
     method: "POST",
   });
   return safeJson(res);
+}
+
+// 扫描当前用户拥有管理权限的书库（管理员与 canManage 用户均可调用）。
+export async function scanManagedLibrary(
+  id: string
+): Promise<{ added: number; library: Library }> {
+  const res = await fetch(`/api/libraries/${id}/scan`, {
+    method: "POST",
+  });
+  return safeJson(res);
+}
+
+export async function previewLibraryOwnership(): Promise<LibraryOwnershipPreview> {
+  const res = await fetch("/api/admin/libraries/ownership-preview");
+  return safeJson(res);
+}
+
+export async function reconcileLibraryOwnership(rootOwners: Record<string, string> = {}): Promise<LibraryOwnershipReconcileResult> {
+  const res = await fetch("/api/admin/libraries/ownership-reconcile", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ confirm: true, rootOwners }),
+  });
+  const data = await safeJson<{ result: LibraryOwnershipReconcileResult }>(res);
+  return data.result;
 }
 
 // 设置用户的书库访问权限

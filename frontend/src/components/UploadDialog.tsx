@@ -14,7 +14,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { uploadComics, type UploadFileResult } from "@/api/comics";
-import { fetchAccessibleLibraries, type Library } from "@/api/libraries";
+import { fetchAccessibleLibraries, scanManagedLibrary, type Library } from "@/api/libraries";
 
 // ============================================================
 // Types
@@ -117,6 +117,7 @@ export default function UploadDialog({
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [dragActive, setDragActive] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [scanWarning, setScanWarning] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dropRef = useRef<HTMLDivElement>(null);
 
@@ -126,6 +127,7 @@ export default function UploadDialog({
       setSelectedLibraryId(defaultLibraryId);
       setQueue([]);
       setUploading(false);
+      setScanWarning("");
     }
   }, [open, defaultLibraryId]);
 
@@ -247,6 +249,7 @@ export default function UploadDialog({
     if (uploadable.length === 0) return;
 
     setUploading(true);
+    setScanWarning("");
 
     // Upload all pending files as a single batch
     const files = uploadable.map((item) => item.file);
@@ -278,11 +281,12 @@ export default function UploadDialog({
       );
 
       if (result.results.some((item) => item.success) || result.successCount > 0) {
-        // Trigger backend scan + refresh
+        // Scan only the selected library, then refresh the current view.
         try {
-          await fetch("/api/sync", { method: "POST" });
-        } catch {
-          // scan failure shouldn't block
+          if (libId) await scanManagedLibrary(libId);
+        } catch (scanErr) {
+          const detail = scanErr instanceof Error ? scanErr.message : "未知错误";
+          setScanWarning(`文件已保存，但目标书库扫描失败：${detail}`);
         }
         onUploaded?.();
       }
@@ -471,6 +475,11 @@ export default function UploadDialog({
           {allDone && (
             <div className="rounded-lg bg-emerald-500/5 border border-emerald-500/20 px-3 py-2 text-xs text-emerald-600 dark:text-emerald-400">
               上传完成：成功 {successCount} 个{failedCount > 0 ? `，失败 ${failedCount} 个` : ""}
+            </div>
+          )}
+          {scanWarning && (
+            <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+              {scanWarning}
             </div>
           )}
         </div>

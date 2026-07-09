@@ -445,8 +445,11 @@ GET /api/comics?readingStatus=finished
 | PUT | `/api/admin/libraries/:id` | 更新书库 |
 | DELETE | `/api/admin/libraries/:id` | 删除书库 |
 | POST | `/api/admin/libraries/:id/scan` | 扫描指定书库 |
+| GET | `/api/admin/libraries/ownership-preview` | 预览目录归属与重复记录 |
+| POST | `/api/admin/libraries/ownership-reconcile` | 合并重复记录并修复书库归属 |
 | POST | `/api/admin/libraries/:id/delete-preview` | 删除书库预览（不删除源文件） |
 | GET | `/api/libraries/accessible` | 获取当前用户可访问书库 🔒 |
+| POST | `/api/libraries/:id/scan` | 扫描当前用户可管理的书库 🔒（需要 canManage） |
 | GET | `/api/admin/users/:id/library-access` | 获取用户书库访问权限 |
 | PUT | `/api/admin/users/:id/library-access` | 设置用户书库访问权限 |
 | GET | `/api/admin/user-groups/:id/library-access` | 获取权限组书库访问权限 |
@@ -479,6 +482,54 @@ GET /api/comics?readingStatus=finished
 - `rootPath` 是主目录；`rootPaths` 包含主目录和额外目录。
 - 文件解析按漫画记录的 `libraryId + relativePath` 在该书库所有根目录内查找，不再按全局文件名唯一定位。
 - 书库内通过 `libraryId + relativePath` 去重，不同书库允许相同文件名。
+- 不同书库不能配置完全相同的物理根目录；创建或更新时返回 `409 Conflict` 和 `conflicts` 数组。
+- 父子根目录可以共存，文件归属于匹配路径最深的书库；父书库扫描时自动跳过子书库目录。
+- 禁用或关闭自动扫描的子书库仍保留目录所有权，防止内容被父书库以不同权限重新收录。
+
+### 书库归属巡检与修复
+
+```http
+GET /api/admin/libraries/ownership-preview
+```
+
+仅按真实物理路径检查，不会将不同目录中的同名文件或相同 MD5 文件误判为同一条记录。响应包括完全相同的根目录冲突，以及需要移动或合并的记录：
+
+```json
+{
+  "issueCount": 1,
+  "duplicateRows": 1,
+  "canReconcile": true,
+  "rootConflicts": [],
+  "issues": [
+    {
+      "physicalPath": "/books/novels/book.epub",
+      "targetLibraryId": "novels",
+      "targetLibraryName": "小说",
+      "targetRelativePath": "book.epub",
+      "targetId": "string",
+      "action": "merge",
+      "resolvable": true,
+      "records": []
+    }
+  ]
+}
+```
+
+确认修复：
+
+```http
+POST /api/admin/libraries/ownership-reconcile
+Content-Type: application/json
+
+{
+  "confirm": true,
+  "rootOwners": {
+    "/books/novels": "novels"
+  }
+}
+```
+
+修复在数据库事务中合并标签、分类、分组、用户阅读状态、阅读会话和元数据日志，不删除或移动源文件。存在完全相同的根目录冲突时，必须通过 `rootOwners` 明确选择每个目录保留在哪个书库；记录合并完成后再修改其他书库的重复路径。未提供完整选择时返回 `409 Conflict`。
 
 ### 当前用户可访问书库
 

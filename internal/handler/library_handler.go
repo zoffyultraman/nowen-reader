@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/nowen-reader/nowen-reader/internal/config"
+	"github.com/nowen-reader/nowen-reader/internal/middleware"
 	"github.com/nowen-reader/nowen-reader/internal/model"
 	"github.com/nowen-reader/nowen-reader/internal/service"
 	"github.com/nowen-reader/nowen-reader/internal/store"
@@ -112,6 +113,18 @@ func (h *LibraryHandler) CreateLibrary(c *gin.Context) {
 		return
 	}
 	rootPath = allPaths[0]
+	conflicts, err := service.ValidateLibraryRootUniqueness("", allPaths)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate library paths"})
+		return
+	}
+	if len(conflicts) > 0 {
+		c.JSON(http.StatusConflict, gin.H{
+			"error":     "A root path is already assigned to another library",
+			"conflicts": conflicts,
+		})
+		return
+	}
 
 	enabled := true
 	if req.Enabled != nil {
@@ -196,14 +209,51 @@ func (h *LibraryHandler) UpdateLibrary(c *gin.Context) {
 		existing.Type = *req.Type
 	}
 	if req.RootPath != nil {
-		existing.RootPath = *req.RootPath
+		cleanedRoot := strings.TrimSpace(*req.RootPath)
+		if cleanedRoot == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "rootPath cannot be empty"})
+			return
+		}
+		cleanedRoot = filepath.Clean(cleanedRoot)
+		existing.RootPath = cleanedRoot
+		if req.RootPaths == nil {
+			paths := append([]string(nil), existing.RootPaths...)
+			if len(paths) == 0 {
+				paths = []string{cleanedRoot}
+			} else {
+				paths[0] = cleanedRoot
+			}
+			existing.RootPaths = validateAndCleanRootPaths(paths)
+		}
 	}
 	if req.RootPaths != nil {
 		// 验证路径：去空、去重、检查重叠
 		cleanedPaths := validateAndCleanRootPaths(req.RootPaths)
+		if len(cleanedPaths) == 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "rootPaths must contain at least one path"})
+			return
+		}
 		existing.RootPaths = cleanedPaths
 		if len(cleanedPaths) > 0 {
 			existing.RootPath = cleanedPaths[0]
+		}
+	}
+	if req.RootPath != nil || req.RootPaths != nil {
+		paths := existing.RootPaths
+		if len(paths) == 0 {
+			paths = []string{existing.RootPath}
+		}
+		conflicts, validateErr := service.ValidateLibraryRootUniqueness(id, paths)
+		if validateErr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate library paths"})
+			return
+		}
+		if len(conflicts) > 0 {
+			c.JSON(http.StatusConflict, gin.H{
+				"error":     "A root path is already assigned to another library",
+				"conflicts": conflicts,
+			})
+			return
 		}
 	}
 	if req.Enabled != nil {
@@ -358,7 +408,11 @@ func safeCachePath(root string, name string) (string, bool) {
 
 func (h *LibraryHandler) ScanLibrary(c *gin.Context) {
 	id := c.Param("id")
-
+	user := middleware.GetCurrentUser(c)
+	if user == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
 	existing, err := store.GetLibraryByID(id)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch library"})
@@ -366,6 +420,15 @@ func (h *LibraryHandler) ScanLibrary(c *gin.Context) {
 	}
 	if existing == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Library not found"})
+		return
+	}
+	canManage, permissionErr := store.UserCanManageLibrary(user.ID, id)
+	if permissionErr != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check library permission"})
+		return
+	}
+	if !canManage {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Forbidden: no manage permission for this library"})
 		return
 	}
 
@@ -377,6 +440,38 @@ func (h *LibraryHandler) ScanLibrary(c *gin.Context) {
 
 	lib, _ := store.GetLibraryByID(id)
 	c.JSON(http.StatusOK, gin.H{"added": added, "library": lib})
+}
+
+// OwnershipPreview reports rows that resolve to the same physical file or are
+// assigned to a parent library instead of the deepest matching root.
+func (h *LibraryHandler) OwnershipPreview(c *gin.Context) {
+	preview, err := service.PreviewLibraryOwnership()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to inspect library ownership: " + err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, preview)
+}
+
+func (h *LibraryHandler) ReconcileOwnership(c *gin.Context) {
+	var req struct {
+		Confirm    bool              `json:"confirm"`
+		RootOwners map[string]string `json:"rootOwners"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || !req.Confirm {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "confirm=true is required"})
+		return
+	}
+	result, err := service.ReconcileLibraryOwnership(req.RootOwners)
+	if err != nil {
+		status := http.StatusInternalServerError
+		if result != nil && result.Blocked > 0 {
+			status = http.StatusConflict
+		}
+		c.JSON(status, gin.H{"error": err.Error(), "result": result})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "result": result})
 }
 
 // ============================================================

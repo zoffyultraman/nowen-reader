@@ -15,6 +15,8 @@ func registerLibraryRoutes(api *gin.RouterGroup) {
 	{
 		libraryGroup.GET("", library.ListLibraries)
 		libraryGroup.POST("", library.CreateLibrary)
+		libraryGroup.GET("/ownership-preview", library.OwnershipPreview)
+		libraryGroup.POST("/ownership-reconcile", library.ReconcileOwnership)
 		libraryGroup.PUT("/:id", library.UpdateLibrary)
 		libraryGroup.DELETE("/:id", library.DeleteLibrary)
 		libraryGroup.POST("/:id/scan", library.ScanLibrary)
@@ -26,6 +28,7 @@ func registerLibraryRoutes(api *gin.RouterGroup) {
 	accessibleGroup.Use(middleware.AuthRequired())
 	{
 		accessibleGroup.GET("/accessible", library.ListAccessibleLibraries)
+		accessibleGroup.POST("/:id/scan", library.ScanLibrary)
 	}
 
 	// User library access management (admin only)

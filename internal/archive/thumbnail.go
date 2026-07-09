@@ -92,7 +92,7 @@ func generateThumbnailInternal(archivePath, comicID string) ([]byte, string, flo
 	var pageBuffer []byte
 
 	switch {
-		case archiveType == TypePdf:
+	case archiveType == TypePdf:
 		// PDF: try pages 0-4 to find a non-blank cover, with dynamic DPI
 		maxPages := 5
 		pageCount, cntErr := GetPdfPageCount(archivePath)
@@ -444,6 +444,45 @@ func ClearThumbnailCache(comicID string) {
 	for _, entry := range entries {
 		if strings.HasPrefix(entry.Name(), prefix) {
 			_ = os.Remove(filepath.Join(thumbDir, entry.Name()))
+		}
+	}
+}
+
+// MigrateThumbnailCache preserves a cached or manually uploaded cover when two
+// database rows for the same physical book are merged. Existing target cache
+// files win; source files are removed after a successful move.
+func MigrateThumbnailCache(sourceID, targetID string) {
+	if sourceID == "" || targetID == "" || sourceID == targetID {
+		return
+	}
+	thumbDir := config.GetThumbnailsDir()
+	entries, err := os.ReadDir(thumbDir)
+	if err != nil {
+		return
+	}
+	for _, entry := range entries {
+		name := entry.Name()
+		var suffix string
+		switch {
+		case name == sourceID+".webp":
+			suffix = ".webp"
+		case strings.HasPrefix(name, sourceID+"_"):
+			suffix = strings.TrimPrefix(name, sourceID)
+		default:
+			continue
+		}
+		sourcePath := filepath.Join(thumbDir, name)
+		targetPath := filepath.Join(thumbDir, targetID+suffix)
+		if _, err := os.Stat(targetPath); err == nil {
+			_ = os.Remove(sourcePath)
+			continue
+		}
+		if err := os.Rename(sourcePath, targetPath); err != nil {
+			if data, readErr := os.ReadFile(sourcePath); readErr == nil {
+				if writeErr := os.WriteFile(targetPath, data, 0644); writeErr == nil {
+					_ = os.Remove(sourcePath)
+				}
+			}
 		}
 	}
 }

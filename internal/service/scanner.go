@@ -14,6 +14,7 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"github.com/nowen-reader/nowen-reader/internal/archive"
 	"github.com/nowen-reader/nowen-reader/internal/config"
+	"github.com/nowen-reader/nowen-reader/internal/model"
 	"github.com/nowen-reader/nowen-reader/internal/store"
 )
 
@@ -196,11 +197,11 @@ func updateDirMtimes() {
 // ============================================================
 
 type diskFile struct {
-	ID       string
-	Filename string
-	Title    string
-	FileSize int64
-	Source   string // "comics" or "novels" — 来源目录类型
+	ID        string
+	Filename  string
+	Title     string
+	FileSize  int64
+	Source    string // "comics" or "novels" — 来源目录类型
 	LibraryID string // 书库ID
 }
 
@@ -223,8 +224,24 @@ func fileBelongsToRootPaths(filename string, rootPaths []string, rootPathSet map
 // 当 enableImageFolder=true 时，会识别"图片文件夹漫画"：如果某个子目录直接包含
 // 多张图片，则将整个目录作为一个漫画入库。novels 目录应当传入 false，避免把
 // "全是 .txt 但混入封面图"的小说目录折叠成单条漫画。
-func walkDirRecursive(libraryID string, root string, enableImageFolder bool) []diskFile {
+func walkDirRecursive(libraryID string, root string, enableImageFolder bool, ownership *LibraryOwnership) []diskFile {
 	var files []diskFile
+	canonicalRoot := canonicalPath(root)
+	isOwnedPath := func(path string, entry os.DirEntry) bool {
+		if ownership == nil {
+			return true
+		}
+		// WalkDir does not follow directory symlinks. Resolve an individual file
+		// symlink explicitly; ordinary files use the already-resolved root.
+		if entry != nil && entry.Type()&os.ModeSymlink != 0 {
+			return ownership.IsOwnedBy(libraryID, path)
+		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return false
+		}
+		return ownership.isCanonicalPathOwnedBy(libraryID, filepath.Join(canonicalRoot, rel))
+	}
 	// 记录已被识别为图片文件夹漫画的目录，避免其子文件被重复处理
 	imageFolderDirs := make(map[string]bool)
 
@@ -238,6 +255,10 @@ func walkDirRecursive(libraryID string, root string, enableImageFolder bool) []d
 			// 跳过根目录本身
 			if path == root {
 				return nil
+			}
+			// 子书库拥有更深的根目录；父书库扫描到这里时直接跳过整棵子树。
+			if !isOwnedPath(path, d) {
+				return filepath.SkipDir
 			}
 			// 如果父目录已经是图片文件夹漫画，跳过子目录
 			parent := filepath.Dir(path)
@@ -276,6 +297,9 @@ func walkDirRecursive(libraryID string, root string, enableImageFolder bool) []d
 
 		name := d.Name()
 		if !config.IsSupportedFile(name) {
+			return nil
+		}
+		if !isOwnedPath(path, d) {
 			return nil
 		}
 		info, err := d.Info()
@@ -372,10 +396,18 @@ func quickSync() (added, removed int) {
 		log.Printf("[quick-sync] Failed to get libraries: %v", err)
 		return 0, 0
 	}
+	ownership, err := LoadLibraryOwnership()
+	if err != nil {
+		log.Printf("[quick-sync] Failed to build library ownership: %v", err)
+		return 0, 0
+	}
 
 	var filesOnDisk []diskFile
+	completeLibraries := make(map[string]bool)
+	libraryByID := make(map[string]model.Library, len(libraries))
 
 	for _, lib := range libraries {
+		libraryByID[lib.ID] = lib
 		rootPaths := lib.RootPaths
 		if len(rootPaths) == 0 {
 			rootPaths = []string{lib.RootPath}
@@ -389,21 +421,31 @@ func quickSync() (added, removed int) {
 			source = "mixed"
 		}
 
+		complete := true
 		for _, rootPath := range rootPaths {
-			info, err := os.Stat(rootPath)
-			if err != nil || !info.IsDir() {
+			if ownership.RootHasExactConflict(rootPath) || !ownership.IsOwnedBy(lib.ID, rootPath) {
+				complete = false
+				log.Printf("[quick-sync] Skipping conflicting root %s for library %s", rootPath, lib.ID)
 				continue
 			}
-			files := walkDirRecursive(lib.ID, rootPath, useFolderComics)
+			info, err := os.Stat(rootPath)
+			if err != nil || !info.IsDir() {
+				complete = false
+				continue
+			}
+			files := walkDirRecursive(lib.ID, rootPath, useFolderComics, ownership)
 			for i := range files {
 				files[i].Source = source
 				files[i].LibraryID = lib.ID
 			}
 			filesOnDisk = append(filesOnDisk, files...)
 		}
+		if complete {
+			completeLibraries[lib.ID] = true
+		}
 	}
 
-	if len(filesOnDisk) == 0 {
+	if len(completeLibraries) == 0 {
 		return 0, 0
 	}
 
@@ -423,8 +465,18 @@ func quickSync() (added, removed int) {
 		log.Printf("[quick-sync] Failed to create temp table: %v", err)
 		return 0, 0
 	}
+	if _, err := tx.Exec(`CREATE TEMP TABLE IF NOT EXISTS "_ScannedLibraries" ("id" TEXT PRIMARY KEY)`); err != nil {
+		log.Printf("[quick-sync] Failed to create scanned-library table: %v", err)
+		return 0, 0
+	}
 	// 清空临时表（防止上次残留）
 	tx.Exec(`DELETE FROM "_DiskFiles"`)
+	tx.Exec(`DELETE FROM "_ScannedLibraries"`)
+	for libraryID := range completeLibraries {
+		if _, err := tx.Exec(`INSERT OR IGNORE INTO "_ScannedLibraries" ("id") VALUES (?)`, libraryID); err != nil {
+			log.Printf("[quick-sync] Failed to mark scanned library %s: %v", libraryID, err)
+		}
+	}
 
 	// 批量插入磁盘文件到临时表
 	insertStmt, err := tx.Prepare(`INSERT OR IGNORE INTO "_DiskFiles" ("id", "filename", "title", "fileSize", "source", "libraryId", "relativePath") VALUES (?, ?, ?, ?, ?, ?, ?)`)
@@ -467,15 +519,27 @@ func quickSync() (added, removed int) {
 	rows.Close()
 
 	// SQL JOIN: 找出数据库有但磁盘没有的文件（过期待删除）
-	rows2, err := tx.Query(`SELECT c."id" FROM "Comic" c LEFT JOIN "_DiskFiles" d ON c."id" = d."id" WHERE d."id" IS NULL`)
+	rows2, err := tx.Query(`
+		SELECT c."id", c."libraryId", COALESCE(NULLIF(c."relativePath", ''), c."filename")
+		FROM "Comic" c
+		JOIN "_ScannedLibraries" s ON s."id" = c."libraryId"
+		LEFT JOIN "_DiskFiles" d ON c."id" = d."id"
+		WHERE d."id" IS NULL
+	`)
 	if err != nil {
 		log.Printf("[quick-sync] Failed to query stale comics: %v", err)
 		return 0, 0
 	}
 	var toRemove []string
 	for rows2.Next() {
-		var id string
-		if rows2.Scan(&id) == nil {
+		var id, libraryID, relativePath string
+		if rows2.Scan(&id, &libraryID, &relativePath) == nil {
+			// A historical parent-library record may still point at a real file
+			// now delegated to a child library. Keep it until the administrator
+			// runs ownership reconciliation so reading state can be merged safely.
+			if lib, ok := libraryByID[libraryID]; ok && recordDelegatedToAnotherLibrary(lib, relativePath, ownership) {
+				continue
+			}
 			toRemove = append(toRemove, id)
 		}
 	}
@@ -483,6 +547,7 @@ func quickSync() (added, removed int) {
 
 	// 清理临时表并提交事务
 	tx.Exec(`DROP TABLE IF EXISTS "_DiskFiles"`)
+	tx.Exec(`DROP TABLE IF EXISTS "_ScannedLibraries"`)
 	tx.Commit()
 
 	// Batch insert new comics
@@ -542,6 +607,22 @@ func quickSync() (added, removed int) {
 	}
 
 	return len(toAdd), len(toRemove)
+}
+
+func recordDelegatedToAnotherLibrary(lib model.Library, relativePath string, ownership *LibraryOwnership) bool {
+	cleanRelative := filepath.Clean(filepath.FromSlash(relativePath))
+	if filepath.IsAbs(cleanRelative) || cleanRelative == "." || cleanRelative == ".." || strings.HasPrefix(cleanRelative, ".."+string(filepath.Separator)) {
+		return false
+	}
+	for _, rootPath := range libraryRootPaths(lib) {
+		path := filepath.Join(rootPath, cleanRelative)
+		if _, err := os.Stat(path); err != nil {
+			continue
+		}
+		owner, ok := ownership.OwnerForPath(path)
+		return !ok || owner.LibraryID != lib.ID
+	}
+	return false
 }
 
 // ============================================================
@@ -1075,10 +1156,10 @@ func SyncComicsToDatabase() {
 
 // SyncResult 保存同步结果的统计信息。
 type SyncResult struct {
-	Added       int `json:"added"`
-	Removed     int `json:"removed"`
-	Moved       int `json:"moved"`       // libraryId 修正数量
-	TypeFixed   int `json:"typeFixed"`   // 类型修正数量
+	Added        int  `json:"added"`
+	Removed      int  `json:"removed"`
+	Moved        int  `json:"moved"`     // libraryId 修正数量
+	TypeFixed    int  `json:"typeFixed"` // 类型修正数量
 	CacheCleared bool `json:"cacheCleared"`
 }
 
@@ -1345,6 +1426,19 @@ const missingGracePeriod = 24 * time.Hour
 
 // SyncLibraryByID 仅扫描指定书库对应的根目录，并更新该书库的扫描状态。
 func SyncLibraryByID(libraryID string) (int, error) {
+	syncMu.Lock()
+	if syncInProgress {
+		syncMu.Unlock()
+		return 0, fmt.Errorf("another library sync is already running")
+	}
+	syncInProgress = true
+	syncMu.Unlock()
+	defer func() {
+		syncMu.Lock()
+		syncInProgress = false
+		syncMu.Unlock()
+	}()
+
 	lib, err := store.GetLibraryByID(libraryID)
 	if err != nil {
 		return 0, fmt.Errorf("failed to fetch library: %w", err)
@@ -1354,6 +1448,10 @@ func SyncLibraryByID(libraryID string) (int, error) {
 	}
 	if !lib.Enabled {
 		return 0, fmt.Errorf("library is disabled")
+	}
+	ownership, err := LoadLibraryOwnership()
+	if err != nil {
+		return 0, fmt.Errorf("failed to build library ownership: %w", err)
 	}
 
 	useFolderComics := lib.Type != "novel"
@@ -1373,13 +1471,16 @@ func SyncLibraryByID(libraryID string) (int, error) {
 	var allFiles []diskFile
 	var missingPaths []string
 	for _, rootPath := range rootPaths {
+		if ownership.RootHasExactConflict(rootPath) || !ownership.IsOwnedBy(libraryID, rootPath) {
+			return 0, fmt.Errorf("root path is assigned to more than one library: %s", rootPath)
+		}
 		// 检查路径是否存在
 		info, err := os.Stat(rootPath)
 		if err != nil || !info.IsDir() {
 			missingPaths = append(missingPaths, rootPath)
 			continue
 		}
-		files := walkDirRecursive(libraryID, rootPath, useFolderComics)
+		files := walkDirRecursive(libraryID, rootPath, useFolderComics, ownership)
 		allFiles = append(allFiles, files...)
 	}
 	// 如果有缺失的路径，记录警告但不中断扫描
@@ -1408,7 +1509,6 @@ func SyncLibraryByID(libraryID string) (int, error) {
 		return 0, fmt.Errorf("failed to query existing comics: %w", err)
 	}
 
-
 	fileMap := make(map[string]diskFile, len(allFiles))
 	for _, f := range allFiles {
 		fileMap[f.ID] = f
@@ -1432,7 +1532,7 @@ func SyncLibraryByID(libraryID string) (int, error) {
 		rootPathSet[filepath.Clean(rp)] = true
 	}
 
-	var toAdd []struct{
+	var toAdd []struct {
 		ID       string
 		Filename string
 		Title    string
@@ -1449,7 +1549,7 @@ func SyncLibraryByID(libraryID string) (int, error) {
 				}
 			} else {
 				// 文件不存在，需要新增
-				toAdd = append(toAdd, struct{
+				toAdd = append(toAdd, struct {
 					ID       string
 					Filename string
 					Title    string
@@ -1500,7 +1600,6 @@ func SyncLibraryByID(libraryID string) (int, error) {
 
 	return totalAdded, nil
 }
-
 
 func CleanupInvalidComics() (int, error) {
 	allComics, err := store.GetAllComicIDsAndFilenames()
@@ -1564,11 +1663,3 @@ func CleanupInvalidComics() (int, error) {
 	log.Printf("[cleanup] Removed %d expired comics (missing for > %v)", len(expiredIDs), missingGracePeriod)
 	return len(expiredIDs), nil
 }
-
-
-
-
-
-
-
-

@@ -9,9 +9,11 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/nowen-reader/nowen-reader/internal/middleware"
+	"github.com/nowen-reader/nowen-reader/internal/model"
 	"github.com/nowen-reader/nowen-reader/internal/store"
 )
 
@@ -183,6 +185,75 @@ func TestAuthRegisterAndLogin(t *testing.T) {
 	w = performRequest(r, "POST", "/api/auth/login", noUser)
 	if w.Code != http.StatusUnauthorized {
 		t.Errorf("Nonexistent user should return 401, got %d", w.Code)
+	}
+}
+
+func TestLibraryRootOwnershipValidation(t *testing.T) {
+	r := setupTestRouter(t)
+	cookie := registerAndLogin(t, r)
+	root := t.TempDir()
+
+	create := func(name string, paths []string) *httptest.ResponseRecorder {
+		t.Helper()
+		return performAuthedRequest(r, "POST", "/api/admin/libraries", map[string]interface{}{
+			"name":      name,
+			"type":      "novel",
+			"rootPaths": paths,
+		}, cookie)
+	}
+	if w := create("Primary", []string{root}); w.Code != http.StatusCreated {
+		t.Fatalf("create primary library: %d %s", w.Code, w.Body.String())
+	}
+	if w := create("Duplicate", []string{root}); w.Code != http.StatusConflict {
+		t.Fatalf("exact root should conflict: %d %s", w.Code, w.Body.String())
+	}
+	child := filepath.Join(root, "child")
+	if w := create("Nested", []string{child}); w.Code != http.StatusCreated {
+		t.Fatalf("nested root should be allowed: %d %s", w.Code, w.Body.String())
+	}
+}
+
+func TestManagedLibraryScanAllowsCanManageUser(t *testing.T) {
+	r := setupTestRouter(t)
+	adminCookie := registerAndLogin(t, r)
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "book.epub"), []byte("epub"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	w := performAuthedRequest(r, "POST", "/api/admin/libraries", map[string]interface{}{
+		"name": "Managed", "type": "novel", "rootPaths": []string{root},
+	}, adminCookie)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create library: %d %s", w.Code, w.Body.String())
+	}
+	var created struct {
+		Library model.Library `json:"library"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &created); err != nil {
+		t.Fatal(err)
+	}
+
+	user := &model.User{ID: "manager-user", Username: "manager-user", Password: "hash", Role: "user"}
+	if err := store.CreateUser(user); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SetUserLibraryAccess(user.ID, []store.LibraryAccessReq{{
+		LibraryID: created.Library.ID,
+		CanView:   true,
+		CanManage: true,
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	token := "manager-session"
+	if err := store.CreateSession(&model.UserSession{
+		ID: token, UserID: user.ID, ExpiresAt: time.Now().Add(time.Hour),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	w = performAuthedRequest(r, "POST", "/api/libraries/"+created.Library.ID+"/scan", nil, token)
+	if w.Code != http.StatusOK {
+		t.Fatalf("managed scan: %d %s", w.Code, w.Body.String())
 	}
 }
 
@@ -459,7 +530,8 @@ func TestAuthRequired(t *testing.T) {
 
 	endpoints := []struct {
 		method string
-		path   string	}{
+		path   string
+	}{
 		{"GET", "/api/comics"},
 		{"GET", "/api/comics/test-id"},
 		{"GET", "/api/tags"},

@@ -2761,7 +2761,7 @@
     </div>
 
     <div id="endpoints-library" class="endpoint-group">
-    <h2 class="group-title"><span data-en="13. Library Management" data-zh="13. 库管理">13. Library Management</span> <span class="group-badge"><span data-en="11 endpoints" data-zh="11 个接口">11 endpoints</span></span></h2>
+    <h2 class="group-title"><span data-en="13. Library Management" data-zh="13. 库管理">13. Library Management</span> <span class="group-badge"><span data-en="14 endpoints" data-zh="14 个接口">14 endpoints</span></span></h2>
 <div class="endpoint admin-only" data-search="GET /api/admin/libraries List all libraries" id="get-api-admin-libraries">
   <div class="endpoint-header">
     <span class="method method-GET">GET</span>
@@ -2807,7 +2807,7 @@
     <span class="summary"><span data-en="Create a new library" data-zh="创建新库">Create a new library</span></span>
   </div>
   <div class="endpoint-body">
-    <p class="description"><span data-en="Create a new library with one or more root directories. Supports multi-directory libraries via rootPaths." data-zh="创建包含一个或多个根目录的新库。支持通过rootPaths创建多目录库。">Create a new library with one or more root directories. Supports multi-directory libraries via rootPaths.</span></p>
+    <p class="description"><span data-en="Create a library with one or more roots. Exact roots cannot be shared by libraries (409 Conflict); nested roots are allowed and the deepest root owns matching files." data-zh="创建包含一个或多个根目录的书库。不同书库不能使用完全相同的根目录（返回 409）；允许父子目录，匹配最深的根目录拥有文件。">Create a library with one or more roots. Exact roots cannot be shared by libraries (409 Conflict); nested roots are allowed and the deepest root owns matching files.</span></p>
 
     <h4><span data-en="Request Body" data-zh="请求体">Request Body</span></h4>
     <pre class="code-block"><code>{
@@ -2837,7 +2837,7 @@
     <span class="summary"><span data-en="Update library" data-zh="更新库">Update library</span></span>
   </div>
   <div class="endpoint-body">
-    <p class="description"><span data-en="Update library properties. Use rootPaths to set multiple directories (first path becomes primary)." data-zh="更新库属性。使用rootPaths设置多个目录（第一个路径为主目录）。">Update library properties. Use rootPaths to set multiple directories (first path becomes primary).</span></p>
+    <p class="description"><span data-en="Update library properties. The first rootPaths entry is primary. An exact root already assigned to another library returns 409 Conflict with a conflicts array." data-zh="更新书库属性，rootPaths 第一项为主目录。根目录已被其他书库使用时返回 409 Conflict，并包含 conflicts 数组。">Update library properties. The first rootPaths entry is primary. An exact root already assigned to another library returns 409 Conflict with a conflicts array.</span></p>
 
     <h4><span data-en="Request Body" data-zh="请求体">Request Body</span></h4>
     <pre class="code-block"><code>{
@@ -2858,6 +2858,85 @@
     <div class="badges">
       <span class="badge badge-auth"><span data-en="Auth Required" data-zh="需要认证">Auth Required</span></span>
       <span class="badge badge-admin"><span data-en="Admin Only" data-zh="仅管理员">Admin Only</span></span>
+    </div>
+  </div>
+</div>
+
+<div class="endpoint admin-only" data-search="GET /api/admin/libraries/ownership-preview Preview library ownership issues" id="get-api-admin-libraries-ownership-preview">
+  <div class="endpoint-header">
+    <span class="method method-GET">GET</span>
+    <span class="path">/api/admin/libraries/ownership-preview</span>
+    <span class="summary"><span data-en="Preview ownership issues" data-zh="预览书库归属问题">Preview ownership issues</span></span>
+  </div>
+  <div class="endpoint-body">
+    <p class="description"><span data-en="Find exact root conflicts and database rows that resolve to the same physical file. Different files with the same name or MD5 are not merged." data-zh="查找完全相同的根目录冲突，以及指向同一真实物理文件的多条数据库记录。不会合并不同目录中的同名或相同 MD5 文件。">Find exact root conflicts and database rows that resolve to the same physical file. Different files with the same name or MD5 are not merged.</span></p>
+    <h4><span data-en="Response" data-zh="响应">Response</span> <span class="status-code">200</span></h4>
+    <pre class="code-block"><code>{
+  "issueCount": 1,
+  "duplicateRows": 1,
+  "canReconcile": true,
+  "rootConflicts": [],
+  "issues": [{
+    "physicalPath": "/books/novels/book.epub",
+    "targetLibraryId": "novels",
+    "targetRelativePath": "book.epub",
+    "action": "merge",
+    "records": []
+  }]
+}</code></pre>
+    <div class="badges">
+      <span class="badge badge-auth"><span data-en="Auth Required" data-zh="需要认证">Auth Required</span></span>
+      <span class="badge badge-admin"><span data-en="Admin Only" data-zh="仅管理员">Admin Only</span></span>
+    </div>
+  </div>
+</div>
+
+<div class="endpoint admin-only" data-search="POST /api/admin/libraries/ownership-reconcile Reconcile library ownership" id="post-api-admin-libraries-ownership-reconcile">
+  <div class="endpoint-header">
+    <span class="method method-POST">POST</span>
+    <span class="path">/api/admin/libraries/ownership-reconcile</span>
+    <span class="summary"><span data-en="Reconcile ownership" data-zh="修复书库归属">Reconcile ownership</span></span>
+  </div>
+  <div class="endpoint-body">
+    <p class="description"><span data-en="Merge duplicate database rows transactionally and move records to the deepest matching library. Reading state, sessions, tags, categories, groups, metadata logs, and cached covers are preserved. Source files are untouched." data-zh="在事务中合并重复记录并归入匹配最深的书库。保留阅读状态、阅读会话、标签、分类、分组、元数据日志和缓存封面，不修改源文件。">Merge duplicate database rows transactionally and move records to the deepest matching library. Reading state, sessions, tags, categories, groups, metadata logs, and cached covers are preserved. Source files are untouched.</span></p>
+    <h4><span data-en="Request Body" data-zh="请求体">Request Body</span></h4>
+    <pre class="code-block"><code>{
+  "confirm": true,
+  "rootOwners": {
+    "/books/novels": "novels"
+  }
+}</code></pre>
+    <h4><span data-en="Response" data-zh="响应">Response</span> <span class="status-code">200</span></h4>
+    <pre class="code-block"><code>{
+  "success": true,
+  "result": {
+    "issueCount": 1,
+    "reconciled": 1,
+    "mergedRows": 1,
+    "movedRows": 0,
+    "blocked": 0
+  }
+}</code></pre>
+    <p class="description"><span data-en="For exact root conflicts, rootOwners must explicitly select the library that keeps each path. Merge records first, then change the duplicate paths on the other libraries. Incomplete choices return 409 Conflict." data-zh="完全相同的根目录发生冲突时，必须通过 rootOwners 明确选择每个目录保留在哪个书库。先合并记录，再修改其他书库的重复路径；选择不完整时返回 409 Conflict。">For exact root conflicts, rootOwners must explicitly select the library that keeps each path. Merge records first, then change the duplicate paths on the other libraries. Incomplete choices return 409 Conflict.</span></p>
+    <div class="badges">
+      <span class="badge badge-auth"><span data-en="Auth Required" data-zh="需要认证">Auth Required</span></span>
+      <span class="badge badge-admin"><span data-en="Admin Only" data-zh="仅管理员">Admin Only</span></span>
+    </div>
+  </div>
+</div>
+
+<div class="endpoint auth-required" data-search="POST /api/libraries/:id/scan Scan managed library" id="post-api-libraries-id-scan">
+  <div class="endpoint-header">
+    <span class="method method-POST">POST</span>
+    <span class="path">/api/libraries/:id/scan</span>
+    <span class="summary"><span data-en="Scan managed library" data-zh="扫描可管理书库">Scan managed library</span></span>
+  </div>
+  <div class="endpoint-body">
+    <p class="description"><span data-en="Scan one library after upload. Available to administrators and users with canManage permission for the target library." data-zh="上传后仅扫描目标书库。管理员或对目标书库拥有 canManage 权限的用户可调用。">Scan one library after upload. Available to administrators and users with canManage permission for the target library.</span></p>
+    <h4><span data-en="Response" data-zh="响应">Response</span> <span class="status-code">200</span></h4>
+    <pre class="code-block"><code>{"added": 1, "library": {Library}}</code></pre>
+    <div class="badges">
+      <span class="badge badge-auth"><span data-en="Auth Required" data-zh="需要认证">Auth Required</span></span>
     </div>
   </div>
 </div>
