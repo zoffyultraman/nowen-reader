@@ -88,6 +88,7 @@ type ComicListItem struct {
 	Language                string              `json:"language"`
 	Genre                   string              `json:"genre"`
 	MetadataSource          string              `json:"metadataSource"`
+	CoverImageURL           string              `json:"coverImageUrl,omitempty"`
 	ReadingStatus           string              `json:"readingStatus"`
 	ComicType               string              `json:"type"`
 	LibraryID               string              `json:"libraryId"`
@@ -567,7 +568,7 @@ func GetComicByID(id string) (*ComicListItem, error) {
 		       c."isFavorite", c."rating", c."sortOrder", c."totalReadTime",
 		       c."author", c."publisher", c."year", c."description",
 		       c."language", c."genre", c."metadataSource",
-		       c."readingStatus", c."type", COALESCE(c."libraryId", ''), c."coverAspectRatio",
+		       c."readingStatus", c."type", COALESCE(c."libraryId", ''), c."coverImageUrl", c."coverAspectRatio",
 		       c."externalRating", c."externalRatingMax", c."externalRatingSource", c."externalRatingUpdatedAt"
 		FROM "Comic" c WHERE c."id" = ?
 	`
@@ -588,7 +589,7 @@ func GetComicByID(id string) (*ComicListItem, error) {
 		&isFav, &rating, &c.SortOrder, &c.TotalReadTime,
 		&c.Author, &c.Publisher, &year, &c.Description,
 		&c.Language, &c.Genre, &c.MetadataSource,
-		&c.ReadingStatus, &c.ComicType, &c.LibraryID, &c.CoverAspectRatio,
+		&c.ReadingStatus, &c.ComicType, &c.LibraryID, &c.CoverImageURL, &c.CoverAspectRatio,
 		&extRating, &extRatingMax, &extRatingSource, &extRatingUpdatedAtStr,
 	)
 	if err == sql.ErrNoRows {

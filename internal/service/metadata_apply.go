@@ -107,9 +107,15 @@ func ApplyMetadata(comicID string, meta ComicMetadata, lang string, overwrite bo
 		}
 	}
 
-	// Download cover image as thumbnail（仅在不跳过封面时）
+	// Download cover image as thumbnail（仅在不跳过封面时）。
+	// 先清理旧缓存，避免前端在后台下载完成前继续命中旧封面。
 	if meta.CoverURL != "" && !opt.SkipCover {
-		go downloadCoverAsThumbnail(comicID, meta.CoverURL)
+		archive.ClearThumbnailCache(comicID)
+		go func() {
+			if err := cacheCoverAsThumbnail(comicID, meta.CoverURL); err != nil {
+				log.Printf("[metadata] Cover cache failed for %s: %v", comicID, err)
+			}
+		}()
 	}
 
 	// Add genres as tags
@@ -132,46 +138,59 @@ func ApplyMetadata(comicID string, meta ComicMetadata, lang string, overwrite bo
 
 // downloadCoverAsThumbnail fetches a cover URL and saves as WebP thumbnail.
 func downloadCoverAsThumbnail(comicID, coverURL string) {
+	if err := cacheCoverAsThumbnail(comicID, coverURL); err != nil {
+		log.Printf("[metadata] Cover cache failed for %s: %v", comicID, err)
+	}
+}
+
+func cacheCoverAsThumbnail(comicID, coverURL string) error {
 	// Bangumi 等源可能返回 http:// URL，Go HTTP 客户端会跟随重定向，
 	// 但显式转为 https 更安全
 	coverURL = strings.Replace(coverURL, "http://", "https://", 1)
 
 	thumbDir := config.GetThumbnailsDir()
 	if err := os.MkdirAll(thumbDir, 0755); err != nil {
-		return
+		return err
 	}
 
 	client := &http.Client{Timeout: 30 * time.Second}
 	req, err := http.NewRequest("GET", coverURL, nil)
 	if err != nil {
-		return
+		return err
 	}
 	req.Header.Set("User-Agent", "NowenReader/1.0")
 
 	resp, err := client.Do(req)
 	if err != nil || resp.StatusCode != 200 {
-		return
+		if err != nil {
+			return err
+		}
+		return fmt.Errorf("download cover returned HTTP %d", resp.StatusCode)
 	}
 	defer resp.Body.Close()
 
 	imgData, err := io.ReadAll(io.LimitReader(resp.Body, maxCoverDownloadBytes+1))
 	if err != nil || len(imgData) == 0 {
-		return
+		if err != nil {
+			return err
+		}
+		return fmt.Errorf("empty cover response")
 	}
 	if len(imgData) > maxCoverDownloadBytes {
-		log.Printf("[metadata] Cover download too large for %s", comicID)
-		return
+		return fmt.Errorf("cover download too large")
 	}
 
 	thumbPath := filepath.Join(thumbDir, archive.ThumbnailCacheName(comicID))
 	webpData, _, err := archive.ResizeImageToWebP(imgData, config.GetThumbnailWidth(), config.GetThumbnailHeight(), 85)
 	if err != nil {
-		log.Printf("[metadata] Cover convert failed for %s: %v", comicID, err)
-		return
+		return fmt.Errorf("convert cover: %w", err)
 	}
 	archive.ClearThumbnailCache(comicID)
-	_ = os.WriteFile(thumbPath, webpData, 0644)
+	if err := os.WriteFile(thumbPath, webpData, 0644); err != nil {
+		return err
+	}
 	log.Printf("[metadata] Cover cached for %s", comicID)
+	return nil
 }
 
 // DownloadGroupCover 保存系列封面 URL 到数据库，并下载到本地缓存。

@@ -654,6 +654,21 @@ func getPdfPageImage(comicID, fp string, pageIndex int) (*PageImage, error) {
 
 // GetComicThumbnail returns the thumbnail and cover aspect ratio for a comic.
 func GetComicThumbnail(comicID string) ([]byte, string, float64, error) {
+	comic, dbErr := store.GetComicByID(comicID)
+	if dbErr == nil && comic != nil && strings.TrimSpace(comic.CoverImageURL) != "" {
+		cachePath := filepath.Join(config.GetThumbnailsDir(), archive.ThumbnailCacheName(comicID))
+		if data, err := os.ReadFile(cachePath); err == nil && len(data) > 0 {
+			return data, "image/webp", 0, nil
+		}
+		if err := cacheCoverAsThumbnail(comicID, comic.CoverImageURL); err == nil {
+			if data, readErr := os.ReadFile(cachePath); readErr == nil && len(data) > 0 {
+				return data, "image/webp", 0, nil
+			}
+		} else {
+			log.Printf("[thumbnail] external cover failed for %s, falling back to archive cover: %v", comicID, err)
+		}
+	}
+
 	fp, _, err := FindComicFilePath(comicID)
 	if err != nil {
 		return nil, "", 0, err
@@ -780,7 +795,7 @@ func warmupPdf(comicID, fp string, startPage, count int) {
 		wg.Add(1)
 		go func(pageIdx int) {
 			defer wg.Done()
-			sem <- struct{}{} // 获取信号量
+			sem <- struct{}{}        // 获取信号量
 			defer func() { <-sem }() // 释放信号量
 
 			data, ext, err := archive.RenderPdfPage(fp, pageIdx)
@@ -883,7 +898,7 @@ func warmupNormal(reader archive.Reader, comicID string, images []string, start,
 		wg.Add(1)
 		go func(pageIdx int) {
 			defer wg.Done()
-			sem <- struct{}{} // 获取信号量
+			sem <- struct{}{}        // 获取信号量
 			defer func() { <-sem }() // 释放信号量
 
 			entryName := images[pageIdx]

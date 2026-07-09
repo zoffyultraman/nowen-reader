@@ -1941,6 +1941,9 @@ export default function ComicDetailPage() {
                 filename={comic.filename}
                 comicType={comic.type}
                 onApplied={() => {
+                  invalidateSwCache(`/api/comics/${comic.id}/thumbnail`);
+                  invalidateComicsCache();
+                  setCoverKey(Date.now());
                   refetch();
                   emitScrapeApplied(comic.id, "detail");
                 }}

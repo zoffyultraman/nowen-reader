@@ -1402,6 +1402,9 @@ export function DetailPanel({
               filename={item.filename}
               comicType={item.contentType}
               onApplied={() => {
+                invalidateSwCache(`/api/comics/${item.id}/thumbnail`);
+                invalidateComicsCache();
+                setCoverKey(Date.now());
                 onRefresh();
                 loadLibrary();
                 loadStats();
@@ -1492,4 +1495,3 @@ export function DetailPanel({
     </div>
   );
 }
-
