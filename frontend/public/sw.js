@@ -2,7 +2,7 @@
 // 注意：升级缓存版本号会让旧版本的缓存（含可能损坏的页面响应）被自动清理。
 const CACHE_NAME = "nowen-reader-v3";
 const STATIC_CACHE = "nowen-static-v3";
-const IMAGE_CACHE = "nowen-images-v5";
+const IMAGE_CACHE = "nowen-images-v6";
 const API_CACHE = "nowen-api-v3";
 
 // Static assets to pre-cache
