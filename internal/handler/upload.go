@@ -21,9 +21,10 @@ type UploadHandler struct{}
 func NewUploadHandler() *UploadHandler { return &UploadHandler{} }
 
 type uploadResult struct {
-	Filename string `json:"filename"`
-	Success  bool   `json:"success"`
-	Error    string `json:"error,omitempty"`
+	Filename  string `json:"filename"`
+	Success   bool   `json:"success"`
+	Recovered bool   `json:"recovered,omitempty"`
+	Error     string `json:"error,omitempty"`
 }
 
 // POST /api/upload
@@ -131,7 +132,34 @@ func (h *UploadHandler) Upload(c *gin.Context) {
 			continue
 		}
 		destPath := filepath.Join(destDir, safeFilename)
-		if _, err := os.Stat(destPath); err == nil {
+		if info, err := os.Stat(destPath); err == nil {
+			// A previous physical-delete failure could remove the DB row while the
+			// file stayed on disk. Re-uploading the same-sized file is treated as an
+			// explicit restore: clear any record-only tombstone and let the normal
+			// post-upload library scan index the existing file again.
+			if targetLibrary != nil {
+				relativePath := filepath.ToSlash(safeFilename)
+				indexed, queryErr := store.ComicExistsAtLibraryPath(targetLibrary.ID, relativePath)
+				if queryErr != nil {
+					results = append(results, uploadResult{Filename: fh.Filename, Error: "Failed to check existing library file"})
+					continue
+				}
+				if !indexed {
+					if fh.Size > 0 && info.Size() != fh.Size {
+						results = append(results, uploadResult{Filename: fh.Filename, Error: "A different file with the same name already exists on disk"})
+						continue
+					}
+					identity := store.ComicSourceIdentity{LibraryID: targetLibrary.ID, RelativePath: relativePath}
+					if err := store.RemoveIgnoredLibraryContents([]store.ComicSourceIdentity{identity}); err != nil {
+						results = append(results, uploadResult{Filename: fh.Filename, Error: "Failed to restore existing library file"})
+						continue
+					}
+					log.Printf("[Upload] Recovering unindexed existing file %s in library %s", destPath, targetLibrary.ID)
+					results = append(results, uploadResult{Filename: fh.Filename, Success: true, Recovered: true})
+					continue
+				}
+			}
+
 			results = append(results, uploadResult{Filename: fh.Filename, Error: "File already exists"})
 			continue
 		}
