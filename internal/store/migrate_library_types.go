@@ -34,4 +34,29 @@ func init() {
 			 END;`,
 		}, "\n"),
 	})
+
+	Migrations = append(Migrations, Migration{
+		Version:     32,
+		Description: "Keep record-only deletions hidden from automatic library scans",
+		SQL: strings.Join([]string{
+			`CREATE TABLE IF NOT EXISTS "LibraryIgnoredContent" (
+				"libraryId" TEXT NOT NULL,
+				"relativePath" TEXT NOT NULL,
+				"createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+				PRIMARY KEY ("libraryId", "relativePath"),
+				CONSTRAINT "LibraryIgnoredContent_libraryId_fkey" FOREIGN KEY ("libraryId")
+					REFERENCES "Library" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+			);`,
+			`CREATE INDEX IF NOT EXISTS "LibraryIgnoredContent_libraryId_idx" ON "LibraryIgnoredContent"("libraryId");`,
+			`CREATE TRIGGER IF NOT EXISTS "Comic_ignored_content_before_insert"
+			 BEFORE INSERT ON "Comic"
+			 WHEN EXISTS (
+			 	SELECT 1 FROM "LibraryIgnoredContent" ignored
+			 	WHERE ignored."libraryId" = COALESCE(NEW."libraryId", '')
+			 	  AND ignored."relativePath" = COALESCE(NULLIF(NEW."relativePath", ''), NEW."filename")
+			 ) BEGIN
+			 	SELECT RAISE(IGNORE);
+			 END;`,
+		}, "\n"),
+	})
 }
