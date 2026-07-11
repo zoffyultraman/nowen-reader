@@ -17,6 +17,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ToastProvider } from "@/components/Toast";
 import MobileBottomNav from "@/components/MobileBottomNav";
 import PageProgressBar from "@/components/PageProgressBar";
+import { LibraryTypeCompatibilityGuard } from "@/components/LibraryTypeCompatibilityGuard";
 
 // Pages — imported directly from original Next.js pages
 // The "use client" directive is harmless in Vite
@@ -94,6 +95,7 @@ function App() {
               <ToastProvider>
                 <AuthGuard>
                   <SiteTitle />
+                  <LibraryTypeCompatibilityGuard />
                   <PageProgressBar />
                   <React.Suspense fallback={<div className="flex items-center justify-center h-screen"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 dark:border-white"></div></div>}>
                     <AnimatedRoutes />
