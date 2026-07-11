@@ -48,6 +48,21 @@ func reconcileOwnershipIfDue(reason string, minInterval time.Duration) {
 	}
 	ownershipReconcileLastAttempt = now
 
+	preview, err := service.PreviewLibraryOwnership()
+	if err != nil {
+		log.Printf("[ownership] automatic preview after %s failed: %v", reason, err)
+		return
+	}
+	if preview == nil || preview.IssueCount == 0 {
+		return
+	}
+	if !preview.CanReconcile {
+		// Exact-root conflicts still require an explicit administrator choice;
+		// parent/child duplicate rows remain safe to repair automatically.
+		log.Printf("[ownership] automatic reconciliation after %s skipped: %d unresolved root conflict(s)", reason, len(preview.RootConflicts))
+		return
+	}
+
 	result, err := service.ReconcileLibraryOwnership()
 	if err != nil {
 		// Background scans are expected to win the synchronization lock. A later
