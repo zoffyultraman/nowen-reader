@@ -25,14 +25,12 @@ func init() {
 			 WHERE "type" NOT IN ('comic', 'novel');`,
 			`CREATE TRIGGER IF NOT EXISTS "Library_type_insert_check"
 			 BEFORE INSERT ON "Library"
-			 WHEN NEW."type" NOT IN ('comic', 'novel')
-			 BEGIN
+			 WHEN NEW."type" NOT IN ('comic', 'novel') BEGIN
 			 	SELECT RAISE(ABORT, 'library type must be comic or novel');
 			 END;`,
 			`CREATE TRIGGER IF NOT EXISTS "Library_type_update_check"
 			 BEFORE UPDATE OF "type" ON "Library"
-			 WHEN NEW."type" NOT IN ('comic', 'novel')
-			 BEGIN
+			 WHEN NEW."type" NOT IN ('comic', 'novel') BEGIN
 			 	SELECT RAISE(ABORT, 'library type must be comic or novel');
 			 END;`,
 		}, "\n"),
