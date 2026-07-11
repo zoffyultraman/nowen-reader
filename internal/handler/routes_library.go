@@ -12,6 +12,7 @@ func registerLibraryRoutes(api *gin.RouterGroup) {
 
 	libraryGroup := api.Group("/admin/libraries")
 	libraryGroup.Use(middleware.AdminRequired())
+	libraryGroup.Use(middleware.LibraryTypeGuard())
 	{
 		libraryGroup.GET("", library.ListLibraries)
 		libraryGroup.POST("", library.CreateLibrary)
