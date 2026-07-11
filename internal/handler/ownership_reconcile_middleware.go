@@ -14,14 +14,15 @@ import (
 var (
 	ownershipReconcileMu          sync.Mutex
 	ownershipReconcileLastAttempt time.Time
+	ownershipInitialCheckDone     bool
 )
 
 // reconcileOwnershipBeforeList repairs historical duplicate rows before the
-// shelf is returned. Attempts are throttled, and a scan-in-progress failure is
-// retried by a later request.
+// first shelf response. If a background scan is busy, the check is throttled
+// and retried by a later request.
 func reconcileOwnershipBeforeList() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		reconcileOwnershipIfDue("list", 15*time.Second)
+		reconcileOwnershipIfDue("list", 15*time.Second, true)
 		c.Next()
 	}
 }
@@ -33,15 +34,18 @@ func reconcileOwnershipAfterScan() gin.HandlerFunc {
 		c.Next()
 		status := c.Writer.Status()
 		if status >= http.StatusOK && status < http.StatusMultipleChoices {
-			reconcileOwnershipIfDue("scan", 0)
+			reconcileOwnershipIfDue("scan", 0, false)
 		}
 	}
 }
 
-func reconcileOwnershipIfDue(reason string, minInterval time.Duration) {
+func reconcileOwnershipIfDue(reason string, minInterval time.Duration, initialOnly bool) {
 	ownershipReconcileMu.Lock()
 	defer ownershipReconcileMu.Unlock()
 
+	if initialOnly && ownershipInitialCheckDone {
+		return
+	}
 	now := time.Now()
 	if minInterval > 0 && !ownershipReconcileLastAttempt.IsZero() && now.Sub(ownershipReconcileLastAttempt) < minInterval {
 		return
@@ -54,6 +58,7 @@ func reconcileOwnershipIfDue(reason string, minInterval time.Duration) {
 		return
 	}
 	if preview == nil || preview.IssueCount == 0 {
+		ownershipInitialCheckDone = true
 		return
 	}
 	if !preview.CanReconcile {
@@ -72,6 +77,7 @@ func reconcileOwnershipIfDue(reason string, minInterval time.Duration) {
 		}
 		return
 	}
+	ownershipInitialCheckDone = true
 	if result != nil && (result.MergedRows > 0 || result.MovedRows > 0) {
 		log.Printf("[ownership] automatic reconciliation after %s: merged=%d moved=%d", reason, result.MergedRows, result.MovedRows)
 	}
