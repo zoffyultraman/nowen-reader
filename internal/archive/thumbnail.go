@@ -39,6 +39,8 @@ func CalcThumbnailDPI(pageWidthPt float64, targetWidthPx int) int {
 // 缩略图生成去重：同一 comicID 同时只有一个生成任务，其余等待结果
 var thumbnailGen sync.Map // comicID -> chan struct{}
 
+const largePDFCoverScanThreshold = 32 << 20
+
 // GenerateThumbnail generates a WebP thumbnail for a comic.
 // Returns the thumbnail bytes, the original cover aspect ratio (width/height), and writes it to disk cache.
 func GenerateThumbnail(archivePath, comicID string) ([]byte, string, float64, error) {
@@ -99,6 +101,18 @@ func generateThumbnailInternal(archivePath, comicID string) ([]byte, string, flo
 
 	switch {
 	case archiveType == TypePdf:
+		// 页数多、体积大的漫画 PDF 优先顺序扫描文件前部的首个大 JPEG。
+		// 该路径不解析完整交叉引用表，避免数百 MB PDF 在低内存 NAS 上解析超时或 OOM。
+		if info, statErr := os.Stat(archivePath); statErr == nil && info.Size() >= largePDFCoverScanThreshold {
+			if extracted, scanErr := ExtractFirstEmbeddedJPEG(archivePath); scanErr == nil && len(extracted) > 0 {
+				pageBuffer = extracted
+				log.Printf("[thumbnail] large PDF cover found by streaming JPEG scan for %s", comicID)
+				break
+			} else if scanErr != nil {
+				log.Printf("[thumbnail] large PDF streaming JPEG scan unavailable for %s: %v; trying structured extraction", comicID, scanErr)
+			}
+		}
+
 		// 图片型漫画 PDF 通常直接把整页 JPEG 放在第一页 XObject 中。
 		// 先走纯 Go 原图提取，不依赖 mutool/pdftoppm，也避免超大 PDF 渲染 OOM。
 		if extracted, extractErr := ExtractPDFPagePrimaryImage(archivePath, 0); extractErr == nil && len(extracted) > 0 {
@@ -297,21 +311,26 @@ func resizeToWebP(imgData []byte, width, height, quality int) ([]byte, string, e
 }
 
 // resizeWithCwebp uses cwebp to resize and convert to WebP.
+// cwebp 原生支持 JPEG/PNG/WebP 输入，直接流式传入源数据，避免先在 Go 中把超大
+// JPEG 完整解码并转成 PNG 所造成的数百 MB 内存峰值。
 func resizeWithCwebp(cwebpPath string, imgData []byte, width, height, quality int) ([]byte, error) {
-	// First, we need to get the image as PNG for cwebp input
-	pngData, err := toPNG(imgData)
-	if err != nil {
-		// Try passing raw data directly
-		pngData = imgData
-	}
-
-	// cwebp -resize W H -q quality -o - -- -
-	cmd := exec.Command(cwebpPath, "-resize", fmt.Sprintf("%d", width), fmt.Sprintf("%d", height),
-		"-q", fmt.Sprintf("%d", quality), "-o", "-", "--", "-")
-	cmd.Stdin = bytes.NewReader(pngData)
+	cmd := exec.Command(cwebpPath,
+		"-quiet",
+		"-mt",
+		"-low_memory",
+		"-resize", fmt.Sprintf("%d", width), fmt.Sprintf("%d", height),
+		"-q", fmt.Sprintf("%d", quality),
+		"-o", "-", "--", "-",
+	)
+	cmd.Stdin = bytes.NewReader(imgData)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
 	out, err := cmd.Output()
 	if err != nil {
-		return nil, fmt.Errorf("cwebp: %w", err)
+		return nil, fmt.Errorf("cwebp: %w (%s)", err, strings.TrimSpace(stderr.String()))
+	}
+	if len(out) == 0 {
+		return nil, fmt.Errorf("cwebp returned empty output")
 	}
 	return out, nil
 }
