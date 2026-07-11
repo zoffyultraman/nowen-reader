@@ -69,7 +69,7 @@ func GetComicSourceIdentities(ids []string) ([]ComicSourceIdentity, error) {
 }
 
 // AddIgnoredLibraryContents stores tombstones for record-only deletions.
-// Automatic scans are blocked by the migration-installed Comic insert trigger.
+// Automatic scans are blocked by the Comic insert trigger.
 func AddIgnoredLibraryContents(items []ComicSourceIdentity) error {
 	return updateIgnoredLibraryContents(items, true)
 }
@@ -83,6 +83,12 @@ func RemoveIgnoredLibraryContents(items []ComicSourceIdentity) error {
 func updateIgnoredLibraryContents(items []ComicSourceIdentity, ignored bool) error {
 	if len(items) == 0 {
 		return nil
+	}
+	// Production installs this schema through migration 32. Keeping a small
+	// idempotent guard here makes deletion safe for partially upgraded databases
+	// and lightweight test databases that only ran createTables().
+	if err := ensureIgnoredContentSchema(); err != nil {
+		return err
 	}
 
 	tx, err := db.Begin()
@@ -123,6 +129,35 @@ func updateIgnoredLibraryContents(items []ComicSourceIdentity, ignored bool) err
 	}
 
 	return tx.Commit()
+}
+
+func ensureIgnoredContentSchema() error {
+	statements := []string{
+		`CREATE TABLE IF NOT EXISTS "LibraryIgnoredContent" (
+			"libraryId" TEXT NOT NULL,
+			"relativePath" TEXT NOT NULL,
+			"createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			PRIMARY KEY ("libraryId", "relativePath"),
+			CONSTRAINT "LibraryIgnoredContent_libraryId_fkey" FOREIGN KEY ("libraryId")
+				REFERENCES "Library" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+		)`,
+		`CREATE INDEX IF NOT EXISTS "LibraryIgnoredContent_libraryId_idx" ON "LibraryIgnoredContent"("libraryId")`,
+		`CREATE TRIGGER IF NOT EXISTS "Comic_ignored_content_before_insert"
+		 BEFORE INSERT ON "Comic"
+		 WHEN EXISTS (
+			SELECT 1 FROM "LibraryIgnoredContent" ignored
+			WHERE ignored."libraryId" = COALESCE(NEW."libraryId", '')
+			  AND ignored."relativePath" = COALESCE(NULLIF(NEW."relativePath", ''), NEW."filename")
+		 ) BEGIN
+			SELECT RAISE(IGNORE);
+		 END`,
+	}
+	for _, statement := range statements {
+		if _, err := db.Exec(statement); err != nil {
+			return fmt.Errorf("ensure ignored content schema: %w", err)
+		}
+	}
+	return nil
 }
 
 func normalizeIgnoredRelativePath(value string) (string, error) {
