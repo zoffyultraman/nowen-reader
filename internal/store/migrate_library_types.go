@@ -7,16 +7,15 @@ func init() {
 		Version:     31,
 		Description: "Remove mixed library type and restrict libraries to comic or novel",
 		SQL: strings.Join([]string{
-			// 历史 mixed 书库不直接丢弃：仅包含小说内容的书库迁移为 novel，
-			// 空书库、漫画书库以及同时包含两类内容的书库统一迁移为 comic。
+			// 历史 mixed 书库不直接丢弃：小说内容数量更多时迁移为 novel，
+			// 其余情况（漫画更多、数量相同或空书库）迁移为 comic。
 			`UPDATE "Library"
 			 SET "type" = CASE
-			 	WHEN EXISTS (
-			 		SELECT 1 FROM "Comic" c
+			 	WHEN (
+			 		SELECT COUNT(*) FROM "Comic" c
 			 		WHERE c."libraryId" = "Library"."id" AND c."type" = 'novel'
-			 	)
-			 	AND NOT EXISTS (
-			 		SELECT 1 FROM "Comic" c
+			 	) > (
+			 		SELECT COUNT(*) FROM "Comic" c
 			 		WHERE c."libraryId" = "Library"."id" AND c."type" = 'comic'
 			 	)
 			 	THEN 'novel'
