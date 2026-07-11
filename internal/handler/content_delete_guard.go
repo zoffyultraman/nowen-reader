@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/nowen-reader/nowen-reader/internal/middleware"
@@ -23,6 +24,12 @@ func recordOnlySingleDeleteGuard() gin.HandlerFunc {
 			comicID := c.Param("id")
 			resolved, err := service.GlobalFileResolver.ResolveContentPath(comicID)
 			if err != nil {
+				// A missing physical file is already in the desired state. Allow the
+				// existing handler to remove the stale database row.
+				if strings.Contains(strings.ToLower(err.Error()), "file not found") {
+					c.Next()
+					return
+				}
 				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
 					"error": "Failed to resolve physical file before deletion: " + err.Error(),
 				})
