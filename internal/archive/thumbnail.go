@@ -42,13 +42,19 @@ var thumbnailGen sync.Map // comicID -> chan struct{}
 // GenerateThumbnail generates a WebP thumbnail for a comic.
 // Returns the thumbnail bytes, the original cover aspect ratio (width/height), and writes it to disk cache.
 func GenerateThumbnail(archivePath, comicID string) ([]byte, string, float64, error) {
-	// 快速路径：磁盘缓存命中
+	// 快速路径：磁盘缓存命中。PDF 渲染失败时生成的文字占位图不能永久命中，
+	// 否则即使后续具备渲染/原图提取能力也永远不会重新生成真实封面。
 	tw := config.GetThumbnailWidth()
 	th := config.GetThumbnailHeight()
 	cacheName := fmt.Sprintf("%s_%dx%d.webp", comicID, tw, th)
 	cachePath := filepath.Join(config.GetThumbnailsDir(), cacheName)
 	if data, err := os.ReadFile(cachePath); err == nil && len(data) > 0 {
-		return data, "image/webp", 0, nil
+		if DetectType(archivePath) == TypePdf && isGeneratedPDFTextCover(data) {
+			_ = os.Remove(cachePath)
+			log.Printf("[thumbnail] discarded stale PDF placeholder cache for %s", comicID)
+		} else {
+			return data, "image/webp", 0, nil
+		}
 	}
 
 	// 去重：如果同一 comicID 正在生成，等待其完成后读缓存
@@ -93,7 +99,17 @@ func generateThumbnailInternal(archivePath, comicID string) ([]byte, string, flo
 
 	switch {
 	case archiveType == TypePdf:
-		// PDF: try pages 0-4 to find a non-blank cover, with dynamic DPI
+		// 图片型漫画 PDF 通常直接把整页 JPEG 放在第一页 XObject 中。
+		// 先走纯 Go 原图提取，不依赖 mutool/pdftoppm，也避免超大 PDF 渲染 OOM。
+		if extracted, extractErr := ExtractPDFPagePrimaryImage(archivePath, 0); extractErr == nil && len(extracted) > 0 {
+			pageBuffer = extracted
+			log.Printf("[thumbnail] PDF cover extracted directly from page 0 for %s", comicID)
+			break
+		} else if extractErr != nil {
+			log.Printf("[thumbnail] native PDF cover extraction unavailable for %s: %v; trying renderer", comicID, extractErr)
+		}
+
+		// 通用 PDF 仍使用渲染器兜底，并尝试前 5 页处理空白扉页。
 		maxPages := 5
 		pageCount, cntErr := GetPdfPageCount(archivePath)
 		if cntErr == nil && pageCount < maxPages {
@@ -116,7 +132,7 @@ func generateThumbnailInternal(archivePath, comicID string) ([]byte, string, flo
 			buf = nil
 		}
 		if len(buf) == 0 {
-			log.Printf("[thumbnail] PDF all pages blank or render failed for %s: %v, generating text cover", comicID, renderErr)
+			log.Printf("[thumbnail] PDF extraction/render failed for %s: %v, generating retryable text cover", comicID, renderErr)
 			data, _, err := generateTextCover(archivePath, comicID, thumbDir, cachePath)
 			return data, "image/png", 0, err
 		}
