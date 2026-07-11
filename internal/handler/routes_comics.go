@@ -14,9 +14,9 @@ func registerComicRoutes(api *gin.RouterGroup) {
 	comicsRead := api.Group("/comics")
 	comicsRead.Use(middleware.AuthRequired())
 	{
-		comicsRead.GET("", comic.ListComics)
+		comicsRead.GET("", reconcileOwnershipBeforeList(), comic.ListComics)
 		comicsRead.GET("/duplicates", comic.DetectDuplicates)
-		comicsRead.POST("/batch", comic.BatchOperation)
+		comicsRead.POST("/batch", recordOnlyBatchDeleteGuard(), comic.BatchOperation)
 	}
 
 	// Comics write ops (require admin)
@@ -60,7 +60,7 @@ func registerComicRoutes(api *gin.RouterGroup) {
 		comicByIDWrite.PUT("/metadata", comic.UpdateMetadata)
 
 		// Delete comic
-		comicByIDWrite.DELETE("", comic.DeleteComic)
+		comicByIDWrite.DELETE("", recordOnlySingleDeleteGuard(), comic.DeleteComic)
 	}
 
 	// 阅读进度和状态（所有登录用户可用）
@@ -79,7 +79,7 @@ func registerComicRoutes(api *gin.RouterGroup) {
 	syncTrigger := api.Group("")
 	syncTrigger.Use(middleware.AdminRequired())
 	{
-		syncTrigger.POST("/sync", comic.TriggerSync)
+		syncTrigger.POST("/sync", reconcileOwnershipAfterScan(), comic.TriggerSync)
 	}
 
 	// Image serving (Phase 3) — all require auth
