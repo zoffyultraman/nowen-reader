@@ -17,7 +17,7 @@ const (
 	// 防止异常 PDF 中缺少 EOI 标记时无限积累单个候选流。
 	maxEmbeddedJPEGBytes = 64 << 20
 	// 过滤 PDF 内的小图标、缩略预览和色彩配置附件。
-	minEmbeddedJPEGDimension = 200
+	minEmbeddedJPEGDimension  = 200
 	preferredEmbeddedJPEGPixels = 200_000
 )
 
@@ -52,11 +52,11 @@ func ExtractFirstEmbeddedJPEG(filePath string) ([]byte, error) {
 	candidate.Grow(512 << 10)
 
 	var (
-		inJPEG      bool
-		previous    byte
+		inJPEG       bool
+		previous     byte
 		havePrevious bool
-		best        []byte
-		bestArea    int64
+		best         []byte
+		bestArea     int64
 	)
 
 	for {
