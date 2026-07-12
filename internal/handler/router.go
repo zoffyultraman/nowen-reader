@@ -46,6 +46,7 @@ func SetupRoutes(r *gin.Engine) {
 
 	registerAuthRoutes(api)
 	registerComicRoutes(api)
+	registerSeriesRoutes(api)
 	registerContentRoutes(api)
 	registerMetadataRoutes(api)
 	registerLibraryRoutes(api)
