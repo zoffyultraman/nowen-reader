@@ -102,7 +102,9 @@ func rebuildComicSeriesForLibraryLocked(libraryID string) error {
 }
 
 // DetectComicSeries turns flat readable items into the V1 hierarchy:
-// Series -> optional Section -> Item. Root-level single items remain loose.
+// Series -> optional Section -> Item. Root-level and single-item directories
+// remain standalone; a series is only created when it can actually collapse
+// at least two shelf entries.
 func DetectComicSeries(libraryID string, items []store.SeriesSourceItem) []store.DetectedSeries {
 	type candidateItem struct {
 		source  store.SeriesSourceItem
@@ -133,16 +135,7 @@ func DetectComicSeries(libraryID string, items []store.SeriesSourceItem) []store
 	result := make([]store.DetectedSeries, 0, len(roots))
 	for _, root := range roots {
 		members := groups[root]
-		hasExplicitSection := false
-		for _, member := range members {
-			if len(member.parts) >= 3 {
-				if _, _, _, ok := classifySection(member.parts[1]); ok {
-					hasExplicitSection = true
-					break
-				}
-			}
-		}
-		if len(members) < 2 && !hasExplicitSection {
+		if len(members) < 2 {
 			continue
 		}
 
