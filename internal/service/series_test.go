@@ -76,12 +76,11 @@ func TestDetectComicSeriesImageFolderBoundaries(t *testing.T) {
 	}
 }
 
-func TestDetectComicSeriesKeepsExplicitSingleSeason(t *testing.T) {
+func TestDetectComicSeriesKeepsSingleItemStandalone(t *testing.T) {
 	items := []store.SeriesSourceItem{
 		{ID: "only", Title: "暗箱 01", RelativePath: "A 暗箱/第一季/暗箱 01.pdf"},
 	}
-	series := DetectComicSeries("comic-library", items)
-	if len(series) != 1 || len(series[0].Sections) != 1 || len(series[0].Items) != 1 {
-		t.Fatalf("explicit single season was not preserved: %#v", series)
+	if series := DetectComicSeries("comic-library", items); len(series) != 0 {
+		t.Fatalf("single item should remain standalone, got %#v", series)
 	}
 }
