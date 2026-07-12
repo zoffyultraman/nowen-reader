@@ -50,7 +50,6 @@ func init() {
 			);`,
 			`CREATE UNIQUE INDEX IF NOT EXISTS "ComicSeriesItem_comicId_key" ON "ComicSeriesItem"("comicId");`,
 			`CREATE INDEX IF NOT EXISTS "ComicSeriesItem_series_sort_idx" ON "ComicSeriesItem"("seriesId", "sectionId", "sortIndex");`,
-			`DELETE FROM "ComicGroup" WHERE COALESCE("autoCreated", 0) = 1 AND COALESCE("classifyMode", '') = 'directory';`,
 		}, "\n"),
 	})
 }
