@@ -231,10 +231,32 @@ export async function setUserLibraryAccess(
   }
 }
 
-
-// 获取当前用户可访问的书库（非 admin 接口）
+// 获取当前用户可访问的书库（非 admin 接口）。漫画书库的标签数量按“作品卡片
+// + 独立内容”计算，而不是把同一作品下的每个 PDF 都当成一本。
 export async function fetchAccessibleLibraries(): Promise<Library[]> {
   const res = await fetch("/api/libraries/accessible");
   const data = await safeJson<{ libraries: Library[] }>(res);
-  return data.libraries || [];
+  const libraries = data.libraries || [];
+
+  try {
+    const seriesRes = await fetch("/api/series");
+    if (!seriesRes.ok) return libraries;
+    const seriesData = await seriesRes.json() as {
+      series?: Array<{ libraryId: string; itemCount: number }>;
+    };
+    const groupedSavings = new Map<string, number>();
+    for (const series of seriesData.series || []) {
+      groupedSavings.set(
+        series.libraryId,
+        (groupedSavings.get(series.libraryId) || 0) + Math.max(0, series.itemCount - 1),
+      );
+    }
+    return libraries.map((library) => ({
+      ...library,
+      comicCount: Math.max(0, (library.comicCount || 0) - (groupedSavings.get(library.id) || 0)),
+    }));
+  } catch {
+    // 分层接口不可用时保留原始计数，不阻断书库加载。
+    return libraries;
+  }
 }
