@@ -1,6 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation, useParams } from "react-router-dom";
 import "@/app/globals.css";
 
 import { ThemeProvider } from "@/lib/theme-context";
@@ -11,7 +11,6 @@ import { PWARegister } from "@/app/pwa-register";
 import { useAuth } from "@/lib/auth-context";
 import { Navigate } from "react-router-dom";
 import { useSiteSettings } from "@/hooks/useSiteSettings";
-
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ToastProvider } from "@/components/Toast";
@@ -26,6 +25,7 @@ const BooksPage = React.lazy(() => import("@/app/books/page"));
 const ComicDetail = React.lazy(() => import("@/app/comic/[id]/page"));
 const Reader = React.lazy(() => import("@/app/reader/[id]/page"));
 const NovelReader = React.lazy(() => import("@/app/novel/[id]/page"));
+const SeriesDetail = React.lazy(() => import("@/app/series/[id]/page"));
 const Recommendations = React.lazy(() => import("@/app/recommendations/page"));
 const Stats = React.lazy(() => import("@/app/stats/page"));
 const Logs = React.lazy(() => import("@/app/logs/page"));
@@ -57,6 +57,32 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function seriesIDFromRoute(id: string): string | null {
+  return id.startsWith("series-") ? id.slice("series-".length) : null;
+}
+
+function ComicDetailRoute() {
+  const { id = "" } = useParams();
+  const seriesId = seriesIDFromRoute(id);
+  if (seriesId) {
+    return <Navigate to={`/series/${seriesId}`} replace />;
+  }
+  return <ComicDetail />;
+}
+
+/**
+ * 作品卡片继续复用现有 ComicCard。后端为作品生成 series-{id} 的虚拟卡片 ID，
+ * 这里在进入阅读器前将其安全转发到作品详情页；普通漫画仍进入原阅读器。
+ */
+function ReaderRoute() {
+  const { id = "" } = useParams();
+  const seriesId = seriesIDFromRoute(id);
+  if (seriesId) {
+    return <Navigate to={`/series/${seriesId}`} replace />;
+  }
+  return <Reader />;
+}
+
 /** 路由过渡动画包装器 —— 每次 pathname 变化时触发 fade-in */
 function AnimatedRoutes() {
   const location = useLocation();
@@ -65,9 +91,10 @@ function AnimatedRoutes() {
       <Routes location={location}>
         <Route path="/" element={<Home />} />
         <Route path="/books" element={<BooksPage />} />
-        <Route path="/comic/:id" element={<ComicDetail />} />
-        <Route path="/reader/:id" element={<Reader />} />
+        <Route path="/comic/:id" element={<ComicDetailRoute />} />
+        <Route path="/reader/:id" element={<ReaderRoute />} />
         <Route path="/novel/:id" element={<NovelReader />} />
+        <Route path="/series/:id" element={<SeriesDetail />} />
         <Route path="/recommendations" element={<Recommendations />} />
         <Route path="/stats" element={<AdminRoute><Stats /></AdminRoute>} />
         <Route path="/logs" element={<AdminRoute><Logs /></AdminRoute>} />
