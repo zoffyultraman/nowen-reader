@@ -7,7 +7,9 @@ import (
 )
 
 // ============================================================
-// 按目录自动分组 — 扫描后自动将同文件夹下的书籍归为合集
+// 按目录自动分组 — 扫描后自动将同文件夹下的小说归为合集
+// 漫画目录由 ComicSeries / ComicSeriesSection 层级模型接管，避免同一目录同时
+// 生成“作品”和旧式扁平 ComicGroup。
 // ============================================================
 
 // chapterKeywords 话级关键词（保留用于向后兼容）
@@ -27,16 +29,20 @@ func IsChapterNaming(filename string) bool {
 }
 
 // AutoGroupByDirectory 按文件夹自动创建目录合集。
-// 规则：同一文件夹下有 2 本及以上未分组的书籍时，自动创建为合集。
-// 不再限制文件名必须包含章节关键词，支持小说、漫画等所有类型。
+// 漫画书库已经使用 ComicSeries 表达“作品 → 季 → 阅读单元”，这里只保留
+// 小说书库的旧兼容行为，避免创建与作品卡片重复的自动合集。
 func AutoGroupByDirectory() (int, error) {
 	grouped, err := GetGroupedComicIDs()
 	if err != nil {
 		return 0, err
 	}
 
-	// 查询所有未分组的书籍（包括漫画和小说）
-	rows, err := db.Query(`SELECT "id", "title", "filename" FROM "Comic" ` + TitleSortOrderSQL("", "ASC"))
+	rows, err := db.Query(`
+		SELECT c."id", c."title", c."filename"
+		FROM "Comic" c
+		JOIN "Library" l ON l."id" = c."libraryId"
+		WHERE l."type" = 'novel' AND c."type" = 'novel'
+	` + TitleSortOrderSQL("c", "ASC"))
 	if err != nil {
 		return 0, err
 	}
@@ -122,7 +128,7 @@ func AutoGroupByDirectory() (int, error) {
 		}
 
 		created++
-		log.Printf("[auto-group] 按目录自动创建合集: %s (%d 本)", groupName, len(refs))
+		log.Printf("[auto-group] 按目录自动创建小说合集: %s (%d 本)", groupName, len(refs))
 	}
 
 	return created, nil
