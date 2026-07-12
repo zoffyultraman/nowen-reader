@@ -14,7 +14,7 @@ func registerComicRoutes(api *gin.RouterGroup) {
 	comicsRead := api.Group("/comics")
 	comicsRead.Use(middleware.AuthRequired())
 	{
-		comicsRead.GET("", reconcileOwnershipBeforeList(), comic.ListComics)
+		comicsRead.GET("", reconcileOwnershipBeforeList(), collapseSeriesShelf(), comic.ListComics)
 		comicsRead.GET("/duplicates", comic.DetectDuplicates)
 		comicsRead.POST("/batch", recordOnlyBatchDeleteGuard(), comic.BatchOperation)
 	}
@@ -79,7 +79,7 @@ func registerComicRoutes(api *gin.RouterGroup) {
 	syncTrigger := api.Group("")
 	syncTrigger.Use(middleware.AdminRequired())
 	{
-		syncTrigger.POST("/sync", reconcileOwnershipAfterScan(), comic.TriggerSync)
+		syncTrigger.POST("/sync", reconcileOwnershipAfterScan(), rebuildSeriesAfterScan(), comic.TriggerSync)
 	}
 
 	// Image serving (Phase 3) — all require auth
