@@ -101,6 +101,8 @@ export function useComics(options?: {
     if (options?.favoritesOnly) params.set("favorites", "true");
     if (options?.sortBy) params.set("sortBy", options.sortBy);
     if (options?.sortOrder) params.set("sortOrder", options.sortOrder);
+    // fetchAll 模式是 Web 书架的统一视图：请求后端将目录成员折叠为作品卡片。
+    if (options?.fetchAll) params.set("seriesView", "true");
     // fetchAll 模式不传 page/pageSize，后端 pageSize<=0 时不应用 LIMIT
     if (!options?.fetchAll) {
       if (options?.page) params.set("page", String(options.page));
